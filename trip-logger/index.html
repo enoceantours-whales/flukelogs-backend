@@ -347,10 +347,10 @@
         <label>Visibility</label>
         <select id="inputVisibility">
           <option value="">Select...</option>
-          <option>Sunny</option>
-          <option>Overcast</option>
-          <option>Patchy Fog</option>
-          <option>Rain</option>
+          <option>Excellent</option>
+          <option>Good</option>
+          <option>Fair</option>
+          <option>Poor</option>
         </select>
       </div>
 
@@ -397,6 +397,8 @@
           <option>Sperm Whale</option>
           <option>Black-footed Albatross</option>
           <option>Common Dolphin</option>
+          <option>Dall's Porpoise</option>
+          <option>Harbor Porpoise</option>
           <option>Coastal Bottlenose Dolphin</option>
         </select>
       </div>
@@ -806,7 +808,8 @@
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.fillRect(80, 916, 120, 3);
 
-        // Species list
+        // Species list — dynamic font size to fit within card width
+        const maxSpeciesW = W - 120; // max text width
         speciesList.forEach((species, i) => {
           const y = 960 + (i * 110);
 
@@ -818,9 +821,15 @@
           ctx.fillStyle = 'white';
           ctx.fillRect(80, y - 20, 5, 90);
 
-          // Species text
+          // Auto-scale font size to fit species name
+          let fontSize = 66;
+          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, Arial, sans-serif`;
+          while (ctx.measureText(species.toUpperCase()).width > maxSpeciesW && fontSize > 32) {
+            fontSize -= 2;
+            ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, Arial, sans-serif`;
+          }
+
           ctx.fillStyle = 'white';
-          ctx.font = 'bold 66px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
           ctx.fillText(species.toUpperCase(), 104, y + 46);
         });
 
