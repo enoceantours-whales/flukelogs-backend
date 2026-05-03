@@ -240,27 +240,37 @@ async function generatePDF(tripData) {
     doc.rect(M, y, CW, 0.5).fill(RULE);
     y += 6;
 
-    // Sighting rows
+    // Sighting rows — auto-scale font to fit all rows on page
+    const footerY = H - 44;
+    const availableH = footerY - y - 10;
+    const totalRows = tripData.sightings.length || 1;
+    const maxRowH = 28;
+    const minRowH = 18;
+    // Calculate row height to fit all rows, clamped between min and max
+    const rowH = Math.min(maxRowH, Math.max(minRowH, Math.floor(availableH / totalRows)));
+    const fontSize = rowH <= 20 ? 7 : rowH <= 24 ? 8 : 9;
+
     if (tripData.sightings.length === 0) {
       doc.fillColor(MID).font(reg).fontSize(9).text('No sightings logged', M, y, { lineBreak: false });
     } else {
       tripData.sightings.forEach((s, i) => {
         const bg = i % 2 === 0 ? WHITE : GRAY;
-        const rowH = 28;
-        doc.rect(M - 4, y - 4, CW + 8, rowH).fill(bg);
-        doc.rect(M - 4, y - 4, 3, rowH).fill(BLACK);
+        doc.rect(M - 4, y - 2, CW + 8, rowH).fill(bg);
+        doc.rect(M - 4, y - 2, 3, rowH).fill(BLACK);
+
+        const textY = y + (rowH - fontSize) / 2 - 2;
 
         // Species
-        doc.fillColor(BLACK).font(bold).fontSize(9)
-           .text(s.species.toUpperCase(), M, y, { width: cols[0] - 8, lineBreak: false });
+        doc.fillColor(BLACK).font(bold).fontSize(fontSize)
+           .text(s.species.toUpperCase(), M, textY, { width: cols[0] - 8, lineBreak: false });
 
         // Count
-        doc.fillColor(BLACK).font(reg).fontSize(9)
-           .text('×' + s.count, M + cols[0], y, { width: cols[1], lineBreak: false });
+        doc.fillColor(BLACK).font(reg).fontSize(fontSize)
+           .text('×' + s.count, M + cols[0], textY, { width: cols[1], lineBreak: false });
 
         // Time
-        doc.fillColor(BLACK).font(reg).fontSize(9)
-           .text(s.time, M + cols[0] + cols[1], y, { width: cols[2], lineBreak: false });
+        doc.fillColor(BLACK).font(reg).fontSize(fontSize)
+           .text(s.time, M + cols[0] + cols[1], textY, { width: cols[2], lineBreak: false });
 
         // Notes + coords inline
         const notesX = M + cols[0] + cols[1] + cols[2];
@@ -269,11 +279,11 @@ async function generatePDF(tripData) {
           const coords = s.lat.toFixed(4) + ', ' + s.lng.toFixed(4);
           noteText = noteText ? noteText + '  •  ' + coords : coords;
         }
-        doc.fillColor(MID).font(reg).fontSize(8)
-           .text(noteText, notesX, y, { width: cols[3], lineBreak: false });
+        doc.fillColor(MID).font(reg).fontSize(Math.max(fontSize - 1, 6))
+           .text(noteText, notesX, textY, { width: cols[3], lineBreak: false });
 
         y += rowH;
-        doc.rect(M, y - 4, CW, 0.5).fill(RULE);
+        doc.rect(M, y - 2, CW, 0.5).fill(RULE);
       });
     }
 
