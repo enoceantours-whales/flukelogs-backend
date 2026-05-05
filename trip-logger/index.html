@@ -334,7 +334,7 @@
 
       <div class="field">
         <label>Passenger Count</label>
-        <input type="number" id="inputPassengers" min="1" max="6" value="6" inputmode="numeric">
+        <input type="number" id="inputPassengers" min="1" max="6" value="0" inputmode="numeric">
       </div>
 
       <div class="field">
@@ -468,7 +468,7 @@
     <button class="btn btn-danger" onclick="discardTrip()">Discard Trip</button>
   </div>
 
-  <div class="footer">Small by design. Unforgettable by nature.</div>
+  <div class="footer">Logging the Wild Monterey</div>
 </div>
 
 <!-- Toast -->
@@ -660,7 +660,7 @@
     count.textContent = trip.sightings.length;
 
     if (trip.sightings.length === 0) {
-      list.innerHTML = '<div class="empty">No sightings logged yet</div>';
+      list.innerHTML = '<div class="empty">Where's the whales?</div>';
       return;
     }
 
@@ -816,10 +816,9 @@
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.fillRect(80, 916, 120, 3);
 
-        // Species list — dynamic font size to fit within card width
-        const maxSpeciesW = W - 120; // max text width
+        // Species list — fixed 25px, consistent across all names
         speciesList.forEach((species, i) => {
-          const y = 960 + (i * 110);
+          const y = 960 + (i * 70);
 
           // Row bg
           ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.07)' : 'transparent';
