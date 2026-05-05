@@ -3,7 +3,7 @@
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/sw.js", "destination": "/Public/sw.js" },
     { "source": "/manifest.json", "destination": "/Public/manifest.json" },
-    { "source": "/public/(.*)", "destination": "/Public/$1" }
+    { "source": "/public/(.*)", "destination": "/Public/$1" },
     { "source": "/sightings", "destination": "/trip-logger/Public/sightings-widget.html" }
   ]
 }
