@@ -1,8 +1,8 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/trip-logger/api/$1" },
-    { "source": "/sw.js", "destination": "/trip-logger/Public/sw.js" },
-    { "source": "/manifest.json", "destination": "/trip-logger/Public/manifest.json" },
-    { "source": "/public/(.*)", "destination": "/trip-logger/Public/$1" }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/sw.js", "destination": "/Public/sw.js" },
+    { "source": "/manifest.json", "destination": "/Public/manifest.json" },
+    { "source": "/public/(.*)", "destination": "/Public/$1" }
   ]
 }
