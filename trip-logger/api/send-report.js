@@ -79,7 +79,7 @@ async function generatePDF(tripData) {
   // Fetch logo outside Promise so await works
   let logoBuffer = null;
   try {
-    logoBuffer = await fetchURL('https://trip-logger-backend.vercel.app/public/Enocean_Tours_logo-05.png');
+    logoBuffer = await fetchURL('https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-05.png');
   } catch(e) {
     console.log('Logo fetch failed:', e.message);
   }
