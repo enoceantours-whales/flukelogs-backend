@@ -15,7 +15,7 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/public/Enocean_Tours_logo-05.png",
+      "src": "/public/Enocean_Tours_logo-03.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
