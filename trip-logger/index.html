@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-title" content="Enocean Logger">
   <meta name="theme-color" content="#000000">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/Public/Enocean_Tours_logo-05.png">
+  <link rel="apple-touch-icon" href="/Public/Enocean_Tours_logo-03.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Enocean Tours — Trip Logger</title>
   <style>
@@ -334,7 +334,7 @@
 
       <div class="field">
         <label>Passenger Count</label>
-        <input type="number" id="inputPassengers" min="1" max="6" value="0" inputmode="numeric">
+        <input type="number" id="inputPassengers" min="1" max="6" value="6" inputmode="numeric">
       </div>
 
       <div class="field">
@@ -596,20 +596,31 @@
 
   // ─── Duration Timer ──────────────────────────────────────────────────────────
 
+  function updateDurationDisplay() {
+    if (!trip.startTime) return;
+    const ms = Date.now() - new Date(trip.startTime);
+    const mins = Math.floor(ms / 60000);
+    const hrs = Math.floor(mins / 60);
+    const el = document.getElementById('statDuration');
+    if (el) el.textContent = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+  }
+
   function startDurationTimer() {
-    durationTimer = setInterval(() => {
-      const ms = Date.now() - trip.startTime;
-      const mins = Math.floor(ms / 60000);
-      const hrs = Math.floor(mins / 60);
-      document.getElementById('statDuration').textContent =
-        hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
-    }, 15000);
+    updateDurationDisplay();
+    durationTimer = setInterval(updateDurationDisplay, 15000);
   }
 
   function stopDurationTimer() {
     clearInterval(durationTimer);
     durationTimer = null;
   }
+
+  // When phone unlocks / app comes back into focus — immediately update time
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && trip.startTime && !trip.endTime) {
+      updateDurationDisplay();
+    }
+  });
 
   // ─── Log Sighting ────────────────────────────────────────────────────────────
 
