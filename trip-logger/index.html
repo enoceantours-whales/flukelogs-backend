@@ -65,12 +65,9 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-
     }
 
-    .header h1 {
-      display: none; /* logo replaces text */
-    }
+    .header h1 { display: none; }
 
     .header p {
       font-size: 10px;
@@ -124,7 +121,7 @@
     .field select:focus {
       outline: none;
       border-color: #ffffff;
-      box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.1);
     }
 
     /* ── Buttons ── */
@@ -212,7 +209,7 @@
     /* ── Summary Cards ── */
     .summary-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -252,7 +249,7 @@
 
     .photo-drop:hover {
       border-color: #ffffff;
-      background: rgba(14,165,233,0.05);
+      background: rgba(255,255,255,0.03);
     }
 
     .photo-drop p { font-size: 13px; color: var(--muted); margin-top: 4px; }
@@ -350,6 +347,7 @@
           <option>Good</option>
           <option>Fair</option>
           <option>Poor</option>
+          <option>Overcast</option>
         </select>
       </div>
 
@@ -375,7 +373,7 @@
       <div class="status-item">Status: <span>Active</span></div>
       <div class="status-item">Duration: <span id="statDuration">0m</span></div>
       <div class="status-item">Distance: <span id="statDistance">0.00 NM</span></div>
-      <div class="status-item" style="grid-column:span 2;">GPS: <span id="statGPS">Acquiring...</span></div>
+      <div class="status-item" style="grid-column:span 3;">GPS: <span id="statGPS">Acquiring...</span></div>
     </div>
 
     <div class="section">
@@ -475,9 +473,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  // ─── State ───────────────────────────────────────────────────────────────────
-
-  const API_URL = '/api/send-report'; // Vercel routes this correctly
+  const API_URL = '/api/send-report';
 
   let trip = newTripState();
 
@@ -538,7 +534,7 @@
   // ─── Haversine Distance (NM) ─────────────────────────────────────────────────
 
   function haversineNM(lat1, lng1, lat2, lng2) {
-    const R = 3440.065; // Earth radius in nautical miles
+    const R = 3440.065;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -547,7 +543,7 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-    // ─── GPS ─────────────────────────────────────────────────────────────────────
+  // ─── GPS ─────────────────────────────────────────────────────────────────────
 
   function startGPS() {
     if (!navigator.geolocation) {
@@ -560,12 +556,9 @@
         const newLat = pos.coords.latitude;
         const newLng = pos.coords.longitude;
 
-        // Accumulate distance
         if (trip.prevLat !== null && trip.prevLng !== null) {
           const d = haversineNM(trip.prevLat, trip.prevLng, newLat, newLng);
-          if (d < 0.5) { // ignore GPS jumps over 0.5 NM
-            trip.distanceNM += d;
-          }
+          if (d < 0.5) trip.distanceNM += d;
         }
 
         trip.prevLat = newLat;
@@ -615,7 +608,6 @@
     durationTimer = null;
   }
 
-  // When phone unlocks / app comes back into focus — immediately update time
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && trip.startTime && !trip.endTime) {
       updateDurationDisplay();
@@ -634,16 +626,8 @@
     if (!count || count < 1) return toast('Enter a count', 'error');
     if (!time) return toast('Set a time', 'error');
 
-    trip.sightings.push({
-      species,
-      count: parseInt(count),
-      time,
-      notes,
-      lat: trip.lastLat,
-      lng: trip.lastLng,
-    });
+    trip.sightings.push({ species, count: parseInt(count), time, notes, lat: trip.lastLat, lng: trip.lastLng });
 
-    // Reset form
     document.getElementById('inputSpecies').value = '';
     document.getElementById('inputCount').value = '1';
     document.getElementById('inputNotes').value = '';
@@ -660,7 +644,7 @@
     count.textContent = trip.sightings.length;
 
     if (trip.sightings.length === 0) {
-      list.innerHTML = '<div class="empty">Where's the whales?</div>';
+      list.innerHTML = '<div class="empty">No sightings logged yet</div>';
       return;
     }
 
@@ -697,20 +681,16 @@
     stopGPS();
     stopDurationTimer();
 
-    // Populate review screen
     document.getElementById('revDate').textContent =
       trip.startTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const ms = trip.endTime - trip.startTime;
     const mins = Math.floor(ms / 60000);
     const hrs = Math.floor(mins / 60);
-    document.getElementById('revDuration').textContent =
-      hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
-
+    document.getElementById('revDuration').textContent = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
     document.getElementById('revPassengers').textContent = trip.passengers;
     document.getElementById('revSightings').textContent = trip.sightings.length;
 
-    // Review sightings list
     const list = document.getElementById('reviewSightingList');
     list.innerHTML = trip.sightings.length === 0
       ? '<div class="empty">No sightings logged</div>'
@@ -736,7 +716,6 @@
 
     const reader = new FileReader();
     reader.onload = e => {
-      // Compress image to max 1200px wide, 0.75 quality
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -755,7 +734,6 @@
     };
     reader.readAsDataURL(file);
   }
-
 
   // ─── Social Card Generator (Browser Canvas) ──────────────────────────────────
 
@@ -787,7 +765,6 @@
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, W, 160);
 
-        // Top divider line
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -795,13 +772,11 @@
         ctx.lineTo(W - 80, 160);
         ctx.stroke();
 
-        // ENOCEAN TOURS
         ctx.fillStyle = 'white';
         ctx.font = 'bold 52px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('ENOCEAN TOURS', W / 2, 96);
 
-        // Subtitle
         ctx.fillStyle = 'rgba(255,255,255,0.75)';
         ctx.font = '28px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.fillText('MONTEREY BAY, CALIFORNIA', W / 2, 140);
@@ -812,36 +787,27 @@
         ctx.font = '32px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.fillText('TODAY WE SAW', 80, 900);
 
-        // Underline
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.fillRect(80, 916, 120, 3);
 
-        // Species list — fixed 25px, consistent across all names
+        // Species list — fixed 25px
         speciesList.forEach((species, i) => {
           const y = 960 + (i * 70);
 
-          // Row bg
           ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.07)' : 'transparent';
-          ctx.fillRect(80, y - 20, W - 160, 90);
-
-          // Left accent bar
-          ctx.fillStyle = 'white';
-          ctx.fillRect(80, y - 20, 5, 90);
-
-          // Auto-scale font size to fit species name
-          let fontSize = 66;
-          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, Arial, sans-serif`;
-          while (ctx.measureText(species.toUpperCase()).width > maxSpeciesW && fontSize > 32) {
-            fontSize -= 2;
-            ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, Arial, sans-serif`;
-          }
+          ctx.fillRect(80, y - 10, W - 160, 60);
 
           ctx.fillStyle = 'white';
-          ctx.fillText(species.toUpperCase(), 104, y + 46);
+          ctx.fillRect(80, y - 10, 5, 60);
+
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 25px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(species.toUpperCase(), 104, y + 26);
         });
 
         // Date
-        const dateY = 960 + (speciesList.length * 110) + 80;
+        const dateY = 960 + (speciesList.length * 70) + 60;
         ctx.fillStyle = 'rgba(255,255,255,0.65)';
         ctx.font = '36px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.fillText(date, 80, dateY);
@@ -850,7 +816,6 @@
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, H - 110, W, 110);
 
-        // Top divider of bottom bar
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -858,7 +823,6 @@
         ctx.lineTo(W - 80, H - 110);
         ctx.stroke();
 
-        // ENOCEANTOURS.COM
         ctx.fillStyle = 'white';
         ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.textAlign = 'center';
@@ -867,17 +831,13 @@
         resolve(canvas.toDataURL('image/jpeg', 0.92));
       };
 
-      // Draw with photo background if available
       if (trip.photoData) {
         const img = new Image();
         img.onload = () => {
-          // Cover fit
           const scale = Math.max(W / img.width, H / img.height);
           const sw = img.width * scale;
           const sh = img.height * scale;
-          const sx = (W - sw) / 2;
-          const sy = (H - sh) / 2;
-          ctx.drawImage(img, sx, sy, sw, sh);
+          ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
           drawCard();
         };
         img.onerror = () => {
@@ -898,12 +858,10 @@
 
   async function sendReport() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
     const raw = document.getElementById('inputGuestEmails').value;
     const emails = raw.split(',').map(e => e.trim()).filter(e => e.length > 0);
 
     if (emails.length === 0) return toast('Enter at least one email', 'error');
-
     const invalid = emails.find(e => !emailRegex.test(e));
     if (invalid) return toast('Invalid: ' + invalid, 'error');
 
@@ -912,7 +870,6 @@
     btn.innerHTML = '<span class="spinner"></span>Sending...';
 
     try {
-      // Generate social card in browser
       const socialCardData = await generateSocialCard();
 
       const results = await Promise.all(emails.map(email =>
@@ -967,7 +924,8 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
   }
 
-  // ─── PWA Service Worker Registration ─────────────────────────────────────────
+  // ─── PWA ─────────────────────────────────────────────────────────────────────
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').catch(err => {
@@ -976,34 +934,24 @@
     });
   }
 
-  // ─── Local Storage — Auto Save & Restore ─────────────────────────────────────
+  // ─── Local Storage ───────────────────────────────────────────────────────────
 
   const STORAGE_KEY = 'enocean_active_trip';
 
   function saveTrip() {
     if (!trip.startTime) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trip));
-    } catch(e) {
-      console.log('Save error:', e);
-    }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(trip)); } catch(e) {}
   }
 
   function restoreTrip() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
-
       const restored = JSON.parse(saved);
       if (!restored.startTime) return;
-
-      // Convert date strings back to Date objects
       restored.startTime = new Date(restored.startTime);
       if (restored.endTime) restored.endTime = new Date(restored.endTime);
-
       trip = restored;
-
-      // If trip was active (no endTime), resume it
       if (!trip.endTime) {
         setCurrentTime();
         startGPS();
@@ -1012,19 +960,15 @@
         showScreen('screenLog');
         toast('Trip restored', 'success');
       } else {
-        // Trip was ended, go to review screen
         endTrip();
       }
-    } catch(e) {
-      console.log('Restore error:', e);
-    }
+    } catch(e) {}
   }
 
   function clearSavedTrip() {
     localStorage.removeItem(STORAGE_KEY);
   }
 
-  // Restore on page load
   restoreTrip();
 
 </script>
