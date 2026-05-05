@@ -5,21 +5,22 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Enocean Logger">
-  <meta name="theme-color" content="#0c4a6e">
+  <meta name="theme-color" content="#000000">
   <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/public/Enocean_Tours_logo-03.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Enocean Tours — Trip Logger</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --navy: #0c4a6e;
-      --blue: #0ea5e9;
-      --dark: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
+      --navy: #000000;
+      --blue: #ffffff;
+      --dark: #111111;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #ffffff;
+      --muted: #888888;
       --success: #22c55e;
       --danger: #ef4444;
     }
@@ -42,43 +43,41 @@
 
     /* ── Header ── */
     .header {
-      background: linear-gradient(135deg, #1e3a8a, var(--navy));
-      padding: 20px;
+      background: #000000;
+      padding: 18px 20px 16px;
       text-align: center;
-      border-bottom: 3px solid var(--blue);
+      border-bottom: 1px solid #222;
       position: sticky;
       top: 0;
       z-index: 10;
     }
 
     .header-logo {
-      width: 56px;
-      height: 56px;
-      background: white;
-      border-radius: 8px;
-      margin: 0 auto 10px;
+      width: 160px;
+      height: 44px;
+      margin: 0 auto 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
     }
 
     .header-logo img {
       width: 100%;
       height: 100%;
       object-fit: contain;
+      filter: invert(1); /* black logo → white on black background */
     }
 
     .header h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 1px;
+      display: none; /* logo replaces text */
     }
 
     .header p {
-      font-size: 11px;
-      color: rgba(255,255,255,0.7);
-      margin-top: 2px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 0;
     }
 
     /* ── Screens ── */
@@ -90,9 +89,9 @@
     .section-label {
       font-size: 11px;
       font-weight: 700;
-      color: var(--blue);
+      color: var(--text);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       margin-bottom: 12px;
     }
 
@@ -124,7 +123,7 @@
     .field input:focus,
     .field select:focus {
       outline: none;
-      border-color: var(--blue);
+      border-color: #ffffff;
       box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
     }
 
@@ -144,15 +143,15 @@
     .btn:active { transform: scale(0.98); opacity: 0.9; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-primary { background: var(--blue); color: #000; }
-    .btn-outline { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); margin-top: 10px; }
+    .btn-primary { background: #ffffff; color: #000000; font-weight: 700; }
+    .btn-outline { background: transparent; color: #ffffff; border: 1.5px solid #ffffff; margin-top: 10px; }
     .btn-danger { background: var(--danger); color: #fff; margin-top: 10px; }
 
     /* ── Status Bar ── */
     .status-bar {
       background: var(--card);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--blue);
+      border-left: 4px solid #ffffff;
       border-radius: 8px;
       padding: 14px;
       margin-bottom: 20px;
@@ -162,7 +161,7 @@
     }
 
     .status-item { font-size: 13px; }
-    .status-item span { color: var(--blue); font-weight: 600; }
+    .status-item span { color: #ffffff; font-weight: 600; }
 
     /* ── Sighting List ── */
     .sighting-list {
@@ -185,7 +184,7 @@
     .sighting-species {
       font-weight: 700;
       font-size: 14px;
-      color: var(--blue);
+      color: #ffffff;
     }
 
     .sighting-meta {
@@ -195,8 +194,8 @@
     }
 
     .sighting-badge {
-      background: rgba(14,165,233,0.15);
-      color: var(--blue);
+      background: rgba(255,255,255,0.1);
+      color: #ffffff;
       font-weight: 700;
       font-size: 13px;
       padding: 4px 10px;
@@ -221,7 +220,7 @@
     .summary-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--navy);
+      border-left: 4px solid #ffffff;
       border-radius: 8px;
       padding: 12px;
     }
@@ -237,13 +236,13 @@
     .summary-card .card-value {
       font-size: 18px;
       font-weight: 700;
-      color: var(--blue);
+      color: #ffffff;
       margin-top: 4px;
     }
 
     /* ── Photo Upload ── */
     .photo-drop {
-      border: 2px dashed var(--border);
+      border: 2px dashed #333;
       border-radius: 8px;
       padding: 24px;
       text-align: center;
@@ -252,12 +251,12 @@
     }
 
     .photo-drop:hover {
-      border-color: var(--blue);
+      border-color: #ffffff;
       background: rgba(14,165,233,0.05);
     }
 
     .photo-drop p { font-size: 13px; color: var(--muted); margin-top: 4px; }
-    .photo-drop strong { color: var(--blue); }
+    .photo-drop strong { color: #ffffff; }
     .photo-drop input { display: none; }
 
     .photo-preview {
@@ -288,7 +287,7 @@
     }
 
     .toast.show { transform: translateX(-50%) translateY(0); }
-    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.success { border-color: var(--success); color: var(--success); background: #111; }
     .toast.error { border-color: var(--danger); color: var(--danger); }
 
     /* ── Spinner ── */
@@ -312,7 +311,7 @@
       text-align: center;
       font-size: 11px;
       color: var(--muted);
-      border-top: 1px solid var(--border);
+      border-top: 1px solid #222;
     }
   </style>
 </head>
@@ -344,13 +343,13 @@
       </div>
 
       <div class="field">
-        <label>Weather</label>
+        <label>Visibility</label>
         <select id="inputVisibility">
           <option value="">Select...</option>
-          <option>overcast</option>
-          <option>clear</option>
-          <option>foggy</option>
-          <option>rain</option>
+          <option>Excellent</option>
+          <option>Good</option>
+          <option>Fair</option>
+          <option>Poor</option>
         </select>
       </div>
 
@@ -360,7 +359,8 @@
           <option value="">Select...</option>
           <option>Calm</option>
           <option>Slight Chop</option>
-          <option>big swell</option>
+          <option>Moderate Chop</option>
+          <option>Rough</option>
         </select>
       </div>
 
@@ -396,8 +396,6 @@
           <option>Sperm Whale</option>
           <option>Black-footed Albatross</option>
           <option>Common Dolphin</option>
-          <option>Dall's Porpoise</option>
-          <option>Harbor Porpoise</option>
           <option>Coastal Bottlenose Dolphin</option>
         </select>
       </div>
