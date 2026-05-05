@@ -296,8 +296,63 @@ async function generatePDF(tripData) {
   });
 }
 
+// ─── Save to Supabase ─────────────────────────────────────────────────────────
 
+async function saveToSupabase(tripData) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SECRET_KEY;
 
+  if (!supabaseUrl || !supabaseKey) {
+    console.log('Supabase not configured, skipping save');
+    return;
+  }
+
+  const tripDate = new Date(tripData.startTime).toISOString().split('T')[0];
+  const durationMs = new Date(tripData.endTime) - new Date(tripData.startTime);
+  const durationMinutes = Math.floor(durationMs / 60000);
+
+  const rows = tripData.sightings.map(s => ({
+    trip_date: tripDate,
+    duration_minutes: durationMinutes,
+    distance_nm: parseFloat((tripData.distanceNM || 0).toFixed(2)),
+    passengers: tripData.passengers,
+    water_temp: tripData.waterTemp ? parseFloat(tripData.waterTemp) : null,
+    visibility: tripData.visibility || null,
+    conditions: tripData.conditions || null,
+    species: s.species,
+    count: s.count,
+    behavior_notes: s.notes || null,
+    lat: s.lat ? parseFloat(s.lat.toFixed(6)) : null,
+    lng: s.lng ? parseFloat(s.lng.toFixed(6)) : null,
+  }));
+
+  if (rows.length === 0) {
+    console.log('No sightings to save');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/sightings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(rows),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('Supabase save error:', err);
+    } else {
+      console.log(`Saved ${rows.length} sightings to Supabase`);
+    }
+  } catch(e) {
+    console.error('Supabase fetch error:', e.message);
+  }
+}
 
 
 
@@ -395,6 +450,7 @@ module.exports = async function handler(req, res) {
     const pdfBuffer = await generatePDF(tripData);
     console.log('PDF done, size:', pdfBuffer.length);
 
+    await saveToSupabase(tripData);
     await addToMailchimp(guestEmail);
     await sendEmail(guestEmail, pdfBuffer, socialCardData, tripData);
 
