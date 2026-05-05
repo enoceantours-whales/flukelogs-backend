@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recent Sightings – Enocean Tours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #222;
+    --text: #f0f0f0; --muted: #888; --accent: #fff; --tag-bg: #1e1e1e;
+  }
+  html, body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh; }
+  .widget-wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 48px; }
+  .widget-header { margin-bottom: 28px; }
+  .widget-header h2 { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+  .widget-header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .status-text { font-size: 12px; color: var(--muted); }
+  .totals-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+  .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; display: flex; flex-direction: column; align-items: center; min-width: 90px; gap: 2px; }
+  .total-chip .chip-num { font-size: 20px; font-weight: 600; color: var(--accent); }
+  .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 340px; }
+  #sightings-map { width: 100%; height: 100%; background: #111; }
+  .leaflet-tile { filter: brightness(0.8) saturate(0.3); }
+  .leaflet-container { background: #111 !important; }
+  .leaflet-popup-content-wrapper { background: #1a1a1a; color: #f0f0f0; border: 1px solid #333; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+  .leaflet-popup-tip { background: #1a1a1a; }
+  .leaflet-popup-close-button { color: #888 !important; }
+  .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .feed-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .feed-count { font-size: 11px; color: var(--muted); }
+  .sighting-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: border-color .15s; }
+  .sighting-card:hover { border-color: #444; }
+  .sighting-card.highlighted { border-color: #fff; }
+  .species-icon { font-size: 22px; width: 36px; text-align: center; flex-shrink: 0; }
+  .sighting-info { flex: 1; min-width: 0; }
+  .sighting-species { font-size: 14px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sighting-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .sighting-count { font-size: 13px; font-weight: 600; color: var(--accent); flex-shrink: 0; text-align: right; }
+  .sighting-count span { display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+  .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
+  .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cta-strip { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .cta-text { font-size: 13px; color: var(--muted); }
+  .cta-btn { background: #fff; color: #000; border: none; border-radius: 6px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; transition: opacity .15s; }
+  .cta-btn:hover { opacity: .85; }
+</style>
+</head>
+<body>
+<div class="widget-wrap">
+  <div class="widget-header">
+    <h2>Recent Sightings</h2>
+    <p>Monterey Bay &middot; Moss Landing</p>
+  </div>
+  <div class="status-row">
+    <div class="pulse-dot"></div>
+    <div class="status-text" id="status-text">Loading latest data&hellip;</div>
+  </div>
+  <div class="totals-bar" id="totals-bar"></div>
+  <div class="map-wrap"><div id="sightings-map"></div></div>
+  <div class="feed-header">
+    <h3>Sighting Log</h3>
+    <div class="feed-count" id="feed-count"></div>
+  </div>
+  <div id="feed-list">
+    <div class="state-msg"><div class="spinner"></div>Fetching sightings&hellip;</div>
+  </div>
+  <div class="cta-strip">
+    <div class="cta-text">Spots are limited to 6 guests. Book early.</div>
+    <a class="cta-btn" href="https://enoceantours.com/tours" target="_blank">Book a Trip &rarr;</a>
+  </div>
+</div>
+<script>
+const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
+const TABLE = 'trips';
+const FEED_LIMIT = 40;
+
+const SPECIES_META = {
+  'Orca':                         { icon: '🐋', color: '#ffffff' },
+  'Humpback Whale':               { icon: '🐳', color: '#90cdf4' },
+  'Gray Whale':                   { icon: '🐋', color: '#a0aec0' },
+  'Blue Whale':                   { icon: '🐋', color: '#63b3ed' },
+  "Risso's Dolphin":              { icon: '🐬', color: '#fbd38d' },
+  'Common Dolphin':               { icon: '🐬', color: '#f6ad55' },
+  'Pacific White-sided Dolphin':  { icon: '🐬', color: '#68d391' },
+  'Bottlenose Dolphin':           { icon: '🐬', color: '#e9c46a' },
+  'Sea Otter':                    { icon: '🦦', color: '#d4a373' },
+  'Harbor Seal':                  { icon: '🦭', color: '#b0b0b0' },
+  'Mola Mola':                    { icon: '🐟', color: '#9f7aea' },
+  'default':                      { icon: '🌊', color: '#555' },
+};
+const sm = n => SPECIES_META[n] || SPECIES_META['default'];
+
+const map = L.map('sightings-map', { center: [36.803, -121.787], zoom: 10, zoomControl: true, scrollWheelZoom: false, attributionControl: false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16 }).addTo(map);
+
+const markers = [];
+
+function renderMap(data) {
+  markers.forEach(m => map.removeLayer(m));
+  markers.length = 0;
+  data.forEach((s, i) => {
+    if (!s.location_lat || !s.location_lng) return;
+    const meta = sm(s.species);
+    const m = L.circleMarker([+s.location_lat, +s.location_lng], { radius: 8, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
+    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
+    m._rowIndex = i;
+    markers.push(m);
+  });
+}
+
+function pingMarker(i) {
+  const m = markers.find(x => x._rowIndex === i);
+  if (m) { map.panTo(m.getLatLng(), { animate: true }); m.openPopup(); }
+}
+
+async function fetchSightings() {
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,location_lat,location_lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderTotals(data) {
+  const counts = {};
+  let total = 0;
+  data.forEach(s => { counts[s.species] = (counts[s.species] || 0) + (parseInt(s.count) || 1); total += parseInt(s.count) || 1; });
+  const days = new Set(data.map(s => (s.trip_date || '').slice(0, 10))).size;
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 4);
+  document.getElementById('totals-bar').innerHTML = `
+    <div class="total-chip"><div class="chip-num">${days}</div><div class="chip-label">Trip Days</div></div>
+    <div class="total-chip"><div class="chip-num">${total}</div><div class="chip-label">Animals</div></div>
+    ${top.map(([n, c]) => `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(-1)[0]}</div></div>`).join('')}`;
+}
+
+function renderFeed(data) {
+  const list = document.getElementById('feed-list');
+  document.getElementById('feed-count').textContent = `${data.length} records`;
+  if (!data.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
+  list.innerHTML = data.map((s, i) => {
+    const meta = sm(s.species);
+    return `<div class="sighting-card" data-i="${i}"><div class="species-icon">${meta.icon}</div><div class="sighting-info"><div class="sighting-species">${s.species || 'Unknown species'}</div><div class="sighting-meta">${fmtDate(s.trip_date)}${s.location_lat ? ' &middot; GPS logged' : ''}</div></div><div class="sighting-count">${s.count ?? '—'}<span>individuals</span></div></div>`;
+  }).join('');
+  list.querySelectorAll('.sighting-card').forEach(card => {
+    card.addEventListener('click', () => {
+      list.querySelectorAll('.sighting-card').forEach(c => c.classList.remove('highlighted'));
+      card.classList.add('highlighted');
+      pingMarker(+card.dataset.i);
+    });
+  });
+}
+
+(async () => {
+  try {
+    const data = await fetchSightings();
+    renderTotals(data);
+    renderMap(data);
+    renderFeed(data);
+    const el = document.getElementById('status-text');
+    el.textContent = data.length ? `Last updated ${fmtDate(data[0].trip_date)}` : 'No data yet';
+  } catch (err) {
+    document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
+    document.getElementById('status-text').textContent = 'Data unavailable';
+  }
+})();
+</script>
+</body>
+</html>
