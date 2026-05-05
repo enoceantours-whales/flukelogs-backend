@@ -1,9 +1,9 @@
 {
+  "outputDirectory": "trip-logger/Public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/sw.js", "destination": "/Public/sw.js" },
-    { "source": "/manifest.json", "destination": "/Public/manifest.json" },
-    { "source": "/public/(.*)", "destination": "/Public/$1" },
-    { "source": "/sightings", "destination": "/Public/sightings-widget.html" }
+    { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/sightings", "destination": "/sightings-widget.html" }
   ]
 }
