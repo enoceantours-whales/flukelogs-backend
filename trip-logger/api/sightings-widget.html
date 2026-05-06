@@ -159,14 +159,11 @@ function fmtDate(d) {
 
 function renderTotals(data) {
   const counts = {};
-  let total = 0;
-  data.forEach(s => { counts[s.species] = (counts[s.species] || 0) + (parseInt(s.count) || 1); total += parseInt(s.count) || 1; });
-  const days = new Set(data.map(s => (s.trip_date || '').slice(0, 10))).size;
-  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 4);
-  document.getElementById('totals-bar').innerHTML = `
-    <div class="total-chip"><div class="chip-num">${days}</div><div class="chip-label">Trip Days</div></div>
-    <div class="total-chip"><div class="chip-num">${total}</div><div class="chip-label">Animals</div></div>
-    ${top.map(([n, c]) => `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(-1)[0]}</div></div>`).join('')}`;
+  data.forEach(s => { counts[s.species] = (counts[s.species] || 0) + (parseInt(s.count) || 1); });
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  document.getElementById('totals-bar').innerHTML = top.map(([n, c]) =>
+    `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(-1)[0]}</div></div>`
+  ).join('');
 }
 
 function renderFeed(data) {
