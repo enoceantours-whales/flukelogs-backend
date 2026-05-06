@@ -24,9 +24,9 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   .status-text { font-size: 12px; color: var(--muted); }
   .totals-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
-  .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; display: flex; flex-direction: column; align-items: center; min-width: 90px; gap: 2px; }
-  .total-chip .chip-num { font-size: 20px; font-weight: 600; color: var(--accent); }
-  .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 20px; display: flex; flex-direction: column; align-items: center; min-width: 110px; gap: 4px; }
+  .total-chip .chip-num { font-size: 28px; font-weight: 600; color: var(--accent); }
+  .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 380px; }
   #sightings-map { width: 100%; height: 100%; background: #0a1628; }
   .leaflet-tile { filter: brightness(0.92) contrast(1.05); }
@@ -88,6 +88,9 @@ const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
 const TABLE = 'sightings';
 const FEED_LIMIT = 100;
+
+const WHALE_SPECIES = ['Humpback Whale','Blue Whale','Gray Whale','Fin Whale','Minke Whale','Orca','Sperm Whale'];
+const DOLPHIN_SPECIES = ['Common Dolphin','Pacific White-sided Dolphin',"Risso's Dolphin",'Bottlenose Dolphin'];
 
 const SPECIES_META = {
   'Orca':                        { icon: '🐋', color: '#ffffff' },
@@ -176,12 +179,16 @@ function fmtDate(d) {
 }
 
 function renderTotals(data) {
-  const counts = {};
-  data.forEach(s => { counts[s.species] = (counts[s.species] || 0) + (parseInt(s.count) || 1); });
-  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]);
-  document.getElementById('totals-bar').innerHTML = top.map(([n, c]) =>
-    `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(-1)[0]}</div></div>`
-  ).join('');
+  let whales = 0, dolphins = 0;
+  data.forEach(s => {
+    const c = parseInt(s.count) || 1;
+    if (WHALE_SPECIES.includes(s.species)) whales += c;
+    else if (DOLPHIN_SPECIES.includes(s.species)) dolphins += c;
+  });
+  const chips = [];
+  if (whales > 0) chips.push(`<div class="total-chip"><div class="chip-num">🐳 ${whales}</div><div class="chip-label">Whales</div></div>`);
+  if (dolphins > 0) chips.push(`<div class="total-chip"><div class="chip-num">🐬 ${dolphins}</div><div class="chip-label">Dolphins</div></div>`);
+  document.getElementById('totals-bar').innerHTML = chips.join('');
 }
 
 function renderFeed(data) {
@@ -193,13 +200,13 @@ function renderFeed(data) {
   list.innerHTML = trips.map(([dateKey, sightings]) => {
     const totalAnimals = sightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
     const tallied = tallyBySpecies(sightings);
-    const rows = tallied.map(([species, data]) => {
+    const rows = tallied.map(([species, d]) => {
       const meta = sm(species);
-      const hasGps = !!(data.lat && data.lng);
+      const hasGps = !!(d.lat && d.lng);
       return `<div class="sighting-row" data-date="${dateKey}" data-species="${species}" data-has-gps="${hasGps}">
         <div class="species-icon">${meta.icon}</div>
         <div class="species-name">${species}</div>
-        <div class="species-count">×${data.count}</div>
+        <div class="species-count">×${d.count}</div>
       </div>`;
     }).join('');
 
