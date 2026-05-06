@@ -1,65 +1,9 @@
-# Enocean Tours — Trip Logger
-
-A mobile-first Progressive Web App (PWA) for logging whale watch trips and delivering branded trip reports to guests.
-
-Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoceantours.com)
-
----
-
-## What It Does
-
-1. Captain starts a trip, enters passenger count and conditions
-2. GPS tracks position and calculates nautical miles traveled
-3. Captain logs each wildlife sighting (species, count, time, GPS coordinates, notes)
-4. At trip end, captain uploads a group photo and enters guest emails
-5. App generates and emails each guest:
-   - A one-page branded **PDF trip report** (photo, map, sightings log)
-   - A **1080x1920 Story card JPG** ready to post on Instagram
-6. Guests are automatically added to the Enocean Tours Mailchimp audience
-7. Email includes a direct link to leave a TripAdvisor review
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Vanilla HTML/CSS/JS — PWA with Service Worker + localStorage |
-| Backend | Node.js Serverless Functions on Vercel |
-| PDF Generation | PDFKit |
-| Story Card | Browser Canvas API |
-| Maps | Google Static Maps API |
-| Email | Gmail SMTP via Nodemailer |
-| CRM | Mailchimp Marketing API |
-| Hosting | Vercel (Free tier) |
-| Repo | GitHub — enoceantours-whales/trip-logger-backend |
-
----
-
-## Project Structure
-
-```
-trip-logger-backend/
-├── trip-logger/
-│   ├── Public/
-│   │   ├── Enocean_Tours_logo-03.png   # White logo (app header)
-│   │   ├── Enocean_Tours_logo-05.png   # Black logo (PDF)
-│   │   ├── manifest.json               # PWA manifest
-│   │   └── sw.js                       # Service worker
-│   ├── api/
-│   │   └── send-report.js              # Serverless function — PDF + email
-│   ├── index.html                      # Frontend PWA
-│   ├── package.json
-│   └── vercel.json                     # Internal routing
-└── vercel.json                         # Root routing (Vercel reads this)
-```
-
 ---
 
 ## Features
 
 ### Trip Logging
-- Species dropdown (12 Monterey Bay species)
+- Species dropdown (14 Monterey Bay species including Fin Whale, Minke Whale, Black-footed Albatross)
 - Count, time, optional behavior notes per sighting
 - GPS coordinates auto-captured per sighting
 - Live nautical miles counter (Haversine formula)
@@ -97,6 +41,41 @@ trip-logger-backend/
 - localStorage saves trip state — survives browser refresh mid-trip
 - Auto-restores active trip if page reloads
 
+### Public Sightings Widget
+- Live at [enoceantours.com/sighting-log](https://enoceantours.com/sighting-log)
+- Served via `/api/sightings` — embedded in Squarespace via iframe
+- Interactive Leaflet map with ESRI Ocean Basemap showing Monterey Submarine Canyon bathymetry
+- Color-coded species markers — click any marker for species + count popup
+- Trip log grouped by date — one card per trip, tallied by species
+- Click a trip date header to pan map to all sightings that day
+- Click a species row to pan map to that specific sighting
+- Season totals bar — running whale and dolphin counts
+- Auto-resizes iframe height as trips accumulate — no scroll limit
+- Pulls live from Supabase `sightings` table
+
+---
+
+## Database — Supabase
+
+Table: `sightings`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | uuid | Auto-generated |
+| `trip_date` | date | Date of trip |
+| `species` | text | Species name |
+| `count` | int4 | Number of individuals |
+| `lat` | numeric | GPS latitude |
+| `lng` | numeric | GPS longitude |
+| `duration_minutes` | int4 | Trip duration |
+| `distance_nm` | numeric | Nautical miles traveled |
+| `passengers` | int4 | Guest count |
+| `water_temp` | numeric | Water temp in °F |
+| `visibility` | text | Visibility conditions |
+| `conditions` | text | Sea state |
+| `behavior_notes` | text | Optional sighting notes |
+| `created_at` | timestamptz | Auto-generated |
+
 ---
 
 ## Environment Variables
@@ -111,6 +90,8 @@ Set these in Vercel → Settings → Environment Variables:
 | `GMAIL_USER` | Sending Gmail address |
 | `GMAIL_APP_PASSWORD` | Gmail app password (16 chars, no spaces) |
 | `GOOGLE_MAPS_API_KEY` | Google Static Maps API key |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SECRET_KEY` | Supabase service_role key (never expose client-side) |
 
 ---
 
@@ -118,18 +99,19 @@ Set these in Vercel → Settings → Environment Variables:
 
 1. Push changes to `main` branch on GitHub
 2. Vercel auto-deploys on every commit
-3. Live at: [trip-logger-backend.vercel.app](https://trip-logger-backend.vercel.app)
+3. PWA live at: [trip-logger-backend.vercel.app](https://trip-logger-backend.vercel.app)
+4. Sightings widget live at: [trip-logger-backend.vercel.app/api/sightings](https://trip-logger-backend.vercel.app/api/sightings)
 
 ---
 
-## Map Configuration
+## Adding Past Trips Manually
 
-Map is fixed to show the full Monterey Bay including the submarine canyon:
-- Center: 36.78, -122.05
-- Zoom: 10
-- Type: hybrid
-- Scale: 2x (high resolution)
-- White numbered pins per sighting
+Use the Supabase SQL editor to insert historical sightings in bulk:
+
+```sql
+INSERT INTO sightings (trip_date, species, count, lat, lng, duration_minutes, distance_nm, passengers, water_temp, visibility) VALUES
+('2026-05-03', 'Humpback Whale', 1, 36.7813, -121.9846, 446, 17.44, 6, 58, 'Overcast');
+```
 
 ---
 
