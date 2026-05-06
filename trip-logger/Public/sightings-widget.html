@@ -125,7 +125,7 @@ function pingMarker(i) {
 }
 
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,location_lat,location_lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
