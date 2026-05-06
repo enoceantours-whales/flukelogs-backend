@@ -65,6 +65,15 @@
     .spinner { width: 18px; height: 18px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .footer { padding: 14px; text-align: center; font-size: 11px; color: var(--muted); border-top: 1px solid #222; }
+
+    /* ── Email tag input ── */
+    .email-tag-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; cursor: text; transition: border-color 0.15s; min-height: 50px; align-items: flex-start; }
+    .email-tag-wrap:focus-within { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.1); }
+    .email-tag { background: rgba(255,255,255,0.12); color: #fff; font-size: 13px; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .email-tag .remove-tag { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 16px; cursor: pointer; padding: 0; line-height: 1; }
+    .email-tag .remove-tag:hover { color: #fff; }
+    .email-tag-input { background: none; border: none; outline: none; color: #fff; font-size: 16px; flex: 1; min-width: 160px; padding: 4px 2px; }
+    .email-tag-input::placeholder { color: var(--muted); }
   </style>
 </head>
 <body>
@@ -211,8 +220,10 @@
     <div class="section">
       <div class="section-label">Send Report to Guests</div>
       <div class="field">
-        <label>Guest Emails <span style="color:var(--muted);font-weight:400;">separate with commas</span></label>
-        <input type="text" id="inputGuestEmails" placeholder="guest1@email.com, guest2@email.com" inputmode="email" autocomplete="off">
+        <label>Guest Emails <span style="color:var(--muted);font-weight:400;">— type and press Enter or comma</span></label>
+        <div class="email-tag-wrap" id="emailTagWrap" onclick="document.getElementById('emailTagInput').focus()">
+          <input type="email" id="emailTagInput" class="email-tag-input" placeholder="guest@email.com" inputmode="email" autocomplete="off">
+        </div>
       </div>
       <button class="btn btn-primary" id="btnSend" onclick="sendReport()">Send Trip Report</button>
     </div>
@@ -234,6 +245,7 @@
 <script>
   const API_URL = '/api/send-report';
   let trip = newTripState();
+  let guestEmails = [];
 
   function newTripState() {
     return {
@@ -253,6 +265,49 @@
     window.scrollTo(0, 0);
   }
 
+  // ── Email tag input ──────────────────────────────────────────
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function renderEmailTags() {
+    const wrap = document.getElementById('emailTagWrap');
+    const input = document.getElementById('emailTagInput');
+    wrap.querySelectorAll('.email-tag').forEach(t => t.remove());
+    guestEmails.forEach((email, i) => {
+      const tag = document.createElement('div');
+      tag.className = 'email-tag';
+      tag.innerHTML = `<span>${email}</span><button class="remove-tag" onclick="removeEmail(${i})">×</button>`;
+      wrap.insertBefore(tag, input);
+    });
+  }
+
+  function addEmailFromInput() {
+    const input = document.getElementById('emailTagInput');
+    const val = input.value.trim().replace(/,+$/, '');
+    if (!val) return;
+    if (!emailRegex.test(val)) { toast('Invalid email: ' + val, 'error'); return; }
+    if (guestEmails.includes(val)) { input.value = ''; return; }
+    guestEmails.push(val);
+    input.value = '';
+    renderEmailTags();
+  }
+
+  function removeEmail(i) {
+    guestEmails.splice(i, 1);
+    renderEmailTags();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('emailTagInput');
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmailFromInput(); }
+      if (e.key === 'Backspace' && input.value === '' && guestEmails.length > 0) {
+        guestEmails.pop(); renderEmailTags();
+      }
+    });
+    input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
+  });
+
+  // ── Trip functions ───────────────────────────────────────────
   function startTrip() {
     const passengers = document.getElementById('inputPassengers').value;
     if (!passengers || passengers < 1) return toast('Enter passenger count', 'error');
@@ -510,27 +565,23 @@
   }
 
   async function sendReport() {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const raw = document.getElementById('inputGuestEmails').value;
-    const emails = raw.split(',').map(e => e.trim()).filter(e => e.length > 0);
-    if (emails.length === 0) return toast('Enter at least one email', 'error');
-    const invalid = emails.find(e => !emailRegex.test(e));
-    if (invalid) return toast('Invalid: ' + invalid, 'error');
+    // Commit any email still in the input box
+    addEmailFromInput();
+    if (guestEmails.length === 0) return toast('Add at least one email', 'error');
     const btn = document.getElementById('btnSend');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Sending...';
     try {
       const socialCardData = await generateSocialCard();
-      const results = await Promise.all(emails.map(email =>
-        fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tripData: trip, guestEmail: email, socialCardData }),
-        }).then(r => r.json())
-      ));
-      const failed = results.filter(r => !r.success);
-      if (failed.length > 0) throw new Error('Some emails failed to send');
-      toast(`Sent to ${emails.length} guest${emails.length > 1 ? 's' : ''}!`, 'success');
+      // Single API call with all emails — Supabase saves once
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripData: trip, guestEmails, socialCardData }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || 'Failed to send');
+      toast(`Sent to ${guestEmails.length} guest${guestEmails.length > 1 ? 's' : ''}!`, 'success');
       btn.innerHTML = '✓ Report Sent';
       btn.style.background = 'var(--success)';
     } catch (err) {
@@ -544,9 +595,11 @@
   function startNewTrip() {
     clearSavedTrip();
     trip = newTripState();
+    guestEmails = [];
     document.getElementById('inputPhoto').value = '';
     document.getElementById('photoPreview').style.display = 'none';
-    document.getElementById('inputGuestEmails').value = '';
+    document.getElementById('emailTagWrap').querySelectorAll('.email-tag').forEach(t => t.remove());
+    document.getElementById('emailTagInput').value = '';
     document.getElementById('btnSend').innerHTML = 'Send Trip Report';
     document.getElementById('btnSend').disabled = false;
     document.getElementById('btnSend').style.background = '';
