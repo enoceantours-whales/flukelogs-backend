@@ -1,3 +1,104 @@
+# Enocean Tours — Trip Logger
+
+A mobile-first Progressive Web App (PWA) for logging whale watch trips, delivering branded trip reports to guests, and displaying a live public sightings log on the Enocean Tours website.
+
+Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoceantours.com)
+
+---
+
+## What It Does
+
+1. Captain starts a trip, enters passenger count and conditions
+2. GPS tracks position and calculates nautical miles traveled
+3. Captain logs each wildlife sighting (species, count, time, GPS coordinates, notes)
+4. At trip end, captain uploads a group photo and enters guest emails
+5. App generates and emails each guest:
+   - A one-page branded **PDF trip report** (photo, map, sightings log)
+   - A **1080x1920 Story card JPG** ready to post on Instagram
+6. Trip sightings are automatically saved to Supabase
+7. Guests are automatically added to the Enocean Tours Mailchimp audience
+8. Email includes a direct link to leave a TripAdvisor review
+9. Public sightings widget on enoceantours.com updates automatically after every trip
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Vanilla HTML/CSS/JS — PWA with Service Worker + localStorage |
+| Backend | Node.js Serverless Functions on Vercel |
+| Database | Supabase (PostgreSQL) |
+| PDF Generation | PDFKit |
+| Story Card | Browser Canvas API |
+| Trip Report Map | Google Static Maps API |
+| Sightings Widget Map | Leaflet + ESRI Ocean Basemap |
+| Email | Gmail SMTP via Nodemailer |
+| CRM | Mailchimp Marketing API |
+| Hosting | Vercel (Free tier) |
+| Repo | GitHub — enoceantours-whales/trip-logger-backend |
+
+---
+
+## Project Structure
+# Enocean Tours — Trip Logger
+
+A mobile-first Progressive Web App (PWA) for logging whale watch trips, delivering branded trip reports to guests, and displaying a live public sightings log on the Enocean Tours website.
+
+Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoceantours.com)
+
+---
+
+## What It Does
+
+1. Captain starts a trip, enters passenger count and conditions
+2. GPS tracks position and calculates nautical miles traveled
+3. Captain logs each wildlife sighting (species, count, time, GPS coordinates, notes)
+4. At trip end, captain uploads a group photo and enters guest emails
+5. App generates and emails each guest:
+   - A one-page branded **PDF trip report** (photo, map, sightings log)
+   - A **1080x1920 Story card JPG** ready to post on Instagram
+6. Trip sightings are automatically saved to Supabase
+7. Guests are automatically added to the Enocean Tours Mailchimp audience
+8. Email includes a direct link to leave a TripAdvisor review
+9. Public sightings widget on enoceantours.com updates automatically after every trip
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Vanilla HTML/CSS/JS — PWA with Service Worker + localStorage |
+| Backend | Node.js Serverless Functions on Vercel |
+| Database | Supabase (PostgreSQL) |
+| PDF Generation | PDFKit |
+| Story Card | Browser Canvas API |
+| Trip Report Map | Google Static Maps API |
+| Sightings Widget Map | Leaflet + ESRI Ocean Basemap |
+| Email | Gmail SMTP via Nodemailer |
+| CRM | Mailchimp Marketing API |
+| Hosting | Vercel (Free tier) |
+| Repo | GitHub — enoceantours-whales/trip-logger-backend |
+
+---
+
+## Project Structure
+trip-logger-backend/
+├── api/
+│   ├── send-report.js          # Serverless function — PDF + email + Supabase save
+│   ├── sightings.js            # Serverless function — serves public sightings widget
+│   └── sightings-widget.html   # Public sightings widget HTML
+├── trip-logger/
+│   ├── Public/
+│   │   ├── Enocean_Tours_logo-03.png   # White logo (app header)
+│   │   ├── Enocean_Tours_logo-05.png   # Black logo (PDF)
+│   │   ├── manifest.json               # PWA manifest
+│   │   └── sw.js                       # Service worker
+│   ├── index.html              # Frontend PWA
+│   └── package.json
+└── vercel.json                 # Root routing
+
 ---
 
 ## Features
@@ -51,7 +152,7 @@
 - Click a species row to pan map to that specific sighting
 - Season totals bar — running whale and dolphin counts
 - Auto-resizes iframe height as trips accumulate — no scroll limit
-- Pulls live from Supabase `sightings` table
+- Pulls live from Supabase sightings table
 
 ---
 
