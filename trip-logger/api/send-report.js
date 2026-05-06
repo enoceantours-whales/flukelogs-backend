@@ -38,8 +38,6 @@ function fetchMapImage(sightings) {
   return new Promise((resolve) => {
     const withCoords = sightings.filter(s => s.lat && s.lng);
 
-    // Always fixed Monterey Bay view — full bay + submarine canyon visible
-    // Center: 36.78, -122.05 | Zoom 10 shows full bay from SC to Monterey
     const CENTER = '36.78,-122.05';
     const ZOOM   = '10';
 
@@ -49,7 +47,6 @@ function fetchMapImage(sightings) {
       return;
     }
 
-    // Pin sightings on the fixed bay view
     const markers = withCoords.map((s, i) =>
       `markers=color:white|label:${i + 1}|${s.lat},${s.lng}`
     ).join('&');
@@ -76,7 +73,6 @@ function fetchURL(url) {
 async function generatePDF(tripData) {
   const mapImageBuffer = await fetchMapImage(tripData.sightings);
 
-  // Fetch logo outside Promise so await works
   let logoBuffer = null;
   try {
     logoBuffer = await fetchURL('https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-05.png');
@@ -119,7 +115,6 @@ async function generatePDF(tripData) {
     const headerH = 72;
     doc.rect(0, 0, W, headerH).fill(BLACK);
 
-    // Logo — centered in white circle
     const logoRadius = 24;
     const logoCX = M + logoRadius;
     const logoCY = headerH / 2;
@@ -129,7 +124,6 @@ async function generatePDF(tripData) {
         const logoSize = logoRadius * 2 - 4;
         doc.image(logoBuffer, logoCX - logoSize/2, logoCY - logoSize/2, { width: logoSize, height: logoSize });
       } catch(e) {
-        console.log('Logo image error:', e.message);
         doc.fillColor(BLACK).font(bold).fontSize(6).text('ENOCEAN', logoCX - 18, logoCY - 6, { lineBreak: false });
         doc.fillColor(BLACK).font(bold).fontSize(5).text('TOURS', logoCX - 12, logoCY + 2, { lineBreak: false });
       }
@@ -167,7 +161,6 @@ async function generatePDF(tripData) {
          .text('No photo', 0, y + photoH/2 - 6, { align: 'center', width: photoW, lineBreak: false });
     }
 
-    // Stats panel right
     const statsX = photoW + 1;
     const statsW = W - photoW - 1;
     doc.rect(statsX, y, statsW, photoH).fill(GRAY);
@@ -202,7 +195,7 @@ async function generatePDF(tripData) {
        .text(condParts.join('   •   ') || 'Monterey Bay', 0, y + 8, { align: 'center', width: W, lineBreak: false, characterSpacing: 0.8 });
     y += 26;
 
-    // ── MAP — full width horizontal ──
+    // ── MAP ──
     const mapH = 180;
     if (mapImageBuffer) {
       try {
@@ -218,8 +211,7 @@ async function generatePDF(tripData) {
     }
     y += mapH;
 
-    // ── SIGHTINGS LIST — full width below map ──
-    // Thin rule + heading
+    // ── SIGHTINGS LOG ──
     y += 12;
     doc.fillColor(BLACK).font(bold).fontSize(9)
        .text('SIGHTINGS LOG', M, y, { lineBreak: false, characterSpacing: 1.5 });
@@ -227,7 +219,6 @@ async function generatePDF(tripData) {
     doc.rect(M, y, CW, 1).fill(BLACK);
     y += 8;
 
-    // Column headers
     const cols = [200, 60, 60, CW - 320];
     const headers = ['SPECIES', 'COUNT', 'TIME', 'NOTES & LOCATION'];
     let cx = M;
@@ -240,13 +231,11 @@ async function generatePDF(tripData) {
     doc.rect(M, y, CW, 0.5).fill(RULE);
     y += 6;
 
-    // Sighting rows — auto-scale font to fit all rows on page
     const footerY = H - 44;
     const availableH = footerY - y - 10;
     const totalRows = tripData.sightings.length || 1;
     const maxRowH = 28;
     const minRowH = 18;
-    // Calculate row height to fit all rows, clamped between min and max
     const rowH = Math.min(maxRowH, Math.max(minRowH, Math.floor(availableH / totalRows)));
     const fontSize = rowH <= 20 ? 7 : rowH <= 24 ? 8 : 9;
 
@@ -260,19 +249,13 @@ async function generatePDF(tripData) {
 
         const textY = y + (rowH - fontSize) / 2 - 2;
 
-        // Species
         doc.fillColor(BLACK).font(bold).fontSize(fontSize)
            .text(s.species.toUpperCase(), M, textY, { width: cols[0] - 8, lineBreak: false });
-
-        // Count
         doc.fillColor(BLACK).font(reg).fontSize(fontSize)
            .text('×' + s.count, M + cols[0], textY, { width: cols[1], lineBreak: false });
-
-        // Time
         doc.fillColor(BLACK).font(reg).fontSize(fontSize)
            .text(s.time, M + cols[0] + cols[1], textY, { width: cols[2], lineBreak: false });
 
-        // Notes + coords inline
         const notesX = M + cols[0] + cols[1] + cols[2];
         let noteText = s.notes || '';
         if (s.lat && s.lng) {
@@ -354,8 +337,7 @@ async function saveToSupabase(tripData) {
   }
 }
 
-
-
+// ─── Mailchimp ────────────────────────────────────────────────────────────────
 
 async function addToMailchimp(email) {
   try {
@@ -414,7 +396,7 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
   </td></tr>
 </table>
 </body>`,
-        attachments: [
+    attachments: [
       {
         filename: `Enocean_Trip_${new Date(tripData.startTime).toISOString().split('T')[0]}.pdf`,
         content: pdfBuffer,
@@ -439,22 +421,31 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { tripData, guestEmail, socialCardData } = req.body;
-  if (!tripData || !guestEmail) return res.status(400).json({ error: 'Missing tripData or guestEmail' });
+  const { tripData, guestEmails, socialCardData } = req.body;
+  if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
+
+  // Accept either a single email string or an array
+  const emails = Array.isArray(guestEmails) ? guestEmails : [guestEmails];
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(guestEmail)) return res.status(400).json({ error: 'Invalid email address' });
+  const validEmails = emails.map(e => e.trim()).filter(e => emailRegex.test(e));
+  if (validEmails.length === 0) return res.status(400).json({ error: 'No valid email addresses provided' });
 
   try {
     console.log('Generating PDF...');
     const pdfBuffer = await generatePDF(tripData);
     console.log('PDF done, size:', pdfBuffer.length);
 
+    // Save to Supabase ONCE regardless of how many guests
     await saveToSupabase(tripData);
-    await addToMailchimp(guestEmail);
-    await sendEmail(guestEmail, pdfBuffer, socialCardData, tripData);
 
-    return res.status(200).json({ success: true, message: `Trip report sent to ${guestEmail}` });
+    // Send email + Mailchimp to each guest
+    await Promise.all(validEmails.map(email => Promise.all([
+      sendEmail(email, pdfBuffer, socialCardData, tripData),
+      addToMailchimp(email),
+    ])));
+
+    return res.status(200).json({ success: true, message: `Trip report sent to ${validEmails.join(', ')}` });
   } catch (err) {
     console.error('Error:', err.message);
     return res.status(500).json({ error: 'Failed to send trip report', detail: err.message });
