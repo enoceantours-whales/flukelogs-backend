@@ -43,15 +43,13 @@
   .trip-date-label { font-size: 13px; font-weight: 600; color: var(--accent); }
   .trip-summary { font-size: 11px; color: var(--muted); }
   .trip-sightings { padding: 4px 0; }
-  .sighting-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .1s; }
+  .sighting-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .1s; }
   .sighting-row:last-child { border-bottom: none; }
   .sighting-row:hover { background: #1c1c1c; }
   .sighting-row.active { background: #1e1e1e; border-left: 2px solid #fff; padding-left: 14px; }
-  .sighting-row .species-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+  .sighting-row .species-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
   .sighting-row .species-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
-  .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); margin-right: 4px; }
-  .sighting-row .gps-tag { font-size: 10px; color: #555; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 4px; padding: 2px 6px; }
-  .sighting-row.active .gps-tag { color: #888; border-color: #444; }
+  .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); }
   .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
   .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -126,22 +124,32 @@ function groupByDate(data) {
   return Object.entries(trips).sort((a, b) => b[0].localeCompare(a[0]));
 }
 
+function tallyBySpecies(sightings) {
+  const tally = {};
+  sightings.forEach(s => {
+    if (!tally[s.species]) tally[s.species] = { count: 0, lat: s.lat, lng: s.lng };
+    tally[s.species].count += parseInt(s.count) || 1;
+    if (s.lat && s.lng) { tally[s.species].lat = s.lat; tally[s.species].lng = s.lng; }
+  });
+  return Object.entries(tally).sort((a, b) => b[1].count - a[1].count);
+}
+
 function renderMap(data) {
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
-  data.forEach((s) => {
+  data.forEach(s => {
     if (!s.lat || !s.lng) return;
     const meta = sm(s.species);
     const m = L.circleMarker([+s.lat, +s.lng], { radius: 7, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
     m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
-    m._rowIdx = s._rowIdx;
     m._dateKey = (s.trip_date || '').slice(0, 10);
+    m._species = s.species;
     markers.push(m);
   });
 }
 
-function pingMarkerByIdx(idx) {
-  const m = markers.find(x => x._rowIdx === idx);
+function pingSpeciesOnDate(dateKey, species) {
+  const m = markers.find(x => x._dateKey === dateKey && x._species === species);
   if (!m) return;
   map.panTo(m.getLatLng(), { animate: true });
   setTimeout(() => m.openPopup(), 300);
@@ -159,9 +167,7 @@ async function fetchSightings() {
   const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  const data = await res.json();
-  data.forEach((s, i) => s._rowIdx = i);
-  return data;
+  return res.json();
 }
 
 function fmtDate(d) {
@@ -186,21 +192,21 @@ function renderFeed(data) {
 
   list.innerHTML = trips.map(([dateKey, sightings]) => {
     const totalAnimals = sightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
-    const speciesCount = new Set(sightings.map(s => s.species)).size;
-    const rows = sightings.map(s => {
-      const meta = sm(s.species);
-      const hasGps = !!(s.lat && s.lng);
-      return `<div class="sighting-row" data-idx="${s._rowIdx}" data-has-gps="${hasGps}">
+    const tallied = tallyBySpecies(sightings);
+    const rows = tallied.map(([species, data]) => {
+      const meta = sm(species);
+      const hasGps = !!(data.lat && data.lng);
+      return `<div class="sighting-row" data-date="${dateKey}" data-species="${species}" data-has-gps="${hasGps}">
         <div class="species-icon">${meta.icon}</div>
-        <div class="species-name">${s.species || 'Unknown'}</div>
-        <div class="species-count">×${s.count ?? '—'}</div>
-        ${hasGps ? '<div class="gps-tag">GPS</div>' : ''}
+        <div class="species-name">${species}</div>
+        <div class="species-count">×${data.count}</div>
       </div>`;
     }).join('');
+
     return `<div class="trip-card">
       <div class="trip-date-header" data-date="${dateKey}">
         <div class="trip-date-label">${fmtDate(dateKey)}</div>
-        <div class="trip-summary">${speciesCount} species &middot; ${totalAnimals} animals</div>
+        <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
       </div>
       <div class="trip-sightings">${rows}</div>
     </div>`;
@@ -215,7 +221,7 @@ function renderFeed(data) {
       if (row.dataset.hasGps !== 'true') return;
       list.querySelectorAll('.sighting-row').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      pingMarkerByIdx(+row.dataset.idx);
+      pingSpeciesOnDate(row.dataset.date, row.dataset.species);
     });
   });
 
