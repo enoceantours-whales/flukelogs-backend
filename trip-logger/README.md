@@ -124,12 +124,6 @@ The product solves three problems for operators:
 2. Every guest email is captured automatically into a remarketing list
 3. A direct review CTA is delivered at peak guest satisfaction (right after the trip)
 
-Potential pricing model:
-- Small boats (under 20 pax) — $149/month
-- Mid size (20-50 pax) — $299/month
-- Large (50-150 pax) — $599/month
-- Fleet — $999+/month
-
 ---
 
 Built by Slater Moore — Captain, Marine Wildlife Cinematographer, Moss Landing Harbor
