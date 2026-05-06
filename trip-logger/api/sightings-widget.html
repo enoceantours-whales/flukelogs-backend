@@ -37,19 +37,21 @@
   .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
   .feed-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .feed-count { font-size: 11px; color: var(--muted); }
-  .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; transition: border-color .15s; }
-  .trip-card:hover { border-color: #333; }
-  .trip-card.highlighted { border-color: #fff; }
-  .trip-date-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .trip-date-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .trip-date-header:hover { background: #1a1a1a; }
   .trip-date-label { font-size: 13px; font-weight: 600; color: var(--accent); }
   .trip-summary { font-size: 11px; color: var(--muted); }
   .trip-sightings { padding: 4px 0; }
-  .sighting-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid #1a1a1a; }
+  .sighting-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .1s; }
   .sighting-row:last-child { border-bottom: none; }
+  .sighting-row:hover { background: #1c1c1c; }
+  .sighting-row.active { background: #1e1e1e; border-left: 2px solid #fff; padding-left: 14px; }
   .sighting-row .species-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
   .sighting-row .species-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
   .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); margin-right: 4px; }
   .sighting-row .gps-tag { font-size: 10px; color: #555; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 4px; padding: 2px 6px; }
+  .sighting-row.active .gps-tag { color: #888; border-color: #444; }
   .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
   .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -94,6 +96,8 @@ const SPECIES_META = {
   'Humpback Whale':              { icon: '🐳', color: '#90cdf4' },
   'Gray Whale':                  { icon: '🐋', color: '#a0aec0' },
   'Blue Whale':                  { icon: '🐋', color: '#63b3ed' },
+  'Fin Whale':                   { icon: '🐋', color: '#b794f4' },
+  'Minke Whale':                 { icon: '🐋', color: '#76e4f7' },
   "Risso's Dolphin":             { icon: '🐬', color: '#fbd38d' },
   'Common Dolphin':              { icon: '🐬', color: '#f6ad55' },
   'Pacific White-sided Dolphin': { icon: '🐬', color: '#68d391' },
@@ -101,6 +105,7 @@ const SPECIES_META = {
   'Sea Otter':                   { icon: '🦦', color: '#d4a373' },
   'Harbor Seal':                 { icon: '🦭', color: '#b0b0b0' },
   'Mola Mola':                   { icon: '🐟', color: '#9f7aea' },
+  'Black-footed Albatross':      { icon: '🐦', color: '#f6e05e' },
   'default':                     { icon: '🌊', color: '#555' },
 };
 const sm = n => SPECIES_META[n] || SPECIES_META['default'];
@@ -129,27 +134,34 @@ function renderMap(data) {
     const meta = sm(s.species);
     const m = L.circleMarker([+s.lat, +s.lng], { radius: 7, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
     m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
+    m._rowId = s._rowId;
     m._dateKey = (s.trip_date || '').slice(0, 10);
     markers.push(m);
   });
 }
 
+function pingMarkerById(rowId) {
+  const m = markers.find(x => x._rowId === rowId);
+  if (!m) return;
+  map.panTo(m.getLatLng(), { animate: true });
+  m.openPopup();
+}
+
 function pingDate(dateKey) {
   const dateMarkers = markers.filter(m => m._dateKey === dateKey);
   if (!dateMarkers.length) return;
-  dateMarkers.forEach(m => m.openPopup());
   const lats = dateMarkers.map(m => m.getLatLng().lat);
   const lngs = dateMarkers.map(m => m.getLatLng().lng);
-  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-  map.panTo([centerLat, centerLng], { animate: true });
+  map.panTo([(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2], { animate: true });
 }
 
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=id,trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  data.forEach(s => s._rowId = s.id);
+  return data;
 }
 
 function fmtDate(d) {
@@ -171,33 +183,44 @@ function renderFeed(data) {
   const trips = groupByDate(data);
   document.getElementById('feed-count').textContent = `${trips.length} trip${trips.length !== 1 ? 's' : ''}`;
   if (!trips.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
+
   list.innerHTML = trips.map(([dateKey, sightings]) => {
     const totalAnimals = sightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
     const speciesCount = new Set(sightings.map(s => s.species)).size;
     const rows = sightings.map(s => {
       const meta = sm(s.species);
-      return `<div class="sighting-row">
+      const hasGps = s.lat && s.lng;
+      return `<div class="sighting-row" data-row-id="${s._rowId}" data-has-gps="${hasGps}">
         <div class="species-icon">${meta.icon}</div>
         <div class="species-name">${s.species || 'Unknown'}</div>
         <div class="species-count">×${s.count ?? '—'}</div>
-        ${s.lat ? '<div class="gps-tag">GPS</div>' : ''}
+        ${hasGps ? '<div class="gps-tag">GPS</div>' : ''}
       </div>`;
     }).join('');
     return `<div class="trip-card" data-date="${dateKey}">
-      <div class="trip-date-header">
+      <div class="trip-date-header" data-date="${dateKey}">
         <div class="trip-date-label">${fmtDate(dateKey)}</div>
         <div class="trip-summary">${speciesCount} species &middot; ${totalAnimals} animals</div>
       </div>
       <div class="trip-sightings">${rows}</div>
     </div>`;
   }).join('');
-  list.querySelectorAll('.trip-card').forEach(card => {
-    card.addEventListener('click', () => {
-      list.querySelectorAll('.trip-card').forEach(c => c.classList.remove('highlighted'));
-      card.classList.add('highlighted');
-      pingDate(card.dataset.date);
+
+  // Trip header click — pan to all sightings that day
+  list.querySelectorAll('.trip-date-header').forEach(header => {
+    header.addEventListener('click', () => pingDate(header.dataset.date));
+  });
+
+  // Individual row click — pan to that specific marker
+  list.querySelectorAll('.sighting-row').forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.hasGps !== 'true') return;
+      list.querySelectorAll('.sighting-row').forEach(r => r.classList.remove('active'));
+      row.classList.add('active');
+      pingMarkerById(row.dataset.rowId);
     });
   });
+
   sendHeight();
 }
 
