@@ -86,18 +86,18 @@ const TABLE = 'sightings';
 const FEED_LIMIT = 40;
 
 const SPECIES_META = {
-  'Orca':                         { icon: '🐋', color: '#ffffff' },
-  'Humpback Whale':               { icon: '🐳', color: '#90cdf4' },
-  'Gray Whale':                   { icon: '🐋', color: '#a0aec0' },
-  'Blue Whale':                   { icon: '🐋', color: '#63b3ed' },
-  "Risso's Dolphin":              { icon: '🐬', color: '#fbd38d' },
-  'Common Dolphin':               { icon: '🐬', color: '#f6ad55' },
-  'Pacific White-sided Dolphin':  { icon: '🐬', color: '#68d391' },
-  'Bottlenose Dolphin':           { icon: '🐬', color: '#e9c46a' },
-  'Sea Otter':                    { icon: '🦦', color: '#d4a373' },
-  'Harbor Seal':                  { icon: '🦭', color: '#b0b0b0' },
-  'Mola Mola':                    { icon: '🐟', color: '#9f7aea' },
-  'default':                      { icon: '🌊', color: '#555' },
+  'Orca':                        { icon: '🐋', color: '#ffffff' },
+  'Humpback Whale':              { icon: '🐳', color: '#90cdf4' },
+  'Gray Whale':                  { icon: '🐋', color: '#a0aec0' },
+  'Blue Whale':                  { icon: '🐋', color: '#63b3ed' },
+  "Risso's Dolphin":             { icon: '🐬', color: '#fbd38d' },
+  'Common Dolphin':              { icon: '🐬', color: '#f6ad55' },
+  'Pacific White-sided Dolphin': { icon: '🐬', color: '#68d391' },
+  'Bottlenose Dolphin':          { icon: '🐬', color: '#e9c46a' },
+  'Sea Otter':                   { icon: '🦦', color: '#d4a373' },
+  'Harbor Seal':                 { icon: '🦭', color: '#b0b0b0' },
+  'Mola Mola':                   { icon: '🐟', color: '#9f7aea' },
+  'default':                     { icon: '🌊', color: '#555' },
 };
 const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 
@@ -110,9 +110,9 @@ function renderMap(data) {
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
   data.forEach((s, i) => {
-    if (!s.location_lat || !s.location_lng) return;
+    if (!s.lat || !s.lng) return;
     const meta = sm(s.species);
-    const m = L.circleMarker([+s.location_lat, +s.location_lng], { radius: 8, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
+    const m = L.circleMarker([+s.lat, +s.lng], { radius: 8, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
     m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
     m._rowIndex = i;
     markers.push(m);
@@ -154,7 +154,7 @@ function renderFeed(data) {
   if (!data.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
   list.innerHTML = data.map((s, i) => {
     const meta = sm(s.species);
-    return `<div class="sighting-card" data-i="${i}"><div class="species-icon">${meta.icon}</div><div class="sighting-info"><div class="sighting-species">${s.species || 'Unknown species'}</div><div class="sighting-meta">${fmtDate(s.trip_date)}${s.location_lat ? ' &middot; GPS logged' : ''}</div></div><div class="sighting-count">${s.count ?? '—'}<span>individuals</span></div></div>`;
+    return `<div class="sighting-card" data-i="${i}"><div class="species-icon">${meta.icon}</div><div class="sighting-info"><div class="sighting-species">${s.species || 'Unknown species'}</div><div class="sighting-meta">${fmtDate(s.trip_date)}${s.lat ? ' &middot; GPS logged' : ''}</div></div><div class="sighting-count">${s.count ?? '—'}<span>individuals</span></div></div>`;
   }).join('');
   list.querySelectorAll('.sighting-card').forEach(card => {
     card.addEventListener('click', () => {
