@@ -129,38 +129,38 @@ function groupByDate(data) {
 function renderMap(data) {
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
-  data.forEach((s, i) => {
+  data.forEach((s) => {
     if (!s.lat || !s.lng) return;
     const meta = sm(s.species);
     const m = L.circleMarker([+s.lat, +s.lng], { radius: 7, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
     m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
-    m._rowId = s._rowId;
+    m._rowIdx = s._rowIdx;
     m._dateKey = (s.trip_date || '').slice(0, 10);
     markers.push(m);
   });
 }
 
-function pingMarkerById(rowId) {
-  const m = markers.find(x => x._rowId === rowId);
+function pingMarkerByIdx(idx) {
+  const m = markers.find(x => x._rowIdx === idx);
   if (!m) return;
   map.panTo(m.getLatLng(), { animate: true });
-  m.openPopup();
+  setTimeout(() => m.openPopup(), 300);
 }
 
 function pingDate(dateKey) {
-  const dateMarkers = markers.filter(m => m._dateKey === dateKey);
-  if (!dateMarkers.length) return;
-  const lats = dateMarkers.map(m => m.getLatLng().lat);
-  const lngs = dateMarkers.map(m => m.getLatLng().lng);
+  const dm = markers.filter(m => m._dateKey === dateKey);
+  if (!dm.length) return;
+  const lats = dm.map(m => m.getLatLng().lat);
+  const lngs = dm.map(m => m.getLatLng().lng);
   map.panTo([(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2], { animate: true });
 }
 
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=id,trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   const data = await res.json();
-  data.forEach(s => s._rowId = s.id);
+  data.forEach((s, i) => s._rowIdx = i);
   return data;
 }
 
@@ -189,15 +189,15 @@ function renderFeed(data) {
     const speciesCount = new Set(sightings.map(s => s.species)).size;
     const rows = sightings.map(s => {
       const meta = sm(s.species);
-      const hasGps = s.lat && s.lng;
-      return `<div class="sighting-row" data-row-id="${s._rowId}" data-has-gps="${hasGps}">
+      const hasGps = !!(s.lat && s.lng);
+      return `<div class="sighting-row" data-idx="${s._rowIdx}" data-has-gps="${hasGps}">
         <div class="species-icon">${meta.icon}</div>
         <div class="species-name">${s.species || 'Unknown'}</div>
         <div class="species-count">×${s.count ?? '—'}</div>
         ${hasGps ? '<div class="gps-tag">GPS</div>' : ''}
       </div>`;
     }).join('');
-    return `<div class="trip-card" data-date="${dateKey}">
+    return `<div class="trip-card">
       <div class="trip-date-header" data-date="${dateKey}">
         <div class="trip-date-label">${fmtDate(dateKey)}</div>
         <div class="trip-summary">${speciesCount} species &middot; ${totalAnimals} animals</div>
@@ -206,18 +206,16 @@ function renderFeed(data) {
     </div>`;
   }).join('');
 
-  // Trip header click — pan to all sightings that day
   list.querySelectorAll('.trip-date-header').forEach(header => {
     header.addEventListener('click', () => pingDate(header.dataset.date));
   });
 
-  // Individual row click — pan to that specific marker
   list.querySelectorAll('.sighting-row').forEach(row => {
     row.addEventListener('click', () => {
       if (row.dataset.hasGps !== 'true') return;
       list.querySelectorAll('.sighting-row').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      pingMarkerById(row.dataset.rowId);
+      pingMarkerByIdx(+row.dataset.idx);
     });
   });
 
