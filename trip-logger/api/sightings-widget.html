@@ -27,10 +27,10 @@
   .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; display: flex; flex-direction: column; align-items: center; min-width: 90px; gap: 2px; }
   .total-chip .chip-num { font-size: 20px; font-weight: 600; color: var(--accent); }
   .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 340px; }
-  #sightings-map { width: 100%; height: 100%; background: #111; }
-  .leaflet-tile { filter: brightness(0.8) saturate(0.3); }
-  .leaflet-container { background: #111 !important; }
+  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 380px; }
+  #sightings-map { width: 100%; height: 100%; background: #0a1628; }
+  .leaflet-tile { filter: brightness(0.92) contrast(1.05); }
+  .leaflet-container { background: #0a1628 !important; }
   .leaflet-popup-content-wrapper { background: #1a1a1a; color: #f0f0f0; border: 1px solid #333; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
   .leaflet-popup-tip { background: #1a1a1a; }
   .leaflet-popup-close-button { color: #888 !important; }
@@ -102,7 +102,15 @@ const SPECIES_META = {
 const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 
 const map = L.map('sightings-map', { center: [36.803, -121.787], zoom: 10, zoomControl: true, scrollWheelZoom: false, attributionControl: false });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16 }).addTo(map);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 16,
+}).addTo(map);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 16,
+  opacity: 0.7,
+}).addTo(map);
 
 const markers = [];
 
@@ -145,39 +153,4 @@ function renderTotals(data) {
   document.getElementById('totals-bar').innerHTML = `
     <div class="total-chip"><div class="chip-num">${days}</div><div class="chip-label">Trip Days</div></div>
     <div class="total-chip"><div class="chip-num">${total}</div><div class="chip-label">Animals</div></div>
-    ${top.map(([n, c]) => `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(-1)[0]}</div></div>`).join('')}`;
-}
-
-function renderFeed(data) {
-  const list = document.getElementById('feed-list');
-  document.getElementById('feed-count').textContent = `${data.length} records`;
-  if (!data.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
-  list.innerHTML = data.map((s, i) => {
-    const meta = sm(s.species);
-    return `<div class="sighting-card" data-i="${i}"><div class="species-icon">${meta.icon}</div><div class="sighting-info"><div class="sighting-species">${s.species || 'Unknown species'}</div><div class="sighting-meta">${fmtDate(s.trip_date)}${s.lat ? ' &middot; GPS logged' : ''}</div></div><div class="sighting-count">${s.count ?? '—'}<span>individuals</span></div></div>`;
-  }).join('');
-  list.querySelectorAll('.sighting-card').forEach(card => {
-    card.addEventListener('click', () => {
-      list.querySelectorAll('.sighting-card').forEach(c => c.classList.remove('highlighted'));
-      card.classList.add('highlighted');
-      pingMarker(+card.dataset.i);
-    });
-  });
-}
-
-(async () => {
-  try {
-    const data = await fetchSightings();
-    renderTotals(data);
-    renderMap(data);
-    renderFeed(data);
-    const el = document.getElementById('status-text');
-    el.textContent = data.length ? `Last updated ${fmtDate(data[0].trip_date)}` : 'No data yet';
-  } catch (err) {
-    document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
-    document.getElementById('status-text').textContent = 'Data unavailable';
-  }
-})();
-</script>
-</body>
-</html>
+    ${top.map(([n, c]) => `<div class="total-chip"><div class="chip-num">${sm(n).icon} ${c}</div><div class="chip-label">${n.split(' ').slice(
