@@ -16,31 +16,57 @@
   }
   html, body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh; }
   .widget-wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 48px; }
-  .widget-header { margin-bottom: 28px; }
+  .widget-header { margin-bottom: 20px; }
   .widget-header h2 { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
   .widget-header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
-  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; flex-shrink: 0; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── What's out there now banner ── */
+  .now-banner { background: linear-gradient(135deg, #0d1f0d 0%, #0a1a0a 100%); border: 1px solid #1a3a1a; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 14px; }
+  .now-dot { width: 10px; height: 10px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; flex-shrink: 0; margin-top: 3px; }
+  @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74,222,128,0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74,222,128,0); } }
+  .now-content { flex: 1; }
+  .now-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #4ade80; margin-bottom: 4px; }
+  .now-species { font-size: 15px; font-weight: 600; color: #fff; line-height: 1.4; }
+  .now-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .now-cta { background: #fff; color: #000; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; flex-shrink: 0; align-self: center; transition: opacity .15s; }
+  .now-cta:hover { opacity: .85; }
+
+  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
   .status-text { font-size: 12px; color: var(--muted); }
-  .totals-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+  .totals-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
   .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 20px; display: flex; flex-direction: column; align-items: center; min-width: 110px; gap: 4px; }
   .total-chip .chip-num { font-size: 28px; font-weight: 600; color: var(--accent); }
   .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 380px; }
+
+  /* ── Species filter pills ── */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .filter-pill { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .filter-pill:hover { border-color: #444; color: var(--text); }
+  .filter-pill.active { background: #fff; border-color: #fff; color: #000; }
+  .filter-pill .pill-icon { font-size: 13px; }
+
+  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 380px; position: relative; }
   #sightings-map { width: 100%; height: 100%; background: #0a1628; }
   .leaflet-tile { filter: brightness(0.92) contrast(1.05); }
   .leaflet-container { background: #0a1628 !important; }
   .leaflet-popup-content-wrapper { background: #1a1a1a; color: #f0f0f0; border: 1px solid #333; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
   .leaflet-popup-tip { background: #1a1a1a; }
   .leaflet-popup-close-button { color: #888 !important; }
+
+  /* Map hint */
+  .map-hint { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.65); color: #888; font-size: 10px; padding: 4px 8px; border-radius: 4px; z-index: 1000; pointer-events: none; }
+
   .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
   .feed-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .feed-count { font-size: 11px; color: var(--muted); }
-  .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
-  .trip-date-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; transition: border-color .15s; }
+  .trip-card.selected { border-color: #444; }
+  .trip-date-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background .1s; }
   .trip-date-header:hover { background: #1a1a1a; }
-  .trip-date-label { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .trip-date-header.active-trip { background: #1a1a1a; }
+  .trip-date-label { font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  .active-indicator { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; display: none; }
+  .trip-date-header.active-trip .active-indicator { display: inline-block; }
   .trip-summary { font-size: 11px; color: var(--muted); }
   .trip-sightings { padding: 4px 0; }
   .sighting-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .1s; }
@@ -50,6 +76,8 @@
   .sighting-row .species-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
   .sighting-row .species-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
   .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .trip-card.hidden { display: none; }
+
   .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
   .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -61,16 +89,37 @@
 </head>
 <body>
 <div class="widget-wrap">
+
   <div class="widget-header">
     <h2>Recent Sightings</h2>
     <p>Monterey Bay &middot; Moss Landing</p>
   </div>
+
+  <!-- What's out there now -->
+  <div class="now-banner" id="now-banner" style="display:none;">
+    <div class="now-dot"></div>
+    <div class="now-content">
+      <div class="now-label">What's out there right now</div>
+      <div class="now-species" id="now-species"></div>
+      <div class="now-meta" id="now-meta"></div>
+    </div>
+    <a class="now-cta" href="https://enoceantours.com/tours" target="_blank">Book Now</a>
+  </div>
+
   <div class="status-row">
-    <div class="pulse-dot"></div>
     <div class="status-text" id="status-text">Loading latest data&hellip;</div>
   </div>
+
   <div class="totals-bar" id="totals-bar"></div>
-  <div class="map-wrap"><div id="sightings-map"></div></div>
+
+  <!-- Species filter -->
+  <div class="filter-bar" id="filter-bar"></div>
+
+  <div class="map-wrap">
+    <div id="sightings-map"></div>
+    <div class="map-hint" id="map-hint">Click a trip to see its pins</div>
+  </div>
+
   <div class="feed-header">
     <h3>Trip Log</h3>
     <div class="feed-count" id="feed-count"></div>
@@ -78,44 +127,163 @@
   <div id="feed-list">
     <div class="state-msg"><div class="spinner"></div>Fetching sightings&hellip;</div>
   </div>
+
   <div class="cta-strip">
     <div class="cta-text">Spots are limited to 6 guests. Book early.</div>
     <a class="cta-btn" href="https://enoceantours.com/tours" target="_blank">Book a Trip &rarr;</a>
   </div>
 </div>
+
 <script>
 const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
 const TABLE = 'sightings';
 const FEED_LIMIT = 100;
+const BOOK_URL = 'https://enoceantours.com/tours';
 
-const WHALE_SPECIES = ['Humpback Whale','Blue Whale','Gray Whale','Fin Whale','Minke Whale','Orca','Sperm Whale'];
-const DOLPHIN_SPECIES = ['Common Dolphin','Pacific White-sided Dolphin',"Risso's Dolphin",'Bottlenose Dolphin'];
+const WHALE_SPECIES = ['Humpback Whale','Blue Whale','Gray Whale','Fin Whale','Minke Whale','Orca','Transient Orcas','Offshore Orcas','Resident Orcas','Sperm Whale'];
+const DOLPHIN_SPECIES = ['Common Dolphin','Pacific White-sided Dolphin',"Risso's Dolphin",'Bottlenose Dolphin','Coastal Bottlenose Dolphin','Northern Right Whale Dolphin'];
 
+// Pin colors — your spec + my picks for the rest
 const SPECIES_META = {
-  'Orca':                        { icon: '🐋', color: '#ffffff' },
-  'Humpback Whale':              { icon: '🐳', color: '#90cdf4' },
-  'Gray Whale':                  { icon: '🐋', color: '#a0aec0' },
-  'Blue Whale':                  { icon: '🐋', color: '#63b3ed' },
-  'Fin Whale':                   { icon: '🐋', color: '#b794f4' },
-  'Minke Whale':                 { icon: '🐋', color: '#76e4f7' },
-  "Risso's Dolphin":             { icon: '🐬', color: '#fbd38d' },
-  'Common Dolphin':              { icon: '🐬', color: '#f6ad55' },
-  'Pacific White-sided Dolphin': { icon: '🐬', color: '#68d391' },
-  'Bottlenose Dolphin':          { icon: '🐬', color: '#e9c46a' },
-  'Sea Otter':                   { icon: '🦦', color: '#d4a373' },
-  'Harbor Seal':                 { icon: '🦭', color: '#b0b0b0' },
-  'Mola Mola':                   { icon: '🐟', color: '#9f7aea' },
-  'Black-footed Albatross':      { icon: '🐦', color: '#f6e05e' },
-  'default':                     { icon: '🌊', color: '#555' },
+  'Orca':                          { icon: '🐋', color: '#ffffff', borderColor: '#000000', isSplit: true },
+  'Transient Orcas':               { icon: '🐋', color: '#ffffff', borderColor: '#000000', isSplit: true },
+  'Offshore Orcas':                { icon: '🐋', color: '#ffffff', borderColor: '#000000', isSplit: true },
+  'Resident Orcas':                { icon: '🐋', color: '#ffffff', borderColor: '#000000', isSplit: true },
+  'Humpback Whale':                { icon: '🐳', color: '#111111', borderColor: '#555' },
+  'Blue Whale':                    { icon: '🐋', color: '#2b6cb0', borderColor: '#1a4a8a' },
+  'Fin Whale':                     { icon: '🐋', color: '#744210', borderColor: '#4a2800' },
+  'Gray Whale':                    { icon: '🐋', color: '#718096', borderColor: '#4a5568' },
+  'Minke Whale':                   { icon: '🐋', color: '#2c7a7b', borderColor: '#1a5a5b' },
+  'Sperm Whale':                   { icon: '🐋', color: '#4a1942', borderColor: '#2d0f29' },
+  'Pacific White-sided Dolphin':   { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  'Common Dolphin':                { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  "Risso's Dolphin":               { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  'Bottlenose Dolphin':            { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  'Coastal Bottlenose Dolphin':    { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  'Northern Right Whale Dolphin':  { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+  'Dall\'s Porpoise':              { icon: '🐬', color: '#e2e8f0', borderColor: '#999' },
+  'Harbor Porpoise':               { icon: '🐬', color: '#e2e8f0', borderColor: '#999' },
+  'Sea Otter':                     { icon: '🦦', color: '#c05621', borderColor: '#7b341e' },
+  'Harbor Seal':                   { icon: '🦭', color: '#b7791f', borderColor: '#7b5a00' },
+  'Mola Mola':                     { icon: '🐟', color: '#6b46c1', borderColor: '#44337a' },
+  'White Shark':                   { icon: '🦈', color: '#4a5568', borderColor: '#2d3748' },
+  'Blue Shark':                    { icon: '🦈', color: '#2b4c7e', borderColor: '#1a3a6e' },
+  'Salmon Shark':                  { icon: '🦈', color: '#2d3748', borderColor: '#1a202c' },
+  'Black-footed Albatross':        { icon: '🐦', color: '#d4a017', borderColor: '#a07800' },
+  'default':                       { icon: '🌊', color: '#4a5568', borderColor: '#2d3748' },
 };
 const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 
+// ── State ────────────────────────────────────────────────────────────────────
+let allData = [];
+let activeFilter = null;   // species name or null
+let activeDateKey = null;  // selected trip date or null
+const markers = [];
+
+// ── Map ──────────────────────────────────────────────────────────────────────
 const map = L.map('sightings-map', { center: [36.803, -121.787], zoom: 10, zoomControl: true, scrollWheelZoom: false, attributionControl: false });
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.7 }).addTo(map);
 
-const markers = [];
+// Custom split circle marker for Orca (black/white)
+function createOrcaIcon(lat, lng) {
+  const size = 16;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 1}" fill="white" stroke="#000" stroke-width="1.5"/>
+    <path d="M${size/2},1 A${size/2-1},${size/2-1} 0 0,1 ${size/2},${size-1} Z" fill="black"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+    popupAnchor: [0, -size/2],
+  });
+}
+
+function refreshMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers.length = 0;
+
+  const dataToShow = activeDateKey
+    ? allData.filter(s => (s.trip_date || '').slice(0, 10) === activeDateKey)
+    : activeFilter
+      ? allData.filter(s => s.species === activeFilter)
+      : allData;
+
+  dataToShow.forEach(s => {
+    if (!s.lat || !s.lng) return;
+    const meta = sm(s.species);
+    let m;
+
+    if (meta.isSplit) {
+      m = L.marker([+s.lat, +s.lng], { icon: createOrcaIcon() });
+    } else {
+      m = L.circleMarker([+s.lat, +s.lng], {
+        radius: 7,
+        fillColor: meta.color,
+        color: meta.borderColor || '#000',
+        weight: 1.5,
+        fillOpacity: 0.95,
+      });
+    }
+
+    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;">
+      <strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>
+      Count: <strong>${s.count ?? '—'}</strong><br>
+      ${fmtDate(s.trip_date)}
+    </div>`);
+    m._dateKey = (s.trip_date || '').slice(0, 10);
+    m._species = s.species;
+    m.addTo(map);
+    markers.push(m);
+  });
+
+  // Update hint
+  const hint = document.getElementById('map-hint');
+  if (activeDateKey) {
+    hint.textContent = `Showing ${fmtDateShort(activeDateKey)} — click map to deselect`;
+  } else if (activeFilter) {
+    hint.textContent = `Filtered: ${activeFilter}`;
+  } else {
+    hint.textContent = 'Click a trip to see its pins';
+  }
+}
+
+// Click map background to deselect trip
+map.on('click', () => {
+  if (activeDateKey) {
+    activeDateKey = null;
+    refreshMarkers();
+    document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+    document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
+  }
+});
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+async function fetchSightings() {
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function fmtDateShort(d) {
+  if (!d) return '—';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function daysBetween(d) {
+  const diff = Math.floor((Date.now() - new Date(d + 'T12:00:00')) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  return `${diff} days ago`;
+}
 
 function groupByDate(data) {
   const trips = {};
@@ -137,47 +305,27 @@ function tallyBySpecies(sightings) {
   return Object.entries(tally).sort((a, b) => b[1].count - a[1].count);
 }
 
-function renderMap(data) {
-  markers.forEach(m => map.removeLayer(m));
-  markers.length = 0;
-  data.forEach(s => {
-    if (!s.lat || !s.lng) return;
-    const meta = sm(s.species);
-    const m = L.circleMarker([+s.lat, +s.lng], { radius: 7, fillColor: meta.color, color: '#000', weight: 1.5, fillOpacity: 0.9 }).addTo(map);
-    m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;"><strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>Count: <strong>${s.count ?? '—'}</strong><br>${fmtDate(s.trip_date)}</div>`);
-    m._dateKey = (s.trip_date || '').slice(0, 10);
-    m._species = s.species;
-    markers.push(m);
-  });
+// ── Now banner ────────────────────────────────────────────────────────────────
+function renderNowBanner(data) {
+  if (!data.length) return;
+  const trips = groupByDate(data);
+  const [latestDate, latestSightings] = trips[0];
+  const tallied = tallyBySpecies(latestSightings);
+  const speciesNames = tallied.map(([name]) => name);
+  const totalAnimals = latestSightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
+
+  // Format species list nicely
+  let speciesText;
+  if (speciesNames.length === 1) speciesText = speciesNames[0];
+  else if (speciesNames.length === 2) speciesText = speciesNames.join(' & ');
+  else speciesText = speciesNames.slice(0, -1).join(', ') + ' & ' + speciesNames.slice(-1);
+
+  document.getElementById('now-species').textContent = speciesText;
+  document.getElementById('now-meta').textContent = `${totalAnimals} animals spotted · ${daysBetween(latestDate)}`;
+  document.getElementById('now-banner').style.display = 'flex';
 }
 
-function pingSpeciesOnDate(dateKey, species) {
-  const m = markers.find(x => x._dateKey === dateKey && x._species === species);
-  if (!m) return;
-  map.panTo(m.getLatLng(), { animate: true });
-  setTimeout(() => m.openPopup(), 300);
-}
-
-function pingDate(dateKey) {
-  const dm = markers.filter(m => m._dateKey === dateKey);
-  if (!dm.length) return;
-  const lats = dm.map(m => m.getLatLng().lat);
-  const lngs = dm.map(m => m.getLatLng().lng);
-  map.panTo([(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2], { animate: true });
-}
-
-async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
-  const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
-  if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  return res.json();
-}
-
-function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
-
+// ── Totals ────────────────────────────────────────────────────────────────────
 function renderTotals(data) {
   let whales = 0, dolphins = 0;
   data.forEach(s => {
@@ -191,6 +339,42 @@ function renderTotals(data) {
   document.getElementById('totals-bar').innerHTML = chips.join('');
 }
 
+// ── Filter pills ──────────────────────────────────────────────────────────────
+function renderFilters(data) {
+  const speciesSeen = [...new Set(data.map(s => s.species))].sort();
+  const bar = document.getElementById('filter-bar');
+  bar.innerHTML = `<div class="filter-pill active" data-species="all"><span class="pill-icon">🌊</span> All</div>` +
+    speciesSeen.map(name => {
+      const meta = sm(name);
+      return `<div class="filter-pill" data-species="${name}"><span class="pill-icon">${meta.icon}</span> ${name}</div>`;
+    }).join('');
+
+  bar.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      bar.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const val = pill.dataset.species;
+      activeFilter = val === 'all' ? null : val;
+      activeDateKey = null;
+      document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+      refreshMarkers();
+      applyFeedFilter();
+    });
+  });
+}
+
+function applyFeedFilter() {
+  document.querySelectorAll('.trip-card').forEach(card => {
+    if (!activeFilter) { card.classList.remove('hidden'); return; }
+    const hasSpecies = card.querySelector(`.sighting-row[data-species="${activeFilter}"]`);
+    card.classList.toggle('hidden', !hasSpecies);
+  });
+  const visible = document.querySelectorAll('.trip-card:not(.hidden)').length;
+  document.getElementById('feed-count').textContent = `${visible} trip${visible !== 1 ? 's' : ''}`;
+  sendHeight();
+}
+
+// ── Feed ──────────────────────────────────────────────────────────────────────
 function renderFeed(data) {
   const list = document.getElementById('feed-list');
   const trips = groupByDate(data);
@@ -210,25 +394,59 @@ function renderFeed(data) {
       </div>`;
     }).join('');
 
-    return `<div class="trip-card">
+    return `<div class="trip-card" data-date="${dateKey}">
       <div class="trip-date-header" data-date="${dateKey}">
-        <div class="trip-date-label">${fmtDate(dateKey)}</div>
+        <div class="trip-date-label">
+          <span class="active-indicator"></span>
+          ${fmtDate(dateKey)}
+        </div>
         <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
       </div>
       <div class="trip-sightings">${rows}</div>
     </div>`;
   }).join('');
 
+  // Trip header click — show only that day's pins
   list.querySelectorAll('.trip-date-header').forEach(header => {
-    header.addEventListener('click', () => pingDate(header.dataset.date));
+    header.addEventListener('click', () => {
+      const dateKey = header.dataset.date;
+      if (activeDateKey === dateKey) {
+        // Deselect
+        activeDateKey = null;
+        header.classList.remove('active-trip');
+        document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
+      } else {
+        activeDateKey = dateKey;
+        document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+        document.querySelectorAll('.trip-card').forEach(c => { c.classList.remove('selected'); c.classList.remove('hidden'); });
+        header.classList.add('active-trip');
+        header.closest('.trip-card').classList.add('selected');
+        // Pan map to this trip's center
+        const dm = allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey && s.lat && s.lng);
+        if (dm.length) {
+          const lats = dm.map(s => +s.lat), lngs = dm.map(s => +s.lng);
+          map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
+        }
+      }
+      refreshMarkers();
+    });
   });
 
+  // Sighting row click — zoom to specific marker
   list.querySelectorAll('.sighting-row').forEach(row => {
     row.addEventListener('click', () => {
       if (row.dataset.hasGps !== 'true') return;
       list.querySelectorAll('.sighting-row').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      pingSpeciesOnDate(row.dataset.date, row.dataset.species);
+      // Set active date to this trip and refresh
+      activeDateKey = row.dataset.date;
+      document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+      const header = list.querySelector(`.trip-date-header[data-date="${row.dataset.date}"]`);
+      if (header) header.classList.add('active-trip');
+      refreshMarkers();
+      // Pan to this specific marker
+      const m = markers.find(x => x._dateKey === row.dataset.date && x._species === row.dataset.species);
+      if (m) { map.panTo(m.getLatLng(), { animate: true }); setTimeout(() => m.openPopup(), 300); }
     });
   });
 
@@ -239,14 +457,19 @@ function sendHeight() {
   window.parent.postMessage({ iframeHeight: document.body.scrollHeight }, '*');
 }
 
+// ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   try {
-    const data = await fetchSightings();
-    renderTotals(data);
-    renderMap(data);
-    renderFeed(data);
+    allData = await fetchSightings();
+    renderNowBanner(allData);
+    renderTotals(allData);
+    renderFilters(allData);
+    refreshMarkers();
+    renderFeed(allData);
     const el = document.getElementById('status-text');
-    el.textContent = data.length ? `Last updated ${new Date(data[0].trip_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No data yet';
+    el.textContent = allData.length
+      ? `Last updated ${new Date(allData[0].trip_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+      : 'No data yet';
     sendHeight();
   } catch (err) {
     document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
