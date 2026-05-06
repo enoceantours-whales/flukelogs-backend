@@ -37,8 +37,6 @@
   .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
   .feed-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .feed-count { font-size: 11px; color: var(--muted); }
-
-  /* Trip cards */
   .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; transition: border-color .15s; }
   .trip-card:hover { border-color: #333; }
   .trip-card.highlighted { border-color: #fff; }
@@ -52,7 +50,6 @@
   .sighting-row .species-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
   .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); margin-right: 4px; }
   .sighting-row .gps-tag { font-size: 10px; color: #555; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 4px; padding: 2px 6px; }
-
   .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
   .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -176,9 +173,7 @@ function renderFeed(data) {
   const list = document.getElementById('feed-list');
   const trips = groupByDate(data);
   document.getElementById('feed-count').textContent = `${trips.length} trip${trips.length !== 1 ? 's' : ''}`;
-
   if (!trips.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
-
   list.innerHTML = trips.map(([dateKey, sightings]) => {
     const totalAnimals = sightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
     const speciesCount = new Set(sightings.map(s => s.species)).size;
@@ -191,7 +186,6 @@ function renderFeed(data) {
         ${s.lat ? '<div class="gps-tag">GPS</div>' : ''}
       </div>`;
     }).join('');
-
     return `<div class="trip-card" data-date="${dateKey}">
       <div class="trip-date-header">
         <div class="trip-date-label">${fmtDate(dateKey)}</div>
@@ -200,7 +194,6 @@ function renderFeed(data) {
       <div class="trip-sightings">${rows}</div>
     </div>`;
   }).join('');
-
   list.querySelectorAll('.trip-card').forEach(card => {
     card.addEventListener('click', () => {
       list.querySelectorAll('.trip-card').forEach(c => c.classList.remove('highlighted'));
@@ -208,6 +201,11 @@ function renderFeed(data) {
       pingDate(card.dataset.date);
     });
   });
+  sendHeight();
+}
+
+function sendHeight() {
+  window.parent.postMessage({ iframeHeight: document.body.scrollHeight }, '*');
 }
 
 (async () => {
@@ -218,11 +216,16 @@ function renderFeed(data) {
     renderFeed(data);
     const el = document.getElementById('status-text');
     el.textContent = data.length ? `Last updated ${new Date(data[0].trip_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No data yet';
+    sendHeight();
   } catch (err) {
     document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
     document.getElementById('status-text').textContent = 'Data unavailable';
+    sendHeight();
   }
 })();
+
+window.addEventListener('load', sendHeight);
+new MutationObserver(sendHeight).observe(document.body, { childList: true, subtree: true });
 </script>
 </body>
 </html>
