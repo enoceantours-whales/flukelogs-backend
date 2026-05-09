@@ -68,6 +68,65 @@ function fetchURL(url) {
   });
 }
 
+// ─── Bathymetry (NOAA NCEI global DEM mosaic) ───────────────────────────────
+// Returns positive depth in meters at the given lat/lng, or null if the point
+// is above sea level, the request times out (3s), or the API errors out.
+//
+// NOAA's DEM_global_mosaic returns elevation in meters: negative = below sea
+// level, positive = above. We invert the sign so callers always see depth as
+// a positive number, and discard land readings (positive elevation -> null).
+function fetchDepth(lat, lng) {
+  return new Promise((resolve) => {
+    const geometry = encodeURIComponent(JSON.stringify({
+      x: lng, y: lat, spatialReference: { wkid: 4326 },
+    }));
+    const url = `https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer/identify`
+      + `?geometry=${geometry}&geometryType=esriGeometryPoint&returnGeometry=false&f=json`;
+
+    let settled = false;
+    const done = (val) => { if (!settled) { settled = true; resolve(val); } };
+
+    const req = https.get(url, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          const raw = body && body.value;
+          const elevation = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
+          if (!Number.isFinite(elevation) || elevation >= 0) return done(null);
+          done(Math.abs(elevation));
+        } catch (e) {
+          done(null);
+        }
+      });
+      res.on('error', () => done(null));
+    });
+    req.on('error', () => done(null));
+    req.setTimeout(3000, () => { req.destroy(); done(null); });
+  });
+}
+
+// Mutates the sightings array, attaching depth_meters to every sighting that
+// has valid lat/lng. All lookups run in parallel (each capped at 3s by
+// fetchDepth's internal timeout), so total wall time is ~3s worst case
+// regardless of how many sightings the trip has.
+async function attachDepthsToSightings(sightings) {
+  if (!Array.isArray(sightings) || sightings.length === 0) return;
+  const depths = await Promise.all(sightings.map(s =>
+    (s && s.lat != null && s.lng != null) ? fetchDepth(s.lat, s.lng) : Promise.resolve(null)
+  ));
+  sightings.forEach((s, i) => { s.depth_meters = depths[i]; });
+}
+
+// Format depth for display: "847m" under 1km, "1.2km" otherwise. Returns
+// null when input is null/undefined/non-numeric so callers can use as a guard.
+function formatDepthLabel(m) {
+  if (m == null || !Number.isFinite(Number(m))) return null;
+  const v = Number(m);
+  return v < 1000 ? `${Math.round(v)}m` : `${(v / 1000).toFixed(1)}km`;
+}
+
 // ─── PDF Generator ───────────────────────────────────────────────────────────
 
 async function generatePDF(tripData) {
@@ -262,6 +321,10 @@ async function generatePDF(tripData) {
           const coords = s.lat.toFixed(4) + ', ' + s.lng.toFixed(4);
           noteText = noteText ? noteText + '  •  ' + coords : coords;
         }
+        const depthLabel = formatDepthLabel(s.depth_meters);
+        if (depthLabel) {
+          noteText = noteText ? noteText + '  ·  ' + depthLabel + ' depth' : depthLabel + ' depth';
+        }
         doc.fillColor(MID).font(reg).fontSize(Math.max(fontSize - 1, 6))
            .text(noteText, notesX, textY, { width: cols[3], lineBreak: false });
 
@@ -307,6 +370,9 @@ async function saveToSupabase(tripData) {
     behavior_notes: s.notes || null,
     lat: s.lat ? parseFloat(s.lat.toFixed(6)) : null,
     lng: s.lng ? parseFloat(s.lng.toFixed(6)) : null,
+    depth_meters: (s.depth_meters != null && Number.isFinite(Number(s.depth_meters)))
+      ? parseFloat(Number(s.depth_meters).toFixed(2))
+      : null,
   }));
 
   if (rows.length === 0) {
@@ -432,6 +498,11 @@ module.exports = async function handler(req, res) {
   if (validEmails.length === 0) return res.status(400).json({ error: 'No valid email addresses provided' });
 
   try {
+    // Fetch bathymetric depth for each sighting first so the PDF and
+    // Supabase row both pick it up. Lookups run in parallel and are
+    // capped at 3s each, so this adds at most ~3s to the trip end flow.
+    await attachDepthsToSightings(tripData.sightings);
+
     console.log('Generating PDF...');
     const pdfBuffer = await generatePDF(tripData);
     console.log('PDF done, size:', pdfBuffer.length);
