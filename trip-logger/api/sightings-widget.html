@@ -229,10 +229,12 @@ function refreshMarkers() {
       });
     }
 
+    const depthLabel = fmtDepth(s.depth_meters);
+    const depthLine = depthLabel ? `Depth: <strong>${depthLabel}</strong><br>` : '';
     m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;">
       <strong style="font-size:13px;">${meta.icon} ${s.species || 'Unknown'}</strong><br>
       Count: <strong>${s.count ?? '—'}</strong><br>
-      ${fmtDate(s.trip_date)}
+      ${depthLine}${fmtDate(s.trip_date)}
     </div>`);
     m._dateKey = (s.trip_date || '').slice(0, 10);
     m._species = s.species;
@@ -263,7 +265,7 @@ map.on('click', () => {
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng,depth_meters&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
@@ -283,6 +285,12 @@ function daysBetween(d) {
   if (diff === 0) return 'today';
   if (diff === 1) return 'yesterday';
   return `${diff} days ago`;
+}
+function fmtDepth(m) {
+  if (m == null) return null;
+  const v = Number(m);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return v < 1000 ? `${Math.round(v)}m` : `${(v / 1000).toFixed(1)}km`;
 }
 
 function groupByDate(data) {
