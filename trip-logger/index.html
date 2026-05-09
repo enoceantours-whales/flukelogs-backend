@@ -74,12 +74,20 @@
     .email-tag .remove-tag:hover { color: #fff; }
     .email-tag-input { background: none; border: none; outline: none; color: #fff; font-size: 16px; flex: 1; min-width: 160px; padding: 4px 2px; }
     .email-tag-input::placeholder { color: var(--muted); }
+
+    /* ── Header refresh button (start screen only) ── */
+    .btn-refresh { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #fff; font-size: 18px; cursor: pointer; display: none; align-items: center; justify-content: center; padding: 0; transition: transform 0.4s ease, background 0.15s; -webkit-tap-highlight-color: transparent; }
+    .btn-refresh.show { display: flex; }
+    .btn-refresh:active { background: rgba(255,255,255,0.2); transform: translateY(-50%) rotate(360deg); }
+    .btn-refresh.spinning { animation: refreshSpin 0.8s linear infinite; }
+    @keyframes refreshSpin { from { transform: translateY(-50%) rotate(0deg); } to { transform: translateY(-50%) rotate(360deg); } }
   </style>
 </head>
 <body>
 <div class="app">
 
   <div class="header">
+    <button class="btn-refresh show" id="btnRefresh" type="button" onclick="fetchBuoyConditions(true)" aria-label="Refresh conditions">↻</button>
     <div class="header-logo">
       <img src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
     </div>
@@ -91,10 +99,6 @@
   <div class="screen active" id="screenStart">
     <div class="section">
       <div class="section-label">New Trip</div>
-      <div id="buoyBanner" style="display:none; background:var(--card); border:1px solid var(--border); border-left:4px solid #fff; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--muted); line-height:1.4;">
-        <div id="buoyBannerText">Fetching live conditions from NOAA buoy 46092…</div>
-        <div style="margin-top:4px;"><a href="#" id="buoyRefresh" onclick="event.preventDefault(); fetchBuoyConditions(true);" style="color:#fff; text-decoration:none; font-weight:600;">↻ Refresh</a></div>
-      </div>
       <div class="field">
         <label>Passenger Count</label>
         <input type="number" id="inputPassengers" min="1" max="6" value="0" inputmode="numeric">
@@ -106,9 +110,8 @@
       <div class="field">
         <label>Visibility</label>
         <select id="inputVisibility">
-          <option value="">Select...</option>
           <option>Excellent</option>
-          <option>Good</option>
+          <option selected>Good</option>
           <option>Fair</option>
           <option>Poor</option>
           <option>Overcast</option>
@@ -266,6 +269,10 @@
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    // Header refresh button is only meaningful on the start screen, where
+    // it re-pulls buoy conditions. Hide it everywhere else.
+    const refreshBtn = document.getElementById('btnRefresh');
+    if (refreshBtn) refreshBtn.classList.toggle('show', id === 'screenStart');
     window.scrollTo(0, 0);
   }
 
@@ -314,20 +321,23 @@
     fetchBuoyConditions(false);
   });
 
-  // ── NOAA buoy auto-fill ────────────────────────────────────────────
+  // ── NOAA buoy auto-fill (silent) ───────────────────────────────────
   // Pulls latest observation from /api/buoy-conditions (default: 46092,
-  // MBARI M1 in the middle of central Monterey Bay) and populates the
-  // Water Temp + Sea Conditions fields if the captain hasn't already
-  // entered something. Runs once on app load and on manual refresh.
-  // Visibility isn't auto-filled — M1 has no visibility sensor; sea
-  // state falls back to a wind-speed read since M1 doesn't carry wave
-  // sensors either.
+  // MBARI M1 in the middle of central Monterey Bay) and quietly populates
+  // the Water Temp + Sea Conditions fields. No banner — the captain just
+  // sees the form pre-filled.
+  //
+  // Runs once on DOMContentLoaded and again every time the captain taps
+  // the ↻ refresh button in the header. On manual refresh (force=true)
+  // we overwrite any existing values and toast the new readings; on the
+  // initial auto-fetch we never overwrite captain edits and stay silent
+  // on errors so an offline app launch isn't loud.
+  //
+  // Visibility isn't touched — M1 has no visibility sensor and the form
+  // already defaults to "Good".
   async function fetchBuoyConditions(force) {
-    const banner = document.getElementById('buoyBanner');
-    const text   = document.getElementById('buoyBannerText');
-    if (!banner || !text) return;
-    banner.style.display = 'block';
-    text.textContent = 'Fetching live conditions from NOAA buoy 46092…';
+    const btn = document.getElementById('btnRefresh');
+    if (force && btn) btn.classList.add('spinning');
     try {
       const res = await fetch('/api/buoy-conditions', { cache: force ? 'reload' : 'default' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -343,17 +353,17 @@
         seaSelect.value = obs.sea_state;
       }
 
-      const parts = [];
-      if (obs.water_temp_f   != null) parts.push(`${obs.water_temp_f}°F`);
-      if (obs.wave_height_ft != null) parts.push(`${obs.wave_height_ft}ft swell`);
-      if (obs.wind_kt        != null) parts.push(`${obs.wind_kt}kt wind`);
-      const ageMin = obs.observed_at_utc
-        ? Math.max(0, Math.round((Date.now() - new Date(obs.observed_at_utc).getTime()) / 60000))
-        : null;
-      const ageStr = ageMin != null ? ` · ${ageMin} min ago` : '';
-      text.innerHTML = `<strong style="color:#fff;">Live from NOAA ${obs.station || '46042'}</strong>${ageStr}<br>${parts.join(' · ') || 'No usable readings'}`;
+      if (force) {
+        const parts = [];
+        if (obs.water_temp_f != null) parts.push(`${obs.water_temp_f}°F`);
+        if (obs.sea_state)            parts.push(obs.sea_state);
+        toast(`Conditions updated · ${parts.join(' · ') || 'no data'}`, 'success');
+      }
     } catch (err) {
-      text.innerHTML = `Couldn't reach NOAA buoy — fill conditions manually.<br><small style="color:#555;">${err.message || err}</small>`;
+      if (force) toast(`Couldn't reach NOAA buoy`, 'error');
+      // Silent on initial auto-fetch — captain just types manually
+    } finally {
+      if (force && btn) setTimeout(() => btn.classList.remove('spinning'), 400);
     }
   }
 
