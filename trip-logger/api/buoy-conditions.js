@@ -3,8 +3,14 @@
 // existing sea-conditions dropdown. The trip-start screen calls this on
 // load so the captain confirms instead of typing.
 //
-// Default station: 46042 (Monterey Bay, ~27 NM WNW of Monterey).
-// Override with ?station=NNNNN (any NDBC realtime2 station, e.g. 46026 SF).
+// Default station: 46092 (MBARI M1, inshore central Monterey Bay — sits
+// right in the middle of the typical whale-watch area). M1 doesn't carry
+// wave sensors so WVHT/DPD/MWD are always MM; sea state falls through to
+// the Beaufort wind-speed mapping below, which is fine for inshore chop
+// where local wind drives the surface more than offshore swell.
+//
+// If you want offshore swell data, use station=46042 (Monterey, ~27 NM
+// WNW) — it has the full wave sensor suite.
 //
 // Source: https://www.ndbc.noaa.gov/data/realtime2/{STATION}.txt
 // Format is space-delimited text with two header rows beginning with `#`.
@@ -12,7 +18,7 @@
 
 const https = require('https');
 
-const DEFAULT_STATION = '46042';
+const DEFAULT_STATION = '46092';
 const STATION_RE = /^\d{4,5}[A-Z]?$/; // basic shape check, e.g. "46042" or "BLIA2"
 
 function fetchText(url) {

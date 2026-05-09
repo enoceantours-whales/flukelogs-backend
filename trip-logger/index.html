@@ -92,7 +92,7 @@
     <div class="section">
       <div class="section-label">New Trip</div>
       <div id="buoyBanner" style="display:none; background:var(--card); border:1px solid var(--border); border-left:4px solid #fff; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--muted); line-height:1.4;">
-        <div id="buoyBannerText">Fetching live conditions from NOAA buoy 46042…</div>
+        <div id="buoyBannerText">Fetching live conditions from NOAA buoy 46092…</div>
         <div style="margin-top:4px;"><a href="#" id="buoyRefresh" onclick="event.preventDefault(); fetchBuoyConditions(true);" style="color:#fff; text-decoration:none; font-weight:600;">↻ Refresh</a></div>
       </div>
       <div class="field">
@@ -310,21 +310,24 @@
     });
     input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
 
-    // Auto-fill water temp + sea state from NOAA buoy 46042 (Monterey Bay)
+    // Auto-fill water temp + sea state from NOAA buoy 46092 (Monterey Bay)
     fetchBuoyConditions(false);
   });
 
   // ── NOAA buoy auto-fill ────────────────────────────────────────────
-  // Pulls latest observation from /api/buoy-conditions (default: 46042) and
-  // populates the Water Temp + Sea Conditions fields if the captain hasn't
-  // already entered something. Runs once on app load and on manual refresh.
-  // Visibility isn't auto-filled — buoy 46042 has no visibility sensor.
+  // Pulls latest observation from /api/buoy-conditions (default: 46092,
+  // MBARI M1 in the middle of central Monterey Bay) and populates the
+  // Water Temp + Sea Conditions fields if the captain hasn't already
+  // entered something. Runs once on app load and on manual refresh.
+  // Visibility isn't auto-filled — M1 has no visibility sensor; sea
+  // state falls back to a wind-speed read since M1 doesn't carry wave
+  // sensors either.
   async function fetchBuoyConditions(force) {
     const banner = document.getElementById('buoyBanner');
     const text   = document.getElementById('buoyBannerText');
     if (!banner || !text) return;
     banner.style.display = 'block';
-    text.textContent = 'Fetching live conditions from NOAA buoy 46042…';
+    text.textContent = 'Fetching live conditions from NOAA buoy 46092…';
     try {
       const res = await fetch('/api/buoy-conditions', { cache: force ? 'reload' : 'default' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
