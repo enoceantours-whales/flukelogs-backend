@@ -15,10 +15,11 @@ Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoce
 5. App generates and emails each guest:
    - A one-page branded **PDF trip report** (photo, map, sightings log)
    - A **1080x1920 Story card JPG** ready to post on Instagram
-6. Trip sightings are automatically saved to Supabase
-7. Guests are automatically added to the Enocean Tours Mailchimp audience
-8. Email includes a direct link to leave a TripAdvisor review
-9. Public sightings widget on enoceantours.com updates automatically after every trip
+6. Ocean depth at each sighting's coordinates is looked up from NOAA's bathymetric DEM and saved with the row
+7. Trip sightings are automatically saved to Supabase
+8. Guests are automatically added to the Enocean Tours Mailchimp audience
+9. Email includes a direct link to leave a review
+10. Public sightings widget on enoceantours.com updates automatically after every trip
 
 ---
 
@@ -33,6 +34,7 @@ Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoce
 | Story Card | Browser Canvas API |
 | Trip Report Map | Google Static Maps API |
 | Sightings Widget Map | Leaflet + ESRI Ocean Basemap |
+| Bathymetry | NOAA NCEI global DEM mosaic (per-sighting depth lookup) |
 | Email | Gmail SMTP via Nodemailer |
 | CRM | Mailchimp Marketing API |
 | Hosting | Vercel (Free tier) |
@@ -57,6 +59,7 @@ trip-logger-backend/
 │   ├── index.html                    # Frontend PWA
 │   ├── env.example
 │   └── package.json
+├── README.md
 └── vercel.json                       # Routing
 ```
 
@@ -78,7 +81,7 @@ trip-logger-backend/
 - Conditions bar: visibility, sea state, water temp
 - Full-width Monterey Bay satellite map (fixed view showing submarine canyon)
 - White numbered pins for each sighting location
-- Sightings table: species, count, time, notes + coordinates inline
+- Sightings table: species, count, time, notes + coordinates inline, plus ocean depth at each pin (e.g. `· 514m depth`)
 - Auto-scales font size to fit any number of sightings on one page
 - Black footer with website
 
@@ -93,7 +96,7 @@ trip-logger-backend/
 ### Email
 - Black/white branded HTML email
 - Logo, stats, species summary
-- "LEAVE US A REVIEW" CTA linking to TripAdvisor
+- "LEAVE US A REVIEW" CTA linking to enoceantours.com/reviews
 - PDF + Story card attached
 - Guest auto-added to Mailchimp with "Trip Guest" tag
 
@@ -107,7 +110,7 @@ trip-logger-backend/
 - Live at [enoceantours.com/sighting-log](https://enoceantours.com/sighting-log)
 - Served via `/api/sightings` — embedded in Squarespace via iframe
 - Interactive Leaflet map with ESRI Ocean Basemap showing Monterey Submarine Canyon bathymetry
-- Color-coded species markers — click any marker for species + count popup
+- Color-coded species markers — click any marker for species, count, and ocean depth at that pin
 - Trip log grouped by date — one card per trip, tallied by species
 - Click a trip date header to pan map to all sightings that day
 - Click a species row to pan map to that specific sighting
@@ -136,6 +139,7 @@ Table: `sightings`
 | `visibility` | text | Visibility conditions |
 | `conditions` | text | Sea state |
 | `behavior_notes` | text | Optional sighting notes |
+| `depth_meters` | numeric | Ocean depth at sighting (positive meters); null if on land or lookup failed |
 | `created_at` | timestamptz | Auto-generated |
 
 ---
@@ -174,6 +178,8 @@ Use the Supabase SQL editor to insert historical sightings in bulk:
 INSERT INTO sightings (trip_date, species, count, lat, lng, duration_minutes, distance_nm, passengers, water_temp, visibility) VALUES
 ('2026-05-03', 'Humpback Whale', 1, 36.7813, -121.9846, 446, 17.44, 6, 58, 'Overcast');
 ```
+
+Leave `depth_meters` out — newly inserted rows will sit as `null` until backfilled. To populate depth for any rows missing it, look up each `(lat, lng)` against NOAA's DEM endpoint and `UPDATE sightings SET depth_meters = … WHERE id = …`. The app's `send-report.js` does this automatically for every new trip; this only matters for manual historical inserts.
 
 ---
 
