@@ -564,6 +564,198 @@
     });
   }
 
+  // Loads an image, returns a Promise that resolves with the HTMLImageElement
+  // (or rejects on error). Used by generateCaptainCard for both the logo and
+  // the static map.
+  function loadCanvasImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to load ' + src));
+      img.src = src;
+    });
+  }
+
+  // PDF-styled image for the captain to download from email and post to IG.
+  // Layout (1080x1920, designed inside IG Story safe zones ~y240-y1680):
+  //   black header  ->  logo + "TRIP REPORT" + date
+  //   map           ->  pulled via /api/static-map proxy with one marker per
+  //                     sighting that has GPS
+  //   stats strip   ->  duration / distance / passengers / sightings
+  //   sightings list-> species, count, depth (auto-scaled font for long lists)
+  //   black footer  ->  ENOCEANTOURS.COM
+  // Returns a base64 JPEG (~150KB), same shape as generateSocialCard.
+  async function generateCaptainCard() {
+    const W = 1080, H = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    const BLACK = '#000000', WHITE = '#ffffff';
+    const GRAY  = '#f0f0f0', MID = '#777777', RULE = '#cccccc';
+
+    // ── 1. White background ──
+    ctx.fillStyle = WHITE;
+    ctx.fillRect(0, 0, W, H);
+
+    // ── 2. Header bar (black, 320px tall — top edge sits behind IG UI but the
+    //      logo + title live inside the safe zone starting ~y240) ──
+    ctx.fillStyle = BLACK;
+    ctx.fillRect(0, 0, W, 320);
+
+    // Logo — black-on-white logo (logo-05) drawn into a white circle so it
+    // pops against the black header, matching the PDF style.
+    try {
+      const logo = await loadCanvasImage('/Public/Enocean_Tours_logo-05.png');
+      const logoBoxY = 200;
+      const logoSize = 90;
+      const circleR = 56;
+      const cx = W / 2 - 200;
+      const cy = logoBoxY + circleR;
+      ctx.fillStyle = WHITE;
+      ctx.beginPath(); ctx.arc(cx, cy, circleR, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(logo, cx - logoSize / 2, cy - logoSize / 2, logoSize, logoSize);
+    } catch (e) { /* logo missing — continue without it */ }
+
+    // Title
+    ctx.fillStyle = WHITE;
+    ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('TRIP REPORT', W / 2 - 110, 270);
+
+    // Date subtitle
+    const date = new Date(trip.startTime).toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+    }).toUpperCase();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '28px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(date, W / 2, 380);
+
+    // ── 3. Map (full bleed, 660px tall) ──
+    const mapY = 430, mapH = 660;
+    const withCoords = trip.sightings.filter(s => s.lat && s.lng);
+    const mapParams = new URLSearchParams();
+    mapParams.set('center', '36.78,-122.05');
+    mapParams.set('zoom', '10');
+    mapParams.set('size', '540x330'); // scaled 2x server-side
+    mapParams.set('maptype', 'hybrid');
+    withCoords.slice(0, 25).forEach((s, i) => {
+      mapParams.append('markers', `color:white|label:${i + 1}|${s.lat},${s.lng}`);
+    });
+    try {
+      const mapImg = await loadCanvasImage('/api/static-map?' + mapParams.toString());
+      // Cover-fit to (W, mapH) preserving aspect
+      const scale = Math.max(W / mapImg.width, mapH / mapImg.height);
+      const dw = mapImg.width * scale, dh = mapImg.height * scale;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, mapY, W, mapH); ctx.clip();
+      ctx.drawImage(mapImg, (W - dw) / 2, mapY + (mapH - dh) / 2, dw, dh);
+      ctx.restore();
+    } catch (e) {
+      ctx.fillStyle = '#e5e5e5';
+      ctx.fillRect(0, mapY, W, mapH);
+      ctx.fillStyle = MID;
+      ctx.font = '28px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Map unavailable', W / 2, mapY + mapH / 2);
+    }
+
+    // ── 4. Stats strip (4 boxes side by side, gray bg) ──
+    const statsY = mapY + mapH;
+    const statsH = 170;
+    ctx.fillStyle = GRAY;
+    ctx.fillRect(0, statsY, W, statsH);
+
+    const ms = new Date(trip.endTime || Date.now()) - new Date(trip.startTime);
+    const mins = Math.floor(ms / 60000);
+    const hrs = Math.floor(mins / 60);
+    const durationStr = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+    const stats = [
+      { label: 'TIME',     value: durationStr },
+      { label: 'DISTANCE', value: (trip.distanceNM || 0).toFixed(1) + ' NM' },
+      { label: 'GUESTS',   value: String(trip.passengers) },
+      { label: 'SIGHTINGS',value: String(trip.sightings.length) },
+    ];
+    const colW = W / stats.length;
+    stats.forEach((s, i) => {
+      const x = i * colW;
+      if (i > 0) {
+        ctx.fillStyle = RULE;
+        ctx.fillRect(x, statsY + 28, 1, statsH - 56);
+      }
+      ctx.fillStyle = MID;
+      ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, x + colW / 2, statsY + 56);
+      ctx.fillStyle = BLACK;
+      ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+      ctx.fillText(s.value, x + colW / 2, statsY + 124);
+    });
+
+    // ── 5. Sightings list ──
+    const listX = 80;
+    const listY = statsY + statsH + 50;
+    const footerY = H - 130;
+
+    ctx.fillStyle = BLACK;
+    ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('SIGHTINGS', listX, listY);
+    ctx.fillStyle = BLACK;
+    ctx.fillRect(listX, listY + 14, W - listX * 2, 3);
+
+    const rowsStart = listY + 50;
+    const rowsAvail = footerY - rowsStart - 30;
+    const sightings = trip.sightings;
+    if (sightings.length === 0) {
+      ctx.fillStyle = MID;
+      ctx.font = '28px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+      ctx.fillText('No sightings logged', listX, rowsStart + 30);
+    } else {
+      const rowH = Math.max(46, Math.min(80, Math.floor(rowsAvail / sightings.length)));
+      const fontSize = rowH <= 52 ? 22 : rowH <= 64 ? 26 : 30;
+      sightings.forEach((s, i) => {
+        const y = rowsStart + i * rowH;
+        if (i % 2 === 1) {
+          ctx.fillStyle = GRAY;
+          ctx.fillRect(listX, y, W - listX * 2, rowH);
+        }
+        ctx.fillStyle = BLACK;
+        ctx.fillRect(listX, y, 4, rowH);
+        // Species (left)
+        ctx.fillStyle = BLACK;
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, Arial, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.fillText(s.species.toUpperCase(), listX + 20, y + rowH / 2 + fontSize / 3);
+        // Count (right) + depth if present
+        const countTxt = '×' + s.count;
+        const depth = s.depth_meters;
+        let depthTxt = '';
+        if (depth != null && Number.isFinite(Number(depth)) && Number(depth) > 0) {
+          const v = Number(depth);
+          depthTxt = '  ·  ' + (v < 1000 ? Math.round(v) + 'm' : (v / 1000).toFixed(1) + 'km');
+        }
+        ctx.textAlign = 'right';
+        ctx.fillStyle = BLACK;
+        ctx.fillText(countTxt + depthTxt, W - listX - 10, y + rowH / 2 + fontSize / 3);
+      });
+    }
+
+    // ── 6. Footer (black bar) ──
+    ctx.fillStyle = BLACK;
+    ctx.fillRect(0, footerY, W, H - footerY);
+    ctx.fillStyle = WHITE;
+    ctx.font = 'bold 30px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ENOCEANTOURS.COM', W / 2, footerY + 60);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '22px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    ctx.fillText('MOSS LANDING HARBOR  ·  MONTEREY BAY', W / 2, footerY + 100);
+
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }
+
   async function sendReport() {
     // Commit any email still in the input box
     addEmailFromInput();
@@ -573,11 +765,15 @@
     btn.innerHTML = '<span class="spinner"></span>Sending...';
     try {
       const socialCardData = await generateSocialCard();
+      // Captain copy is best-effort — if rendering fails, still send guest emails
+      let captainCardData = null;
+      try { captainCardData = await generateCaptainCard(); }
+      catch (e) { console.warn('Captain card failed, continuing:', e); }
       // Single API call with all emails — Supabase saves once
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tripData: trip, guestEmails, socialCardData }),
+        body: JSON.stringify({ tripData: trip, guestEmails, socialCardData, captainCardData }),
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to send');

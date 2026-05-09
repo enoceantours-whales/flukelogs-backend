@@ -480,6 +480,41 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
   return result;
 }
 
+// ─── Captain copy (IG-ready image) ────────────────────────────────────────────
+// Sends a separate email back to GMAIL_USER (enoceantours@gmail.com) with the
+// PDF-styled 1080x1920 captain card attached. The captain downloads it from
+// their inbox and decides whether to post to Instagram. Best-effort: any
+// failure here is logged but doesn't fail the trip end response.
+async function sendCaptainCopy(captainCardData, tripData) {
+  if (!captainCardData) return;
+  if (!process.env.GMAIL_USER) {
+    console.log('GMAIL_USER not set, skipping captain copy');
+    return;
+  }
+  try {
+    const date = new Date(tripData.startTime).toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    });
+    const dateSlug = new Date(tripData.startTime).toISOString().split('T')[0];
+    const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings';
+
+    await transporter.sendMail({
+      from: `"Enocean Tours" <${process.env.GMAIL_USER}>`,
+      to: process.env.GMAIL_USER,
+      subject: `Captain copy — ${date} — ready for Instagram`,
+      text: `Captain copy for the ${date} trip.\n\nSpecies: ${speciesList}\nSightings: ${tripData.sightings.length}\n\nDownload the attached image and post it to Instagram if you want — guests did NOT receive this.`,
+      attachments: [{
+        filename: `Enocean_Captain_${dateSlug}.jpg`,
+        content: Buffer.from(captainCardData.replace(/^data:image\/\w+;base64,/, ''), 'base64'),
+        contentType: 'image/jpeg',
+      }],
+    });
+    console.log('Captain copy emailed to', process.env.GMAIL_USER);
+  } catch (err) {
+    console.error('Captain copy email failed:', err.message);
+  }
+}
+
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 
 module.exports = async function handler(req, res) {
@@ -487,7 +522,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { tripData, guestEmails, socialCardData } = req.body;
+  const { tripData, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
 
   // Accept either a single email string or an array
@@ -510,11 +545,16 @@ module.exports = async function handler(req, res) {
     // Save to Supabase ONCE regardless of how many guests
     await saveToSupabase(tripData);
 
-    // Send email + Mailchimp to each guest
-    await Promise.all(validEmails.map(email => Promise.all([
-      sendEmail(email, pdfBuffer, socialCardData, tripData),
-      addToMailchimp(email),
-    ])));
+    // Send email + Mailchimp to each guest, plus the captain copy back to
+    // ourselves — all in parallel. Captain copy failure never blocks the
+    // guest emails (it swallows its own errors inside sendCaptainCopy).
+    await Promise.all([
+      ...validEmails.map(email => Promise.all([
+        sendEmail(email, pdfBuffer, socialCardData, tripData),
+        addToMailchimp(email),
+      ])),
+      sendCaptainCopy(captainCardData, tripData),
+    ]);
 
     return res.status(200).json({ success: true, message: `Trip report sent to ${validEmails.join(', ')}` });
   } catch (err) {
