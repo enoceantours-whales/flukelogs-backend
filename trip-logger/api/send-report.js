@@ -389,7 +389,7 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
       <p style="margin:0;color:#ffffff;font-size:14px;">${speciesList}</p>
     </div>
     <div style="text-align:center;margin-bottom:24px;">
-      <a href="https://www.tripadvisor.com/UserReviewEdit-g32748-d34278154-Enocean_Tours-Moss_Landing_California.html" style="background:#ffffff;color:#000000;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;letter-spacing:0.5px;">LEAVE US A REVIEW</a>
+      <a href="https://www.enoceantours.com/reviews" style="background:#ffffff;color:#000000;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;letter-spacing:0.5px;">LEAVE US A REVIEW</a>
       <p style="margin:10px 0 0;color:#555;font-size:12px;">It takes 2 minutes and means the world to us.</p>
     </div>
     <p style="color:#444;font-size:12px;text-align:center;margin:0;border-top:1px solid #222;padding-top:20px;">Moss Landing Harbor, Monterey Bay, CA<br><a href="https://enoceantours.com" style="color:#888;">enoceantours.com</a></p>
