@@ -1,1 +1,0 @@
-trip-logger/README.md
