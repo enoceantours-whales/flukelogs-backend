@@ -91,6 +91,10 @@
   <div class="screen active" id="screenStart">
     <div class="section">
       <div class="section-label">New Trip</div>
+      <div id="buoyBanner" style="display:none; background:var(--card); border:1px solid var(--border); border-left:4px solid #fff; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--muted); line-height:1.4;">
+        <div id="buoyBannerText">Fetching live conditions from NOAA buoy 46042…</div>
+        <div style="margin-top:4px;"><a href="#" id="buoyRefresh" onclick="event.preventDefault(); fetchBuoyConditions(true);" style="color:#fff; text-decoration:none; font-weight:600;">↻ Refresh</a></div>
+      </div>
       <div class="field">
         <label>Passenger Count</label>
         <input type="number" id="inputPassengers" min="1" max="6" value="0" inputmode="numeric">
@@ -305,7 +309,50 @@
       }
     });
     input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
+
+    // Auto-fill water temp + sea state from NOAA buoy 46042 (Monterey Bay)
+    fetchBuoyConditions(false);
   });
+
+  // ── NOAA buoy auto-fill ────────────────────────────────────────────
+  // Pulls latest observation from /api/buoy-conditions (default: 46042) and
+  // populates the Water Temp + Sea Conditions fields if the captain hasn't
+  // already entered something. Runs once on app load and on manual refresh.
+  // Visibility isn't auto-filled — buoy 46042 has no visibility sensor.
+  async function fetchBuoyConditions(force) {
+    const banner = document.getElementById('buoyBanner');
+    const text   = document.getElementById('buoyBannerText');
+    if (!banner || !text) return;
+    banner.style.display = 'block';
+    text.textContent = 'Fetching live conditions from NOAA buoy 46042…';
+    try {
+      const res = await fetch('/api/buoy-conditions', { cache: force ? 'reload' : 'default' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const obs = await res.json();
+      if (obs.error) throw new Error(obs.error);
+
+      const tempInput = document.getElementById('inputWaterTemp');
+      const seaSelect = document.getElementById('inputConditions');
+      if (obs.water_temp_f != null && (!tempInput.value || force)) {
+        tempInput.value = obs.water_temp_f;
+      }
+      if (obs.sea_state && (!seaSelect.value || force)) {
+        seaSelect.value = obs.sea_state;
+      }
+
+      const parts = [];
+      if (obs.water_temp_f   != null) parts.push(`${obs.water_temp_f}°F`);
+      if (obs.wave_height_ft != null) parts.push(`${obs.wave_height_ft}ft swell`);
+      if (obs.wind_kt        != null) parts.push(`${obs.wind_kt}kt wind`);
+      const ageMin = obs.observed_at_utc
+        ? Math.max(0, Math.round((Date.now() - new Date(obs.observed_at_utc).getTime()) / 60000))
+        : null;
+      const ageStr = ageMin != null ? ` · ${ageMin} min ago` : '';
+      text.innerHTML = `<strong style="color:#fff;">Live from NOAA ${obs.station || '46042'}</strong>${ageStr}<br>${parts.join(' · ') || 'No usable readings'}`;
+    } catch (err) {
+      text.innerHTML = `Couldn't reach NOAA buoy — fill conditions manually.<br><small style="color:#555;">${err.message || err}</small>`;
+    }
+  }
 
   // ── Trip functions ───────────────────────────────────────────
   function startTrip() {
