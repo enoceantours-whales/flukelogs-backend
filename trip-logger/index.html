@@ -121,23 +121,6 @@
     @keyframes bayDrift { 0% { transform: translateX(-1%); } 100% { transform: translateX(1%); } }
     @keyframes bayMotes { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-40px,-30px,0); } }
 
-    /* faint sperm whale silhouette swimming far below the UI */
-    .ambient-whale {
-      position: fixed;
-      left: -22%;
-      bottom: 18%;
-      width: 320px;
-      opacity: .07;
-      filter: blur(.4px);
-      pointer-events: none;
-      z-index: -1;
-      animation: whaleCruise 60s linear infinite;
-    }
-    @keyframes whaleCruise {
-      0%   { left: -22%; bottom: 18%; }
-      50%  { left:  50%; bottom: 22%; }
-      100% { left: 120%; bottom: 18%; }
-    }
 
     /* ── Header — 3-column grid: refresh | logo | placeholder ──── */
     .header {
@@ -659,7 +642,7 @@
 
     /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
-      .bay::before, .bay::after, .ambient-whale, .pill .dot { animation: none !important; }
+      .bay::before, .bay::after, .pill .dot { animation: none !important; }
     }
   </style>
 </head>
@@ -667,9 +650,6 @@
 
 <!-- Ambient ocean — sits behind every screen -->
 <div class="bay" aria-hidden="true"></div>
-<svg class="ambient-whale" viewBox="0 0 400 200" aria-hidden="true">
-  <path d="M 364,72 C 322,68 268,69 218,71 C 168,73 118,77 78,84 C 58,88 42,94 32,100 L 22,94 L 6,74 C 14,88 22,100 28,106 L 30,108 C 24,116 16,128 6,142 L 22,120 L 32,110 C 50,116 78,120 116,122 C 162,124 214,126 240,126 C 244,128 248,130 252,130 C 256,130 260,127 264,124 C 290,122 318,119 344,114 C 368,110 386,100 386,90 C 386,80 378,73 364,72 Z M 232,121 C 234,131 244,142 262,140 C 258,134 252,128 244,124 C 240,122 235,121 232,121 Z" fill="#cfdcde"/>
-</svg>
 
 <div class="app">
 
