@@ -544,6 +544,44 @@
     <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
   </div>
 
+  <!-- Past Trips — operator picks a date to record audio for -->
+  <div class="screen" id="screenPastTrips">
+    <div class="section">
+      <div class="section-label">Past Trips</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Record an audio note for any past trip — guests on your website can listen to it from the public sightings widget. Pick a date.</p>
+      <div id="pastTripsList"><div class="empty">Loading…</div></div>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
+    </div>
+  </div>
+
+  <!-- Trip Audio recorder — focused on one selected date -->
+  <div class="screen" id="screenTripAudio">
+    <div class="section">
+      <div class="section-label" id="tripAudioTitle">Audio note</div>
+
+      <div class="field">
+        <label>Existing recording</label>
+        <audio id="tripAudioExisting" controls style="width:100%; display:none;"></audio>
+        <p id="tripAudioNoExisting" style="font-size:13px;color:var(--text-dim);">No audio recorded yet for this trip.</p>
+      </div>
+
+      <div class="field">
+        <label>Record new audio (max 3 min)</label>
+        <button class="btn btn-primary" type="button" id="tripAudioRecBtn" onclick="toggleTripAudioRecord()" style="margin-top:6px;">🎤 Tap to record</button>
+        <p id="tripAudioStatus" style="font-size:13px;color:var(--text-muted);margin-top:8px;text-align:center;"></p>
+      </div>
+
+      <div class="field" id="tripAudioPreviewWrap" style="display:none;">
+        <label>Preview</label>
+        <audio id="tripAudioPreview" controls style="width:100%;"></audio>
+      </div>
+
+      <button class="btn btn-primary" type="button" id="tripAudioSaveBtn" onclick="saveTripAudio()" style="display:none;">Save audio</button>
+      <button class="btn btn-danger"  type="button" id="tripAudioDeleteBtn" onclick="deleteTripAudio()" style="display:none;">Remove audio</button>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenPastTrips')">Back</button>
+    </div>
+  </div>
+
   <!-- Admin (super admin only) — list of every operator -->
   <div class="screen" id="screenAdmin">
     <div class="section">
@@ -745,6 +783,7 @@
 
   <div class="footer">
     <span>Logging the Wild Monterey</span>
+    <a href="#" id="footerPastTrips" onclick="event.preventDefault(); openPastTrips();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Past Trips</a>
     <a href="#" id="footerSettings" onclick="event.preventDefault(); openSettings();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Settings</a>
     <a href="#" id="footerAdmin" onclick="event.preventDefault(); openAdmin();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Admin</a>
     <a href="#" id="footerLogout" onclick="event.preventDefault(); handleLogout();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Log out</a>
@@ -1497,6 +1536,7 @@
     document.getElementById('footerLogout').style.display = 'none';
     document.getElementById('footerSettings').style.display = 'none';
     document.getElementById('footerAdmin').style.display = 'none';
+    document.getElementById('footerPastTrips').style.display = 'none';
     showScreen('screenLogin');
   }
 
@@ -1513,12 +1553,14 @@
     if (!session) {
       document.getElementById('footerLogout').style.display = 'none';
       document.getElementById('footerSettings').style.display = 'none';
+      document.getElementById('footerPastTrips').style.display = 'none';
       showScreen('screenLogin');
       return;
     }
 
     document.getElementById('footerLogout').style.display = 'inline';
     document.getElementById('footerSettings').style.display = 'inline';
+    document.getElementById('footerPastTrips').style.display = 'inline';
 
     // Pull per-operator config (logo, species list, buoy station, etc.).
     // Best-effort — if /api/me fails we proceed with hardcoded defaults so
@@ -1941,6 +1983,232 @@
       toast('Operator deleted', 'success');
       adminEditingId = null;
       openAdmin(); // back to list
+    } catch (err) {
+      toast('Delete failed: ' + (err.message || err), 'error');
+    }
+  }
+
+  // ── Past Trips + Audio Notes ─────────────────────────────────────
+  // Captain records audio AFTER the trip — privately, not in front of
+  // guests. Past Trips screen lists recent trip dates; tapping one opens
+  // a focused recorder for that specific date.
+
+  let currentAudioDate = null;     // YYYY-MM-DD being edited
+  let currentAudioRow  = null;     // server-returned audio row, if exists
+  let audioMediaStream = null;     // active mic stream during recording
+  let audioRecorder    = null;     // MediaRecorder
+  let audioChunks      = [];
+  let audioBlob        = null;     // recorded blob, null until first stop
+  let audioRecStartMs  = 0;
+  let audioRecTimer    = null;
+
+  function fmtTripDate(iso) {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }
+  function fmtSec(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  async function openPastTrips() {
+    showScreen('screenPastTrips');
+    const list = document.getElementById('pastTripsList');
+    list.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return handleLogout();
+      const res = await fetch('/api/operator/trips', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const trips = await res.json();
+      renderPastTripsList(trips);
+    } catch (err) {
+      list.innerHTML = `<div class="empty">Could not load: ${err.message || err}</div>`;
+    }
+  }
+
+  function renderPastTripsList(trips) {
+    const list = document.getElementById('pastTripsList');
+    if (!trips.length) { list.innerHTML = '<div class="empty">No trips logged yet</div>'; return; }
+    list.innerHTML = trips.map(t => {
+      const audioStatus = t.has_audio
+        ? `<div class="sighting-meta" style="color:var(--success);">✓ Audio · ${fmtSec(t.duration_seconds || 0)}</div>`
+        : '<div class="sighting-meta">🎙 Add audio</div>';
+      return `<div class="sighting-row" style="cursor:pointer;" onclick="openTripAudio('${t.trip_date}')">
+        <div>
+          <div class="sighting-species">${fmtTripDate(t.trip_date)}</div>
+          <div class="sighting-meta">${t.species_count} species · ${t.animal_count} animals</div>
+          ${audioStatus}
+        </div>
+        <div class="sighting-badge">›</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function openTripAudio(date) {
+    currentAudioDate = date;
+    currentAudioRow  = null;
+    audioBlob        = null;
+    audioChunks      = [];
+    showScreen('screenTripAudio');
+
+    document.getElementById('tripAudioTitle').textContent = 'Audio for ' + fmtTripDate(date);
+    document.getElementById('tripAudioPreviewWrap').style.display = 'none';
+    document.getElementById('tripAudioSaveBtn').style.display = 'none';
+    document.getElementById('tripAudioStatus').textContent = '';
+    document.getElementById('tripAudioRecBtn').textContent = '🎤 Tap to record';
+    document.getElementById('tripAudioRecBtn').disabled = false;
+
+    // Look up existing audio for this date
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return handleLogout();
+      const res = await fetch('/api/operator/trips', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const trips = await res.json();
+        const found = trips.find(t => t.trip_date === date);
+        currentAudioRow = (found && found.has_audio) ? found : null;
+      }
+    } catch (e) { /* non-blocking */ }
+
+    const existingEl  = document.getElementById('tripAudioExisting');
+    const noExisting  = document.getElementById('tripAudioNoExisting');
+    const deleteBtn   = document.getElementById('tripAudioDeleteBtn');
+    if (currentAudioRow && currentAudioRow.audio_url) {
+      existingEl.src = currentAudioRow.audio_url;
+      existingEl.style.display = 'block';
+      noExisting.style.display = 'none';
+      deleteBtn.style.display = 'block';
+    } else {
+      existingEl.removeAttribute('src');
+      existingEl.style.display = 'none';
+      noExisting.style.display = 'block';
+      deleteBtn.style.display = 'none';
+    }
+  }
+
+  async function toggleTripAudioRecord() {
+    if (audioRecorder && audioRecorder.state === 'recording') {
+      return stopTripAudioRecord();
+    }
+    return startTripAudioRecord();
+  }
+
+  async function startTripAudioRecord() {
+    try {
+      audioMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      return toast('Microphone access denied: ' + (err.message || err), 'error');
+    }
+    audioChunks = [];
+    audioBlob = null;
+    // Let the browser pick a sensible mime — iOS Safari → audio/mp4,
+    // Chrome/Firefox → audio/webm. Both play in the HTML5 audio element.
+    try { audioRecorder = new MediaRecorder(audioMediaStream); }
+    catch (err) {
+      audioMediaStream.getTracks().forEach(t => t.stop());
+      return toast('Recording not supported on this browser', 'error');
+    }
+
+    audioRecorder.ondataavailable = (e) => { if (e.data && e.data.size) audioChunks.push(e.data); };
+    audioRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: audioRecorder.mimeType || 'audio/mp4' });
+      audioMediaStream.getTracks().forEach(t => t.stop());
+      audioMediaStream = null;
+      const previewEl = document.getElementById('tripAudioPreview');
+      previewEl.src = URL.createObjectURL(audioBlob);
+      document.getElementById('tripAudioPreviewWrap').style.display = 'block';
+      document.getElementById('tripAudioSaveBtn').style.display = 'block';
+    };
+
+    audioRecorder.start();
+    audioRecStartMs = Date.now();
+    document.getElementById('tripAudioRecBtn').textContent = '⏹ Stop recording';
+    updateTripAudioRecTimer();
+    audioRecTimer = setInterval(updateTripAudioRecTimer, 500);
+  }
+
+  function updateTripAudioRecTimer() {
+    const sec = Math.floor((Date.now() - audioRecStartMs) / 1000);
+    document.getElementById('tripAudioStatus').textContent = '● Recording — ' + fmtSec(sec);
+    // Hard-cap at 3 minutes (matches server byte cap)
+    if (sec >= 180) stopTripAudioRecord();
+  }
+
+  function stopTripAudioRecord() {
+    try { audioRecorder.stop(); } catch (e) { /* ignore */ }
+    clearInterval(audioRecTimer);
+    audioRecTimer = null;
+    document.getElementById('tripAudioRecBtn').textContent = '🎤 Tap to record';
+    document.getElementById('tripAudioStatus').textContent = '';
+  }
+
+  async function saveTripAudio() {
+    if (!audioBlob || !currentAudioDate) return;
+    const btn = document.getElementById('tripAudioSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Uploading…';
+
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { handleLogout(); throw new Error('No session'); }
+
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload  = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(audioBlob);
+      });
+      const data_base64 = String(dataUrl).split(',', 2)[1];
+      const duration_seconds = Math.round((document.getElementById('tripAudioPreview').duration) || 0);
+
+      const res = await fetch('/api/trip-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          trip_date:        currentAudioDate,
+          content_type:     audioBlob.type || 'audio/mp4',
+          data_base64,
+          duration_seconds,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
+
+      toast('Audio saved · live on the widget', 'success');
+      // Refresh the screen state to show the newly-saved audio as the existing one
+      openTripAudio(currentAudioDate);
+    } catch (err) {
+      toast('Save failed: ' + (err.message || err), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save audio';
+    }
+  }
+
+  async function deleteTripAudio() {
+    if (!currentAudioDate) return;
+    if (!confirm(`Remove audio for ${fmtTripDate(currentAudioDate)}?\n\nThe player will stop showing on the public widget. The audio file stays in storage and is unrecoverable from inside the app — you can re-record any time.`)) return;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return handleLogout();
+      const res = await fetch('/api/trip-audio?date=' + encodeURIComponent(currentAudioDate), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'HTTP ' + res.status);
+      }
+      toast('Audio removed', 'success');
+      openTripAudio(currentAudioDate);
     } catch (err) {
       toast('Delete failed: ' + (err.message || err), 'error');
     }

@@ -177,6 +177,7 @@ const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allData = [];
+let tripAudioByDate = new Map(); // YYYY-MM-DD -> { audio_url, duration_seconds }
 let activeFilter = null;   // species name or null
 let activeDateKey = null;  // selected trip date or null
 const markers = [];
@@ -269,6 +270,19 @@ async function fetchSightings() {
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
+}
+
+// Captain audio notes per trip date. Public read via the same anon key.
+// Returns { trip_date -> { audio_url, duration_seconds } } so render code
+// can do a synchronous lookup per trip card.
+async function fetchTripAudio() {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/trip_audio?select=trip_date,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
+    const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
+    if (!res.ok) return new Map();
+    const rows = await res.json();
+    return new Map(rows.map(r => [r.trip_date, r]));
+  } catch (e) { return new Map(); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -402,6 +416,15 @@ function renderFeed(data) {
       </div>`;
     }).join('');
 
+    const audio = tripAudioByDate.get(dateKey);
+    const audioBlock = audio ? `
+      <div class="trip-audio" style="padding: 10px 16px 12px; border-bottom: 1px solid var(--border);">
+        <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">
+          🎙 Captain's notes from this trip${audio.duration_seconds ? ' · ' + Math.floor(audio.duration_seconds/60) + ':' + String(audio.duration_seconds%60).padStart(2,'0') : ''}
+        </div>
+        <audio controls preload="none" style="width: 100%; height: 32px;" src="${audio.audio_url}"></audio>
+      </div>` : '';
+
     return `<div class="trip-card" data-date="${dateKey}">
       <div class="trip-date-header" data-date="${dateKey}">
         <div class="trip-date-label">
@@ -410,6 +433,7 @@ function renderFeed(data) {
         </div>
         <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
       </div>
+      ${audioBlock}
       <div class="trip-sightings">${rows}</div>
     </div>`;
   }).join('');
@@ -468,7 +492,7 @@ function sendHeight() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   try {
-    allData = await fetchSightings();
+    [allData, tripAudioByDate] = await Promise.all([fetchSightings(), fetchTripAudio()]);
     renderNowBanner(allData);
     renderTotals(allData);
     renderFilters(allData);
