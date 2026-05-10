@@ -18,10 +18,11 @@ Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoce
 6. Ocean depth at each sighting is looked up from NOAA's bathymetric DEM and saved with the row
 7. Trip sightings are saved to Supabase, tagged with the operator
 8. Guests are added to the operator's Mailchimp audience
-9. Email includes a direct link to leave a review
-10. Captain receives a separate **captain-copy IG card** in their own inbox to post manually
-11. **After the trip** (privately, when there are no guests around) the captain can record a short audio recap for any trip date — it shows up as a player on the public sightings widget
-12. Public sightings widget on the operator's website updates automatically after every trip
+9. Email opens with a **personalized greeting** based on the guest's history — first-timer gets a "welcome aboard your first trip" line; returning guests see *"Welcome back — your 3rd trip with us. You've now spotted 8 species across all your trips."*
+10. Email includes a direct link to leave a review
+11. Captain receives a separate **captain-copy IG card** in their own inbox to post manually
+12. **After the trip** (privately, when there are no guests around) the captain can record a short audio recap for any trip date — it shows up as a player on the public sightings widget
+13. Public sightings widget on the operator's website updates automatically after every trip
 
 ---
 
@@ -73,7 +74,8 @@ trip-logger-backend/
 │   └── migrations/                       # Hand-applied SQL via Supabase SQL Editor
 │       ├── 0001_init_multi_tenant.sql
 │       ├── 0002_operator_branding_extras.sql
-│       └── 0003_trip_audio.sql
+│       ├── 0003_trip_audio.sql
+│       └── 0004_trip_guests.sql
 ├── trip-logger/
 │   ├── api/
 │   │   ├── admin/
@@ -155,6 +157,7 @@ trip-logger-backend/
 ### Email
 - Black/white branded HTML email
 - Logo, stats, species summary
+- **Per-guest personalized greeting** — first-timers get *"welcome aboard your first trip"*; returning guests see *"Welcome back — your Nth trip with us. You've now spotted X species across all your trips."* Same PDF/Story card attached for everyone — only the opening line changes per recipient.
 - "LEAVE US A REVIEW" CTA (operator-configurable URL)
 - PDF + Story card attached
 - Guest auto-added to the operator's Mailchimp audience with a "Trip Guest" tag
@@ -170,7 +173,7 @@ trip-logger-backend/
 - Interactive Leaflet map with ESRI Ocean Basemap showing Monterey Submarine Canyon bathymetry
 - Color-coded species markers — click any marker for species, count, and ocean depth at that pin
 - Trip log grouped by date — one card per trip, tallied by species
-- **Captain audio player** on trip cards that have audio
+- **Captain audio player** on trip cards that have audio — pill-shaped, custom waveform visualization (36 deterministic bars seeded from the audio URL), click-to-seek, auto-pauses other players when one starts. No native HTML5 controls.
 - Click a trip date header to pan the map to all sightings that day
 - Click a species row to pan to that specific sighting
 - Season totals bar — running whale and dolphin counts
@@ -234,6 +237,21 @@ Per-date captain audio note. One row per `(operator_id, trip_date)`. Public read
 | `content_type` | text | `audio/mp4`, `audio/webm`, etc. |
 | `created_at`, `updated_at` | timestamptz | Auto-generated |
 
+### `trip_guests`
+One row per guest per trip — used to power the personalized greeting in the trip-end email. Server-only access (RLS on, no anon).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | uuid | Auto-generated |
+| `operator_id` | uuid (FK) | Owning operator |
+| `trip_date` | date | Trip date the guest was on |
+| `email` | text | Always stored lowercased so case differences still match |
+| `created_at` | timestamptz | When the row was inserted |
+
+UNIQUE on `(operator_id, email, trip_date)` — re-sending the same trip is idempotent.
+
+Backed by a `guest_stats(op_id, email_in)` PL/SQL function that returns `{trips, species}` — counts the guest's distinct trip dates and total distinct species across all those trips. Called from `send-report.js` to choose between first-timer and returning-guest copy.
+
 ---
 
 ## Environment Variables
@@ -260,6 +278,7 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
    - `db/migrations/0001_init_multi_tenant.sql`
    - `db/migrations/0002_operator_branding_extras.sql`
    - `db/migrations/0003_trip_audio.sql`
+   - `db/migrations/0004_trip_guests.sql`
 3. Create two Supabase Storage buckets (Dashboard → Storage → New bucket → toggle **Public bucket** ON):
    - `operator-logos`
    - `trip-audio`
