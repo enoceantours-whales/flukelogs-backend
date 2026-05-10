@@ -31,6 +31,82 @@ function configureMailchimp(operator) {
   });
 }
 
+// ─── Per-guest whale log (migration 0004) ──────────────────────────────
+// Records who's been emailed on which trip so the next email can open with
+// "Welcome back — your 3rd trip with us. You've now spotted 8 species..."
+// instead of the generic greeting.
+
+function ordinal(n) {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return n + 'th';
+  switch (n % 10) {
+    case 1: return n + 'st';
+    case 2: return n + 'nd';
+    case 3: return n + 'rd';
+    default: return n + 'th';
+  }
+}
+
+// Insert one row per guest into trip_guests for today's trip. Uses
+// resolution=merge-duplicates so re-sending the same trip is idempotent.
+async function recordGuestsForTrip(operatorId, tripDate, emails) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !operatorId || !tripDate || !emails || emails.length === 0) return;
+  const rows = emails.map(e => ({
+    operator_id: operatorId,
+    trip_date:   tripDate,
+    email:       String(e).toLowerCase().trim(),
+  }));
+  try {
+    const res = await fetch(`${url}/rest/v1/trip_guests?on_conflict=operator_id,email,trip_date`, {
+      method: 'POST',
+      headers: {
+        'apikey':        key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (!res.ok) console.error('recordGuestsForTrip:', res.status, (await res.text()).slice(0, 200));
+  } catch (err) {
+    console.error('recordGuestsForTrip error:', err.message);
+  }
+}
+
+// Asks Postgres for how many trips and species this email has logged with
+// the operator. Falls back to {trips: 1, species: 0} on any failure so the
+// email still sends with the first-timer copy.
+async function getGuestStats(operatorId, email) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  const fallback = { trips: 1, species: 0 };
+  if (!url || !key || !operatorId || !email) return fallback;
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/guest_stats`, {
+      method: 'POST',
+      headers: {
+        'apikey':        key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({ op_id: operatorId, email_in: String(email).toLowerCase().trim() }),
+    });
+    if (!res.ok) return fallback;
+    const rows = await res.json();
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (!row) return fallback;
+    return {
+      trips:   Number.isFinite(+row.trips)   ? +row.trips   : 1,
+      species: Number.isFinite(+row.species) ? +row.species : 0,
+    };
+  } catch (err) {
+    console.error('getGuestStats error:', err.message);
+    return fallback;
+  }
+}
+
 // Resolves every per-operator branding string used by the PDF, email, and
 // captain copy. Centralized so adding a new branded surface = one edit here
 // instead of hunting for hardcoded "Enocean" strings.
@@ -462,10 +538,20 @@ async function addToMailchimp(email, b) {
 
 // ─── Send Email ───────────────────────────────────────────────────────────────
 
-async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, transporter) {
+async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, transporter, operatorId) {
   const date = new Date(tripData.startTime).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings logged';
   const duration = getFormattedDuration(tripData.startTime, tripData.endTime);
+
+  // Pull this guest's prior-trip stats (post-insert of today's row, so trips
+  // includes today). Pick first-timer vs returning copy. If the lookup fails,
+  // getGuestStats returns the first-timer fallback so the email still sends.
+  const stats = await getGuestStats(operatorId, guestEmail);
+  const greetingHTML = stats.trips <= 1
+    ? `<p style="color:#ffffff;font-size:15px;margin:0 0 12px;">Hi there,</p>
+       <p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">Welcome aboard your first ${b.name} trip — your wildlife log starts here. Your trip report and story card are attached.</p>`
+    : `<p style="color:#ffffff;font-size:15px;margin:0 0 12px;">Welcome back,</p>
+       <p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">This is your <strong style="color:#fff;">${ordinal(stats.trips)} trip</strong> with us.${stats.species >= 2 ? ` You've now spotted <strong style="color:#fff;">${stats.species} species</strong> across all your trips.` : ''} Your trip report and story card are attached.</p>`;
 
   const result = await transporter.sendMail({
     from: `"${b.name}" <${b.fromEmail}>`,
@@ -478,8 +564,7 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
     <p style="color:rgba(255,255,255,0.5);margin:0;font-size:10px;letter-spacing:3px;text-transform:uppercase;">TRIP REPORT</p>
   </td></tr>
   <tr><td style="padding:32px;">
-    <p style="color:#ffffff;font-size:15px;margin:0 0 12px;">Hi there,</p>
-    <p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">Thank you for joining us on the water. Your trip report and story card are attached.</p>
+    ${greetingHTML}
     <table width="100%" style="margin-bottom:24px;">
       <tr>
         <td width="48%" style="background:#000;padding:14px;border-left:4px solid #ffffff;"><p style="margin:0;color:#888;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Date</p><p style="margin:4px 0 0;color:#fff;font-weight:bold;">${date}</p></td>
@@ -605,12 +690,18 @@ module.exports = async function handler(req, res) {
     // request from one operator can never write into another's data.
     await saveToSupabase(tripData, operatorId);
 
+    // Record this trip's guests BEFORE the emails fire so getGuestStats()
+    // (called inside sendEmail) sees today's row in its count. A first-timer
+    // gets trips=1, a 2nd-trip guest gets trips=2.
+    const tripDateISO = new Date(tripData.startTime).toISOString().split('T')[0];
+    await recordGuestsForTrip(operatorId, tripDateISO, validEmails);
+
     // Send email + Mailchimp to each guest, plus the captain copy back to
     // ourselves — all in parallel. Captain copy failure never blocks the
     // guest emails (it swallows its own errors inside sendCaptainCopy).
     await Promise.all([
       ...validEmails.map(email => Promise.all([
-        sendEmail(email, pdfBuffer, socialCardData, tripData, b, transporter),
+        sendEmail(email, pdfBuffer, socialCardData, tripData, b, transporter, operatorId),
         addToMailchimp(email, b),
       ])),
       sendCaptainCopy(captainCardData, tripData, b, transporter),
