@@ -10,34 +10,52 @@
   <link rel="apple-touch-icon" href="/Public/Enocean_Tours_logo-03.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Enocean Tours — Trip Logger</title>
+  <!-- Brand typeface — matches enoceantours.com -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Supabase Auth SDK (UMD bundle, no build step) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      /* Surface palette — three depth tiers + subtle hairlines */
-      --bg:            #0a0a0a;          /* page background, deepest */
-      --surface-1:     #131313;          /* primary card */
-      --surface-2:     #1a1a1a;          /* nested / inputs on cards */
-      --surface-3:     #222222;          /* hover / pressed */
-      --hairline:      rgba(255,255,255,0.06);
-      --hairline-strong: rgba(255,255,255,0.12);
+      /* Surface palette — Enocean ocean-deep tones from claude.ai/design */
+      --ink:           #0a0c0e;          /* page, deepest */
+      --ink-2:         #0f1316;          /* surface */
+      --ink-3:         #161b1f;          /* card */
+      --ink-4:         #1d2429;          /* field */
+      --hair:          rgba(255,255,255,0.08);
+      --hair-2:        rgba(255,255,255,0.14);
+
+      /* Backward-compat aliases — existing screens still reference these */
+      --bg:            var(--ink);
+      --surface-1:     var(--ink-3);
+      --surface-2:     var(--ink-4);
+      --surface-3:     #232a30;
+      --hairline:        var(--hair);
+      --hairline-strong: var(--hair-2);
 
       /* Text */
-      --text:          #ffffff;
-      --text-muted:    #9b9b9b;
-      --text-dim:      #6a6a6a;
+      --text:          #f4f6f7;
+      --text-muted:    rgba(244,246,247,0.62);
+      --text-dim:      rgba(244,246,247,0.42);
+      --text-faint:    var(--text-dim);
 
-      /* Accents (semantic only — keep B&W everywhere else) */
+      /* Brand accents */
+      --accent:        #e6f0f0;          /* moon white — primary CTA */
+      --teal:          #6fb1ac;
+      --gold:          #c8a86b;
+
+      /* Semantic */
       --success:       #22c55e;
       --danger:        #ef4444;
 
-      /* Elevation — soft, layered shadows for that depth-without-color feel */
+      /* Elevation */
       --shadow-sm:     0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.25);
-      --shadow-md:     0 4px 12px rgba(0,0,0,0.45), 0 8px 32px rgba(0,0,0,0.35);
-      --shadow-lg:     0 12px 32px rgba(0,0,0,0.55), 0 24px 64px rgba(0,0,0,0.4);
-      --shadow-inset:  inset 0 1px 0 rgba(255,255,255,0.05);
+      --shadow-md:     0 4px 12px rgba(0,0,0,0.45), 0 14px 28px rgba(0,0,0,0.45);
+      --shadow-lg:     0 12px 32px rgba(0,0,0,0.55), 0 30px 60px rgba(0,0,0,0.45);
+      --shadow-inset:  inset 0 1px 0 rgba(255,255,255,0.04);
 
       /* Motion */
       --ease:          cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -47,88 +65,141 @@
 
     html, body {
       height: 100%;
-      background: var(--bg);
+      background: var(--ink);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+      font-family: "Open Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      letter-spacing: -0.005em;
+      letter-spacing: 0.005em;
     }
-    body { overscroll-behavior-y: contain; }
+    body { overscroll-behavior-y: contain; overflow-x: hidden; }
 
     .app {
-      max-width: 480px;
+      position: relative;
+      max-width: 560px;
       margin: 0 auto;
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
-      background: var(--bg);
+      background: transparent;
+      isolation: isolate;
     }
 
-    /* ── Header ─────────────────────────────────────────────────── */
+    /* ── Ambient ocean — sits behind everything ────────────────── */
+    .bay {
+      position: fixed; inset: 0; z-index: -2;
+      background:
+        radial-gradient(120% 60% at 50% 110%, rgba(64,108,118,.55) 0%, rgba(20,32,38,.55) 35%, transparent 70%),
+        radial-gradient(80% 50% at 50% -10%, rgba(80,118,128,.18) 0%, transparent 60%),
+        linear-gradient(180deg, #06090b 0%, #0a0e11 40%, #0d1418 70%, #0a1014 100%);
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .bay::before, .bay::after {
+      content: "";
+      position: absolute;
+      inset: -20% -10%;
+      pointer-events: none;
+    }
+    .bay::before {
+      background:
+        linear-gradient(100deg, transparent 38%, rgba(220,240,240,.04) 40%, transparent 44%),
+        linear-gradient(105deg, transparent 55%, rgba(220,240,240,.03) 57%, transparent 62%);
+      mix-blend-mode: screen;
+      animation: bayDrift 18s ease-in-out infinite alternate;
+    }
+    .bay::after {
+      background-image:
+        radial-gradient(1.5px 1.5px at 12% 30%, rgba(255,255,255,.18), transparent 60%),
+        radial-gradient(1px 1px at 78% 60%, rgba(255,255,255,.14), transparent 60%),
+        radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,.18), transparent 60%),
+        radial-gradient(1.5px 1.5px at 88% 20%, rgba(255,255,255,.10), transparent 60%),
+        radial-gradient(1px 1px at 22% 70%, rgba(255,255,255,.12), transparent 60%),
+        radial-gradient(1px 1px at 60% 15%, rgba(255,255,255,.12), transparent 60%);
+      animation: bayMotes 28s linear infinite;
+    }
+    @keyframes bayDrift { 0% { transform: translateX(-1%); } 100% { transform: translateX(1%); } }
+    @keyframes bayMotes { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-40px,-30px,0); } }
+
+
+    /* ── Header — 3-column grid: refresh | logo | placeholder ──── */
     .header {
-      background: linear-gradient(180deg, #000 0%, #0a0a0a 100%);
-      padding: 18px 24px;
-      text-align: center;
-      border-bottom: 1px solid var(--hairline);
       position: sticky;
       top: 0;
       z-index: 10;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.4);
+      padding: 22px 24px 18px;
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(6,9,11,0.92) 0%, rgba(10,14,17,0.78) 100%);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
-    .header-logo { width: 220px; height: 64px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
+    .header-logo { width: 100%; max-width: 220px; height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
     .header-logo img { width: 100%; height: 100%; object-fit: contain; }
     .header h1, .header p { display: none; }
 
     /* ── Screen wrappers + sections ─────────────────────────────── */
-    .screen { display: none; flex: 1; padding: 24px 20px 32px; overflow-y: auto; }
+    .screen { display: none; flex: 1; padding: 28px 20px 110px; overflow-y: auto; max-width: 560px; width: 100%; margin: 0 auto; }
     .screen.active { display: block; animation: screenIn 0.3s var(--ease); }
     @keyframes screenIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
     .section {
-      background: var(--surface-1);
-      border: 1px solid var(--hairline);
+      position: relative;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.025) 0%, rgba(255,255,255,0) 100%),
+        var(--ink-3);
+      border: 1px solid var(--hair);
       border-radius: 18px;
-      padding: 22px 20px;
+      padding: 22px 22px 24px;
       margin-bottom: 20px;
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 30px 60px rgba(0,0,0,.45);
+      overflow: hidden;
     }
+    .section::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(60% 40% at 80% 0%, rgba(200,168,107,.06), transparent 60%);
+      pointer-events: none;
+    }
+    .section > * { position: relative; }
     .section-label {
       font-size: 11px;
       font-weight: 700;
       color: var(--text);
       text-transform: uppercase;
-      letter-spacing: 2px;
+      letter-spacing: 0.28em;
       margin-bottom: 18px;
       padding-bottom: 14px;
-      border-bottom: 1px solid var(--hairline);
+      border-bottom: 1px solid var(--hair);
     }
 
     /* ── Form fields ─────────────────────────────────────────────── */
-    .field { margin-bottom: 16px; }
+    .field { display: grid; gap: 8px; margin-top: 16px; }
+    .field:first-of-type { margin-top: 6px; }
     .field:last-child { margin-bottom: 0; }
     .field label {
-      display: block;
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      letter-spacing: 0.3px;
+      color: var(--text-faint);
+      letter-spacing: 0.26em;
       text-transform: uppercase;
     }
-    .field input, .field select {
+    .field input, .field select, .field textarea {
       width: 100%;
       padding: 16px 18px;
-      background: var(--surface-2);
-      border: 1px solid var(--hairline-strong);
-      border-radius: 14px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
       color: var(--text);
-      font-size: 16px;
-      font-weight: 500;
+      font: 500 16px/1.2 "Open Sans", sans-serif;
+      letter-spacing: 0.005em;
       appearance: none;
       -webkit-appearance: none;
-      transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
-      box-shadow: var(--shadow-inset);
+      transition: border-color var(--t-fast), background var(--t-fast);
     }
     .field select {
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
@@ -136,62 +207,158 @@
       background-position: right 18px center;
       padding-right: 44px;
     }
-    .field input:focus, .field select:focus {
+    .field input:focus, .field select:focus, .field textarea:focus {
       outline: none;
-      border-color: rgba(255,255,255,0.6);
-      background: var(--surface-3);
-      box-shadow: 0 0 0 4px rgba(255,255,255,0.08), var(--shadow-inset);
+      border-color: var(--hair-2);
+      background: #1f262b;
     }
-    .field input::placeholder { color: var(--text-dim); }
-    .field select option, .field select optgroup { background: var(--surface-2); color: #fff; }
+    .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
+    .field select option, .field select optgroup { background: var(--ink-4); color: var(--text); }
+
+    /* ── Stepper (passenger count) ──────────────────────────────── */
+    .stepper {
+      display: grid;
+      grid-template-columns: 56px 1fr 56px;
+      align-items: center;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .stepper button {
+      height: 54px;
+      background: transparent;
+      border: 0;
+      color: var(--text);
+      font: 400 22px/1 "Open Sans", sans-serif;
+      cursor: pointer;
+      transition: background .15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .stepper button:hover { background: rgba(255,255,255,.05); }
+    .stepper button:disabled { opacity: .3; cursor: not-allowed; }
+    .stepper .val {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text);
+      border-left: 1px solid var(--hair);
+      border-right: 1px solid var(--hair);
+      padding: 12px 0 8px;
+    }
+    .stepper .val small {
+      display: block;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.24em;
+      color: var(--text-faint);
+      margin-top: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ── Segmented control (visibility, sea conditions) ─────────── */
+    .seg {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .seg button {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      color: var(--text-dim);
+      padding: 12px 6px;
+      font: 600 11px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background .2s ease, color .2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .seg button.on {
+      background: rgba(255,255,255,.92);
+      color: #0d1014;
+      box-shadow: 0 8px 20px rgba(0,0,0,.35);
+    }
+    .seg button:not(.on):hover { color: var(--text); background: rgba(255,255,255,.04); }
 
     /* ── Buttons ─────────────────────────────────────────────────── */
     .btn {
       width: 100%;
-      padding: 18px;
-      border: none;
-      border-radius: 14px;
-      font-size: 15px;
-      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px;
+      padding: 18px 24px;
+      border: 0;
+      border-radius: 999px;
+      font: 700 12px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
       cursor: pointer;
-      letter-spacing: 0.3px;
       transition: transform var(--t-fast), box-shadow var(--t-med), opacity var(--t-fast), background var(--t-fast);
       -webkit-tap-highlight-color: transparent;
     }
-    .btn:active { transform: scale(0.98); }
+    .btn:active { transform: translateY(1px); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
     .btn-primary {
-      background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%);
-      color: #000;
-      box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.1);
+      background: linear-gradient(180deg, #ffffff 0%, #e8edee 100%);
+      color: #0a0c0e;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,.6) inset,
+        0 -8px 20px rgba(0,0,0,.04) inset,
+        0 14px 28px rgba(0,0,0,.45);
     }
-    .btn-primary:active { box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.6); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 -8px 20px rgba(0,0,0,.04) inset, 0 18px 36px rgba(0,0,0,.55); }
     .btn-outline {
-      background: var(--surface-2);
-      color: #fff;
-      border: 1px solid var(--hairline-strong);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      border: 1px solid var(--hair-2);
       margin-top: 12px;
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
     }
-    .btn-outline:active { background: var(--surface-3); }
+    .btn-outline:hover { background: rgba(255,255,255,.08); }
     .btn-danger {
-      background: var(--danger);
-      color: #fff;
+      background: rgba(214,165,151,.12);
+      color: #d6a597;
+      border: 1px solid rgba(214,165,151,.28);
       margin-top: 12px;
-      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.25);
     }
+    .btn-danger:hover { background: rgba(214,165,151,.18); }
+
+    /* Icon buttons (header + small actions) */
+    .iconbtn {
+      width: 40px; height: 40px;
+      display: grid; place-items: center;
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--hair);
+      color: var(--text);
+      cursor: pointer;
+      padding: 0;
+      transition: background .2s ease, transform .2s ease, border-color .2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .iconbtn:hover { background: rgba(255,255,255,.08); border-color: var(--hair-2); }
+    .iconbtn:active { transform: scale(.96); }
+    .iconbtn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .iconbtn.spinning svg { animation: refreshSpin 0.8s linear infinite; transform-origin: center; }
+    @keyframes refreshSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     /* ── Status bar (mid-trip) ───────────────────────────────────── */
     .status-bar {
-      background: linear-gradient(180deg, var(--surface-1) 0%, var(--surface-2) 100%);
-      border: 1px solid var(--hairline);
-      border-radius: 16px;
-      padding: 18px;
-      margin-bottom: 24px;
+      background: var(--ink-3);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 12px;
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px rgba(0,0,0,.35);
       position: relative;
       overflow: hidden;
     }
@@ -199,214 +366,302 @@
       content: '';
       position: absolute; top: 0; left: 0; bottom: 0;
       width: 3px;
-      background: linear-gradient(180deg, #fff, rgba(255,255,255,0.2));
+      background: linear-gradient(180deg, var(--teal), rgba(111,177,172,0.2));
     }
-    .status-item { font-size: 12px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.2px; }
-    .status-item span { color: #fff; font-weight: 700; display: block; margin-top: 4px; font-size: 14px; }
+    .status-item { font-size: 11px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
+    .status-item span { color: var(--text); font-weight: 500; font-size: 18px; display: block; margin-top: 6px; letter-spacing: 0; text-transform: none; }
+
+    /* ── Live-conditions pill (used inside section heads) ───────── */
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--hair);
+      background: rgba(255,255,255,.025);
+    }
+    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px var(--teal); animation: pillPulse 2.4s ease-in-out infinite; }
+    @keyframes pillPulse { 0%,100%{ opacity: 1; transform: scale(1); } 50%{ opacity: .55; transform: scale(.85); } }
+
+    /* Card head — section-label + pill */
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
+    .section-head h2 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: var(--text); }
+
+    /* ── Greeting strip (start screen) ──────────────────────────── */
+    .greeting { display: grid; gap: 6px; text-align: center; padding: 4px 0 8px; }
+    .greeting .kicker { font-size: 10px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
+    .greeting h1 { margin: 0; font: 400 26px/1.2 "Open Sans", sans-serif; letter-spacing: 0.005em; color: var(--text); }
+    .greeting .meta { font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; }
+    .greeting .meta b { color: var(--text); font-weight: 600; }
+
+    /* ── Glance tiles (Sea Temp / Swell / Wind from buoy) ───────── */
+    .glance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+    .glance .tile {
+      background: var(--ink-3);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      display: grid; gap: 6px;
+    }
+    .glance .tile .lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase; color: var(--text-faint); }
+    .glance .tile .val { font: 500 18px/1.1 "Open Sans", sans-serif; color: var(--text); display: flex; align-items: baseline; gap: 4px; }
+    .glance .tile .val small { font-size: 10px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.08em; }
+    .glance .tile .val.placeholder { color: var(--text-faint); font-weight: 400; }
 
     /* ── Sighting list ───────────────────────────────────────────── */
     .sighting-list {
-      background: var(--surface-1);
-      border: 1px solid var(--hairline);
-      border-radius: 16px;
+      background: var(--ink-3);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
       overflow: hidden;
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 28px rgba(0,0,0,.35);
     }
     .sighting-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 16px 18px;
-      border-bottom: 1px solid var(--hairline);
+      border-bottom: 1px solid var(--hair);
       transition: background var(--t-fast);
     }
     .sighting-row:hover { background: rgba(255,255,255,0.02); }
     .sighting-row:last-child { border-bottom: none; }
-    .sighting-species { font-weight: 700; font-size: 15px; color: #fff; letter-spacing: -0.01em; }
-    .sighting-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-weight: 500; }
+    .sighting-species { font: 600 15px/1.2 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0.005em; }
+    .sighting-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.02em; }
     .sighting-badge {
-      background: rgba(255,255,255,0.1);
-      color: #fff;
-      font-weight: 700;
-      font-size: 13px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-weight: 600;
+      font-size: 12px;
       padding: 6px 12px;
       border-radius: 999px;
-      box-shadow: var(--shadow-inset);
-      letter-spacing: 0.2px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
     }
-    .empty { padding: 40px 24px; text-align: center; color: var(--text-dim); font-size: 14px; font-weight: 500; }
+    .empty { padding: 36px 20px; text-align: center; color: var(--text-faint); font-size: 13px; letter-spacing: 0.05em; }
 
     /* ── Summary cards (review screen) ───────────────────────────── */
-    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
     .summary-card {
-      background: linear-gradient(180deg, var(--surface-1) 0%, var(--surface-2) 100%);
-      border: 1px solid var(--hairline);
+      background: var(--ink-3);
+      border: 1px solid var(--hair);
       border-radius: 14px;
-      padding: 16px;
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
+      padding: 14px 14px 12px;
+      display: grid; gap: 6px;
       position: relative;
       overflow: hidden;
     }
-    .summary-card::before {
-      content: '';
-      position: absolute; top: 0; left: 0; bottom: 0;
-      width: 3px;
-      background: linear-gradient(180deg, #fff, rgba(255,255,255,0.2));
-    }
-    .summary-card .card-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .summary-card .card-value {
-      font-size: 22px;
-      font-weight: 700;
-      color: #fff;
-      margin-top: 6px;
-      letter-spacing: -0.02em;
-    }
+    .summary-card .card-label { font-size: 9px; font-weight: 600; color: var(--text-faint); letter-spacing: 0.26em; text-transform: uppercase; }
+    .summary-card .card-value { font: 500 18px/1.1 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0; }
 
     /* ── Photo drop ──────────────────────────────────────────────── */
     .photo-drop {
-      border: 2px dashed var(--hairline-strong);
-      border-radius: 16px;
-      padding: 32px 20px;
+      border: 1px dashed var(--hair-2);
+      border-radius: 14px;
+      padding: 28px 20px;
       text-align: center;
       cursor: pointer;
-      transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
-      background: var(--surface-2);
+      transition: border-color var(--t-fast), background var(--t-fast);
+      background: var(--ink-4);
     }
-    .photo-drop:hover { border-color: rgba(255,255,255,0.4); background: var(--surface-3); transform: translateY(-1px); }
-    .photo-drop p { font-size: 13px; color: var(--text-muted); margin-top: 6px; font-weight: 500; }
-    .photo-drop strong { color: #fff; font-weight: 700; }
+    .photo-drop:hover { border-color: rgba(255,255,255,0.32); background: #1f262b; }
+    .photo-drop p { font-size: 12px; color: var(--text-dim); margin-top: 6px; letter-spacing: 0.04em; }
+    .photo-drop strong { color: var(--text); font-weight: 600; letter-spacing: 0.05em; }
     .photo-drop input { display: none; }
     .photo-preview {
       width: 100%;
       max-height: 240px;
       object-fit: cover;
-      border-radius: 14px;
+      border-radius: 12px;
       margin-top: 14px;
       display: none;
-      box-shadow: var(--shadow-md);
+      box-shadow: 0 14px 28px rgba(0,0,0,.35);
     }
 
     /* ── Toast ───────────────────────────────────────────────────── */
     .toast {
       position: fixed;
-      bottom: 32px;
+      bottom: 100px;
       left: 50%;
-      transform: translateX(-50%) translateY(120px);
-      background: var(--surface-1);
-      border: 1px solid var(--hairline-strong);
-      border-radius: 14px;
-      padding: 14px 22px;
-      font-size: 14px;
-      font-weight: 600;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--ink-3);
+      border: 1px solid var(--hair-2);
+      border-radius: 999px;
+      padding: 12px 22px;
+      font: 600 12px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text);
       z-index: 100;
       transition: transform var(--t-med), opacity var(--t-med);
       white-space: nowrap;
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 30px 60px rgba(0,0,0,0.55);
       opacity: 0;
+      max-width: calc(100vw - 32px);
+      overflow: hidden; text-overflow: ellipsis;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-    .toast.success { border-color: rgba(34, 197, 94, 0.4); color: var(--success); }
-    .toast.error { border-color: rgba(239, 68, 68, 0.4); color: var(--danger); }
+    .toast.success { color: #cfeacb; border-color: rgba(34,197,94,0.32); }
+    .toast.error { color: #f5b6b6; border-color: rgba(239,68,68,0.32); }
 
-    /* ── Spinner ─────────────────────────────────────────────────── */
+    /* ── Spinner (inside primary button) ────────────────────────── */
     .spinner {
-      width: 18px; height: 18px;
-      border: 2px solid rgba(0,0,0,0.2);
-      border-top-color: #000;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(0,0,0,0.18);
+      border-top-color: rgba(0,0,0,0.7);
       border-radius: 50%;
-      animation: spin 0.6s linear infinite;
+      animation: spinIcon 0.6s linear infinite;
       display: inline-block;
       vertical-align: middle;
       margin-right: 10px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .footer { padding: 18px; text-align: center; font-size: 11px; color: var(--text-dim); border-top: 1px solid var(--hairline); letter-spacing: 0.5px; font-weight: 500; }
+    @keyframes spinIcon { to { transform: rotate(360deg); } }
 
     /* ── Email tag input ─────────────────────────────────────────── */
     .email-tag-wrap {
-      background: var(--surface-2);
-      border: 1px solid var(--hairline-strong);
-      border-radius: 14px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
       padding: 10px 12px;
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       cursor: text;
-      transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+      transition: border-color var(--t-fast), background var(--t-fast);
       min-height: 56px;
       align-items: flex-start;
-      box-shadow: var(--shadow-inset);
     }
-    .email-tag-wrap:focus-within {
-      border-color: rgba(255,255,255,0.6);
-      background: var(--surface-3);
-      box-shadow: 0 0 0 4px rgba(255,255,255,0.08), var(--shadow-inset);
-    }
+    .email-tag-wrap:focus-within { border-color: var(--hair-2); background: #1f262b; }
     .email-tag {
-      background: rgba(255,255,255,0.1);
-      color: #fff;
-      font-size: 13px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 12px;
       padding: 6px 12px;
       border-radius: 999px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      display: flex; align-items: center; gap: 6px;
       white-space: nowrap;
       font-weight: 600;
-      box-shadow: var(--shadow-inset);
+      letter-spacing: 0.04em;
     }
     .email-tag .remove-tag {
-      background: none; border: none;
+      background: none; border: 0;
       color: rgba(255,255,255,0.55);
       font-size: 16px; cursor: pointer; padding: 0; line-height: 1;
       transition: color var(--t-fast);
     }
-    .email-tag .remove-tag:hover { color: #fff; }
-    .email-tag-input { background: none; border: none; outline: none; color: #fff; font-size: 16px; flex: 1; min-width: 160px; padding: 4px 2px; font-weight: 500; }
-    .email-tag-input::placeholder { color: var(--text-dim); }
+    .email-tag .remove-tag:hover { color: var(--text); }
+    .email-tag-input {
+      background: none; border: 0; outline: 0;
+      color: var(--text);
+      font: 500 16px/1.2 "Open Sans", sans-serif;
+      flex: 1; min-width: 160px; padding: 4px 2px;
+    }
+    .email-tag-input::placeholder { color: var(--text-faint); }
 
-    /* ── Header refresh button (start screen only) ───────────────── */
-    .btn-refresh {
+    /* ── Header refresh button (alias of .iconbtn) ──────────────── */
+    .btn-refresh { display: none; }
+    .btn-refresh.show { display: grid; }
+
+    /* ── Bottom ribbon — amplified nav (replaces text-link footer) */
+    .footer.ribbon {
+      position: sticky;
+      bottom: 0;
+      z-index: 5;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+      background:
+        linear-gradient(180deg, rgba(10,12,14,0) 0%, rgba(10,12,14,.85) 30%, rgba(10,12,14,.96) 100%);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 0;
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .footer.ribbon::before {
+      content: "";
       position: absolute;
-      top: 50%; left: 18px;
-      transform: translateY(-50%);
-      width: 40px; height: 40px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #fff;
-      font-size: 18px;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 32px));
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--hair-2), transparent);
+    }
+    .ribbon-inner {
+      display: grid;
+      grid-template-columns: 1.4fr repeat(3, 1fr);
+      gap: 8px;
+    }
+    .nav {
+      appearance: none;
+      text-decoration: none;
+      color: var(--text);
+      background: var(--ink-3);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      padding: 12px 10px 10px;
+      display: grid;
+      grid-template-rows: 22px auto auto;
+      align-items: end;
+      gap: 4px;
       cursor: pointer;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      transition: transform 0.4s var(--ease), background var(--t-fast);
-      box-shadow: var(--shadow-sm), var(--shadow-inset);
+      text-align: left;
+      transition: transform .15s ease, border-color .2s ease, background .2s ease;
+      position: relative;
+      overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
-    .btn-refresh.show { display: flex; }
-    .btn-refresh:active { background: rgba(255,255,255,0.18); transform: translateY(-50%) rotate(360deg); }
-    .btn-refresh.spinning { animation: refreshSpin 0.8s linear infinite; }
-    @keyframes refreshSpin { from { transform: translateY(-50%) rotate(0deg); } to { transform: translateY(-50%) rotate(360deg); } }
+    .nav:hover { border-color: var(--hair-2); transform: translateY(-2px); }
+    .nav .glyph { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.5; color: var(--text); opacity: .9; }
+    .nav .lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); }
+    .nav .sub { font-size: 10px; color: var(--text-dim); letter-spacing: 0.02em; }
+    .nav.feature {
+      background:
+        radial-gradient(140% 100% at 0% 100%, rgba(111,177,172,.18) 0%, rgba(111,177,172,0) 60%),
+        linear-gradient(180deg, #15201f 0%, #0f1718 100%);
+      border-color: rgba(111,177,172,.28);
+    }
+    .nav.feature .lbl { color: var(--accent); }
+    .nav.feature .sub { color: rgba(230,240,240,.8); }
+    .nav.feature .glyph { color: var(--teal); opacity: 1; }
+    .nav.danger:hover { border-color: rgba(214,165,151,.5); }
+    .nav.danger .glyph { color: #d6a597; }
+    .nav.hidden { display: none; }
+
+    /* Hide ribbon on the login screen via body class */
+    body.is-login .footer.ribbon { display: none; }
+
+    /* Responsive ribbon */
+    @media (max-width: 480px) {
+      .ribbon-inner { grid-template-columns: 1fr 1fr; }
+      .nav.feature { grid-column: 1 / -1; }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .bay::before, .bay::after, .pill .dot { animation: none !important; }
+    }
   </style>
 </head>
-<body>
+<body class="is-login">
+
+<!-- Ambient ocean — sits behind every screen -->
+<div class="bay" aria-hidden="true"></div>
+
 <div class="app">
 
-  <div class="header">
-    <button class="btn-refresh" id="btnRefresh" type="button" onclick="fetchBuoyConditions(true)" aria-label="Refresh conditions">↻</button>
+  <header class="header">
+    <button class="iconbtn btn-refresh" id="btnRefresh" type="button" onclick="fetchBuoyConditions(true)" aria-label="Refresh conditions">
+      <svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 1 6.3 6.3M20 4v7h-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <div class="header-logo">
       <img src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
     </div>
-  </div>
+    <div class="iconbtn" style="visibility:hidden" aria-hidden="true"></div>
+  </header>
 
   <!-- Login (default screen until a Supabase session is found on boot) -->
   <div class="screen active" id="screenLogin">
@@ -428,46 +683,79 @@
 
   <!-- Start -->
   <div class="screen" id="screenStart">
-    <div class="section">
-      <div class="section-label">New Trip</div>
+    <section class="greeting">
+      <div class="kicker" id="startKicker">Moss Landing · Monterey Bay</div>
+      <h1>Ready when you are, Captain</h1>
+      <div class="meta" id="startMeta">&nbsp;</div>
+    </section>
+
+    <section class="glance">
+      <div class="tile">
+        <div class="lbl">Sea Temp</div>
+        <div class="val placeholder" id="glanceTemp">—<small>°F</small></div>
+      </div>
+      <div class="tile">
+        <div class="lbl">Swell</div>
+        <div class="val placeholder" id="glanceSwell">—<small>ft</small></div>
+      </div>
+      <div class="tile">
+        <div class="lbl">Wind</div>
+        <div class="val placeholder" id="glanceWind">—<small>kt</small></div>
+      </div>
+    </section>
+
+    <section class="section" id="trip-card">
+      <div class="section-head">
+        <h2>New Trip</h2>
+        <span class="pill"><span class="dot"></span>Live Conditions</span>
+      </div>
+
       <div class="field">
         <label>Passenger Count</label>
-        <select id="inputPassengers">
-          <option value="0">0</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-        </select>
+        <div class="stepper">
+          <button type="button" id="paxDec" aria-label="Decrease">−</button>
+          <div class="val">
+            <span id="paxVal">4</span>
+            <small id="paxLabel">of 6 guests</small>
+          </div>
+          <button type="button" id="paxInc" aria-label="Increase">+</button>
+        </div>
+        <input type="hidden" id="inputPassengers" value="4">
       </div>
+
       <div class="field">
         <label>Water Temperature (°F)</label>
         <input type="number" id="inputWaterTemp" placeholder="e.g. 55" step="0.1" inputmode="decimal">
       </div>
+
       <div class="field">
         <label>Visibility</label>
-        <select id="inputVisibility">
-          <option>Excellent</option>
-          <option selected>Good</option>
-          <option>Fair</option>
-          <option>Poor</option>
-          <option>Overcast</option>
-        </select>
+        <div class="seg" id="visSeg" data-target="inputVisibility">
+          <button type="button" data-value="Excellent">Excellent</button>
+          <button type="button" data-value="Good" class="on">Good</button>
+          <button type="button" data-value="Fair">Fair</button>
+          <button type="button" data-value="Poor">Poor</button>
+          <button type="button" data-value="Overcast">Overcast</button>
+        </div>
+        <input type="hidden" id="inputVisibility" value="Good">
       </div>
+
       <div class="field">
         <label>Sea Conditions</label>
-        <select id="inputConditions">
-          <option value="">Select...</option>
-          <option>Calm</option>
-          <option>Slight Chop</option>
-          <option>Moderate Chop</option>
-          <option>Rough</option>
-        </select>
+        <div class="seg" id="seaSeg" data-target="inputConditions">
+          <button type="button" data-value="Calm">Calm</button>
+          <button type="button" data-value="Slight Chop">Slight</button>
+          <button type="button" data-value="Moderate Chop">Moderate</button>
+          <button type="button" data-value="Rough">Rough</button>
+        </div>
+        <input type="hidden" id="inputConditions" value="">
       </div>
-      <button class="btn btn-primary" onclick="startTrip()">Start Trip</button>
-    </div>
+
+      <button class="btn btn-primary" onclick="startTrip()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Start Trip
+      </button>
+    </section>
   </div>
 
   <!-- Settings (operator-editable subset of operator config) -->
@@ -781,13 +1069,30 @@
     <button class="btn btn-danger" onclick="discardTrip()">Discard Trip</button>
   </div>
 
-  <div class="footer">
-    <span>Logging the Wild Monterey</span>
-    <a href="#" id="footerPastTrips" onclick="event.preventDefault(); openPastTrips();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Past Trips</a>
-    <a href="#" id="footerSettings" onclick="event.preventDefault(); openSettings();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Settings</a>
-    <a href="#" id="footerAdmin" onclick="event.preventDefault(); openAdmin();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Admin</a>
-    <a href="#" id="footerLogout" onclick="event.preventDefault(); handleLogout();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Log out</a>
-  </div>
+  <footer class="footer ribbon">
+    <div class="ribbon-inner">
+      <a class="nav feature hidden" id="footerPastTrips" href="#" onclick="event.preventDefault(); openPastTrips();" aria-label="Past Trips">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="lbl">Past Trips</div>
+        <div class="sub">Audio recaps</div>
+      </a>
+      <a class="nav hidden" id="footerSettings" href="#" onclick="event.preventDefault(); openSettings();" aria-label="Settings">
+        <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5A7 7 0 0 0 19 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="lbl">Settings</div>
+        <div class="sub">Logo · Species</div>
+      </a>
+      <a class="nav hidden" id="footerAdmin" href="#" onclick="event.preventDefault(); openAdmin();" aria-label="Admin">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M12 3l9 4-9 4-9-4 9-4Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12l9 4 9-4M3 16l9 4 9-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="lbl">Admin</div>
+        <div class="sub">Operators</div>
+      </a>
+      <a class="nav danger hidden" id="footerLogout" href="#" onclick="event.preventDefault(); handleLogout();" aria-label="Log out">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="lbl">Log Out</div>
+        <div class="sub">End shift</div>
+      </a>
+    </div>
+  </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -873,6 +1178,58 @@
     });
     input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
 
+    // ── Stepper for passenger count (start screen) ──────────────
+    // Visible UI is the ± stepper; underlying value lives on the hidden
+    // #inputPassengers input so the existing startTrip() reader keeps working.
+    const PAX_MIN = 0, PAX_MAX = 6;
+    const paxValEl = document.getElementById('paxVal');
+    const paxLblEl = document.getElementById('paxLabel');
+    const paxHidden = document.getElementById('inputPassengers');
+    function setPax(n) {
+      n = Math.max(PAX_MIN, Math.min(PAX_MAX, n | 0));
+      paxValEl.textContent = n;
+      paxLblEl.textContent = n === 1 ? 'of 6 guests' : `of ${PAX_MAX} guests`;
+      paxHidden.value = String(n);
+      document.getElementById('paxDec').disabled = n <= PAX_MIN;
+      document.getElementById('paxInc').disabled = n >= PAX_MAX;
+    }
+    document.getElementById('paxInc').addEventListener('click', () => setPax(parseInt(paxHidden.value || '0', 10) + 1));
+    document.getElementById('paxDec').addEventListener('click', () => setPax(parseInt(paxHidden.value || '0', 10) - 1));
+    setPax(parseInt(paxHidden.value || '4', 10));
+
+    // ── Segmented controls (visibility, sea conditions) ─────────
+    // Each .seg has a data-target pointing at the hidden input id; clicking
+    // a button updates that hidden input's value and the .on visual state.
+    document.querySelectorAll('.seg').forEach(seg => {
+      const targetId = seg.dataset.target;
+      const target = targetId && document.getElementById(targetId);
+      // Sync the initially-on button to the hidden input (handles "Good" default)
+      const initial = seg.querySelector('button.on');
+      if (initial && target) target.value = initial.dataset.value || initial.textContent.trim();
+      seg.addEventListener('click', e => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        if (target) target.value = b.dataset.value || b.textContent.trim();
+      });
+    });
+
+    // ── Greeting strip meta — current weekday + local time ──────
+    function refreshStartMeta() {
+      const el = document.getElementById('startMeta');
+      if (!el) return;
+      const now = new Date();
+      const day = now.toLocaleDateString('en-US', { weekday: 'short' });
+      const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      el.innerHTML = `${day} · ${time} · <b>Whale Watch</b>`;
+    }
+    refreshStartMeta();
+    setInterval(refreshStartMeta, 60_000);
+
+    // Pull operator name into the kicker if available later via /api/me
+    // (loadMe will refresh it once the session resolves).
+
     // Buoy auto-fill is triggered by bootApp() after a successful session
     // check, so it doesn't run while the login screen is up.
   });
@@ -905,13 +1262,23 @@
       if (obs.error) throw new Error(obs.error);
 
       const tempInput = document.getElementById('inputWaterTemp');
-      const seaSelect = document.getElementById('inputConditions');
+      const seaHidden = document.getElementById('inputConditions');
       if (obs.water_temp_f != null && (!tempInput.value || force)) {
         tempInput.value = obs.water_temp_f;
       }
-      if (obs.sea_state && (!seaSelect.value || force)) {
-        seaSelect.value = obs.sea_state;
+      if (obs.sea_state && (!seaHidden.value || force)) {
+        seaHidden.value = obs.sea_state;
+        // Sync the segmented control's visual state to the new value
+        const seaSeg = document.getElementById('seaSeg');
+        if (seaSeg) {
+          seaSeg.querySelectorAll('button').forEach(b => {
+            b.classList.toggle('on', (b.dataset.value || b.textContent.trim()) === obs.sea_state);
+          });
+        }
       }
+
+      // Glance tiles — always update when buoy responds
+      paintGlance(obs);
 
       if (force) {
         const parts = [];
@@ -925,6 +1292,37 @@
     } finally {
       if (force && btn) setTimeout(() => btn.classList.remove('spinning'), 400);
     }
+  }
+
+  // Updates the three Sea Temp / Swell / Wind tiles on the start screen with
+  // the latest buoy reading. M1 has no wave sensors, so swell stays muted
+  // ("—") on Enocean's default station; an offshore station (e.g. 46042)
+  // would populate it.
+  function paintGlance(obs) {
+    function set(id, value, unit) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (value == null || value === '') {
+        el.classList.add('placeholder');
+        el.innerHTML = `—<small>${unit}</small>`;
+      } else {
+        el.classList.remove('placeholder');
+        el.innerHTML = `${value}<small>${unit}</small>`;
+      }
+    }
+    set('glanceTemp',  obs && obs.water_temp_f,   '°F');
+    set('glanceSwell', obs && obs.wave_height_ft, 'ft');
+    if (obs && obs.wind_kt != null) {
+      const dir = (obs.wind_dir_deg != null) ? ' ' + degToCompass(obs.wind_dir_deg) : '';
+      const el = document.getElementById('glanceWind');
+      if (el) { el.classList.remove('placeholder'); el.innerHTML = `${obs.wind_kt}<small>kt${dir}</small>`; }
+    } else {
+      set('glanceWind', null, 'kt');
+    }
+  }
+  function degToCompass(deg) {
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(((deg % 360) / 45)) % 8];
   }
 
   // ── Trip functions ───────────────────────────────────────────
@@ -1533,11 +1931,27 @@
     trip = newTripState();
     guestEmails = [];
     document.getElementById('loginPassword').value = '';
-    document.getElementById('footerLogout').style.display = 'none';
-    document.getElementById('footerSettings').style.display = 'none';
-    document.getElementById('footerAdmin').style.display = 'none';
-    document.getElementById('footerPastTrips').style.display = 'none';
+    setRibbonForLoggedOut();
     showScreen('screenLogin');
+  }
+
+  // Ribbon visibility helpers — toggle the .hidden class on each nav tile.
+  // The ribbon container itself is hidden via body.is-login when logged out
+  // so the empty bar doesn't show on the login screen.
+  function setRibbonForLoggedOut() {
+    document.body.classList.add('is-login');
+    ['footerLogout','footerSettings','footerAdmin','footerPastTrips'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    });
+  }
+  function setRibbonForLoggedIn() {
+    document.body.classList.remove('is-login');
+    ['footerLogout','footerSettings','footerPastTrips'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    });
+    // Admin link revealed by loadMe() based on is_super_admin
   }
 
   // Single boot entry point. Decides which screen to show based on
@@ -1551,16 +1965,12 @@
     } catch (e) { /* offline / SDK not loaded — treat as logged out */ }
 
     if (!session) {
-      document.getElementById('footerLogout').style.display = 'none';
-      document.getElementById('footerSettings').style.display = 'none';
-      document.getElementById('footerPastTrips').style.display = 'none';
+      setRibbonForLoggedOut();
       showScreen('screenLogin');
       return;
     }
 
-    document.getElementById('footerLogout').style.display = 'inline';
-    document.getElementById('footerSettings').style.display = 'inline';
-    document.getElementById('footerPastTrips').style.display = 'inline';
+    setRibbonForLoggedIn();
 
     // Pull per-operator config (logo, species list, buoy station, etc.).
     // Best-effort — if /api/me fails we proceed with hardcoded defaults so
@@ -1592,8 +2002,13 @@
       if (operatorConfig && operatorConfig.species_list && operatorConfig.species_list.length) {
         renderSpeciesDropdown(operatorConfig.species_list);
       }
+      // Greeting kicker = operator tagline (e.g. "Moss Landing · Monterey Bay")
+      const kicker = document.getElementById('startKicker');
+      if (kicker && operatorConfig && operatorConfig.tagline) {
+        kicker.textContent = operatorConfig.tagline;
+      }
       const adminLink = document.getElementById('footerAdmin');
-      if (adminLink) adminLink.style.display = (body.user && body.user.is_super_admin) ? 'inline' : 'none';
+      if (adminLink) adminLink.classList.toggle('hidden', !(body.user && body.user.is_super_admin));
     } catch (e) {
       console.warn('loadMe failed, using hardcoded defaults:', e.message);
       operatorConfig = null;
@@ -2239,7 +2654,7 @@
   // token expired, signed out from another tab).
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') {
-      document.getElementById('footerLogout').style.display = 'none';
+      setRibbonForLoggedOut();
       showScreen('screenLogin');
     }
   });
