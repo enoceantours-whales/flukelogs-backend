@@ -470,6 +470,67 @@
     </div>
   </div>
 
+  <!-- Settings (operator-editable subset of operator config) -->
+  <div class="screen" id="screenSettings">
+    <div class="section">
+      <div class="section-label">Operator</div>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="settingsName" disabled style="opacity:0.6;">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Branding</div>
+      <div class="field">
+        <label>Logo URL — PDF (dark logo on white)</label>
+        <input type="url" id="settingsLogoUrl" placeholder="https://…/logo-dark.png">
+      </div>
+      <div class="field">
+        <label>Logo URL — Email (light logo on dark)</label>
+        <input type="url" id="settingsLogoUrlEmail" placeholder="https://…/logo-light.png">
+      </div>
+      <div class="field">
+        <label>Review URL</label>
+        <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Email</div>
+      <div class="field">
+        <label>"From" Email Address</label>
+        <input type="email" id="settingsFromEmail" autocapitalize="none" autocorrect="off">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Mailchimp</div>
+      <div class="field">
+        <label>API Key <span id="settingsMailchimpKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(leave blank to keep current)</span></label>
+        <input type="password" id="settingsMailchimpKey" autocomplete="off" placeholder="paste new key to replace">
+      </div>
+      <div class="field">
+        <label>Audience ID</label>
+        <input type="text" id="settingsMailchimpAudience" autocapitalize="none" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>Server Prefix</label>
+        <input type="text" id="settingsMailchimpServer" placeholder="us1" autocapitalize="none" autocorrect="off">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Species List</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Each row is a group shown as an optgroup in the dropdown. Species within a group are comma-separated.</p>
+      <div id="settingsSpeciesGroups"></div>
+      <button class="btn btn-outline" type="button" onclick="addSpeciesGroup()" style="margin-top:8px;">+ Add group</button>
+    </div>
+
+    <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettings()">Save Settings</button>
+    <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
+  </div>
+
   <!-- Logging -->
   <div class="screen" id="screenLog">
     <div class="status-bar">
@@ -585,6 +646,7 @@
 
   <div class="footer">
     <span>Logging the Wild Monterey</span>
+    <a href="#" id="footerSettings" onclick="event.preventDefault(); openSettings();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Settings</a>
     <a href="#" id="footerLogout" onclick="event.preventDefault(); handleLogout();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Log out</a>
   </div>
 </div>
@@ -1333,6 +1395,7 @@
     guestEmails = [];
     document.getElementById('loginPassword').value = '';
     document.getElementById('footerLogout').style.display = 'none';
+    document.getElementById('footerSettings').style.display = 'none';
     showScreen('screenLogin');
   }
 
@@ -1348,11 +1411,13 @@
 
     if (!session) {
       document.getElementById('footerLogout').style.display = 'none';
+      document.getElementById('footerSettings').style.display = 'none';
       showScreen('screenLogin');
       return;
     }
 
     document.getElementById('footerLogout').style.display = 'inline';
+    document.getElementById('footerSettings').style.display = 'inline';
 
     // Pull per-operator config (logo, species list, buoy station, etc.).
     // Best-effort — if /api/me fails we proceed with hardcoded defaults so
@@ -1386,6 +1451,131 @@
     } catch (e) {
       console.warn('loadMe failed, using hardcoded defaults:', e.message);
       operatorConfig = null;
+    }
+  }
+
+  // ── Settings (operator-editable subset) ──────────────────────────
+  // Fetched fresh from /api/operator-settings on every Settings open so the
+  // form reflects whatever the captain (or super admin) has changed in
+  // another tab / on another device since last view.
+
+  async function openSettings() {
+    showScreen('screenSettings');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return handleLogout();
+    try {
+      const res = await fetch('/api/operator-settings', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const cfg = await res.json();
+      populateSettingsForm(cfg);
+    } catch (err) {
+      toast('Could not load settings: ' + (err.message || err), 'error');
+    }
+  }
+
+  function populateSettingsForm(cfg) {
+    document.getElementById('settingsName').value             = cfg.name || '';
+    document.getElementById('settingsLogoUrl').value          = cfg.logo_url || '';
+    document.getElementById('settingsLogoUrlEmail').value     = cfg.logo_url_email || '';
+    document.getElementById('settingsReviewUrl').value        = cfg.review_url || '';
+    document.getElementById('settingsFromEmail').value        = cfg.from_email || '';
+    document.getElementById('settingsMailchimpKey').value     = '';
+    document.getElementById('settingsMailchimpKeyHint').textContent =
+      cfg.has_mailchimp_api_key ? '(leave blank to keep current)' : '(not set)';
+    document.getElementById('settingsMailchimpAudience').value = cfg.mailchimp_audience_id || '';
+    document.getElementById('settingsMailchimpServer').value   = cfg.mailchimp_server_prefix || '';
+    renderSpeciesGroupEditor(cfg.species_list || []);
+  }
+
+  // Renders one row per species group: group-name input + comma-separated
+  // species textarea + remove button. addSpeciesGroup appends a blank one.
+  function renderSpeciesGroupEditor(groups) {
+    const wrap = document.getElementById('settingsSpeciesGroups');
+    wrap.innerHTML = '';
+    for (const g of groups) appendSpeciesGroupRow(g.group || '', (g.species || []).join(', '));
+  }
+
+  function appendSpeciesGroupRow(name, speciesCsv) {
+    const wrap = document.getElementById('settingsSpeciesGroups');
+    const row = document.createElement('div');
+    row.className = 'species-group-row';
+    row.style.cssText = 'background:var(--surface-2);border:1px solid var(--hairline);border-radius:12px;padding:12px;margin-bottom:10px;';
+    row.innerHTML =
+      '<div class="field" style="margin-bottom:8px;"><label>Group name</label>' +
+        '<input type="text" class="sg-name" autocapitalize="words" autocorrect="off"></div>' +
+      '<div class="field" style="margin-bottom:8px;"><label>Species (comma-separated)</label>' +
+        '<textarea class="sg-species" rows="2" style="width:100%;padding:14px;background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:12px;color:var(--text);font-size:15px;font-family:inherit;resize:vertical;"></textarea></div>' +
+      '<button type="button" class="btn btn-outline" style="margin-top:0;font-size:12px;padding:8px;">Remove group</button>';
+    row.querySelector('.sg-name').value = name;
+    row.querySelector('.sg-species').value = speciesCsv;
+    row.querySelector('button').onclick = () => row.remove();
+    wrap.appendChild(row);
+  }
+
+  function addSpeciesGroup() { appendSpeciesGroupRow('', ''); }
+
+  // Serializes the editor back into the [{group, species:[]}] structure
+  // /api/operator-settings expects. Strips empty groups + empty species.
+  function serializeSpeciesGroups() {
+    const out = [];
+    document.querySelectorAll('#settingsSpeciesGroups .species-group-row').forEach(row => {
+      const name = row.querySelector('.sg-name').value.trim();
+      const speciesCsv = row.querySelector('.sg-species').value;
+      const species = speciesCsv.split(',').map(s => s.trim()).filter(Boolean);
+      if (name && species.length) out.push({ group: name, species });
+    });
+    return out;
+  }
+
+  async function saveSettings() {
+    const btn = document.getElementById('settingsSaveBtn');
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span>Saving…';
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { btn.disabled = false; btn.textContent = originalLabel; return handleLogout(); }
+
+    const body = {
+      logo_url:                document.getElementById('settingsLogoUrl').value.trim()      || null,
+      logo_url_email:          document.getElementById('settingsLogoUrlEmail').value.trim() || null,
+      review_url:              document.getElementById('settingsReviewUrl').value.trim()    || null,
+      from_email:              document.getElementById('settingsFromEmail').value.trim()    || null,
+      mailchimp_api_key:       document.getElementById('settingsMailchimpKey').value, // empty = keep current
+      mailchimp_audience_id:   document.getElementById('settingsMailchimpAudience').value.trim() || null,
+      mailchimp_server_prefix: document.getElementById('settingsMailchimpServer').value.trim() || null,
+      species_list:            serializeSpeciesGroups(),
+    };
+
+    try {
+      const res = await fetch('/api/operator-settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'HTTP ' + res.status);
+
+      // Hot-reload the in-memory operator config so the change takes effect
+      // without a full page refresh — species dropdown updates immediately,
+      // captain card branding updates on the next trip end.
+      operatorConfig = Object.assign({}, operatorConfig || {}, updated);
+      if (Array.isArray(updated.species_list) && updated.species_list.length) {
+        renderSpeciesDropdown(updated.species_list);
+      }
+
+      toast('Settings saved', 'success');
+      populateSettingsForm(updated); // reset password placeholder + masked hint
+    } catch (err) {
+      toast('Save failed: ' + (err.message || err), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
     }
   }
 
