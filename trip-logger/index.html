@@ -10,6 +10,8 @@
   <link rel="apple-touch-icon" href="/Public/Enocean_Tours_logo-03.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Enocean Tours — Trip Logger</title>
+  <!-- Supabase Auth SDK (UMD bundle, no build step) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -400,14 +402,32 @@
 <div class="app">
 
   <div class="header">
-    <button class="btn-refresh show" id="btnRefresh" type="button" onclick="fetchBuoyConditions(true)" aria-label="Refresh conditions">↻</button>
+    <button class="btn-refresh" id="btnRefresh" type="button" onclick="fetchBuoyConditions(true)" aria-label="Refresh conditions">↻</button>
     <div class="header-logo">
       <img src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
     </div>
   </div>
 
+  <!-- Login (default screen until a Supabase session is found on boot) -->
+  <div class="screen active" id="screenLogin">
+    <div class="section" style="margin-top: 40px;">
+      <div class="section-label">Sign In</div>
+      <form id="loginForm" onsubmit="event.preventDefault(); handleLogin();" autocomplete="on">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="loginEmail" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-primary" id="loginBtn" type="submit">Sign In</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Start -->
-  <div class="screen active" id="screenStart">
+  <div class="screen" id="screenStart">
     <div class="section">
       <div class="section-label">New Trip</div>
       <div class="field">
@@ -563,13 +583,26 @@
     <button class="btn btn-danger" onclick="discardTrip()">Discard Trip</button>
   </div>
 
-  <div class="footer">Logging the Wild Monterey</div>
+  <div class="footer">
+    <span>Logging the Wild Monterey</span>
+    <a href="#" id="footerLogout" onclick="event.preventDefault(); handleLogout();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Log out</a>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
   const API_URL = '/api/send-report';
+
+  // ── Supabase client (auth only at this stage) ────────────────────
+  // Same project + anon key the public sightings widget already uses.
+  // Anon key is safe to ship client-side — it's gated by RLS server-side.
+  const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage },
+  });
+
   let trip = newTripState();
   let guestEmails = [];
 
@@ -636,8 +669,8 @@
     });
     input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
 
-    // Auto-fill water temp + sea state from NOAA buoy 46092 (Monterey Bay)
-    fetchBuoyConditions(false);
+    // Buoy auto-fill is triggered by bootApp() after a successful session
+    // check, so it doesn't run while the login screen is up.
   });
 
   // ── NOAA buoy auto-fill (silent) ───────────────────────────────────
@@ -1231,7 +1264,84 @@
 
   function clearSavedTrip() { localStorage.removeItem(STORAGE_KEY); }
 
-  restoreTrip();
+  // ── Auth ─────────────────────────────────────────────────────────
+  // Step 2: client-side gate only. The API endpoints are still open;
+  // Step 3 will lock them down. For now this just controls which
+  // screen the captain sees and gives us a real session to work with.
+
+  async function handleLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) return toast('Email and password required', 'error');
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Signing in…';
+
+    try {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // Session is now persisted — boot into the app.
+      await bootApp();
+    } catch (err) {
+      console.error('login failed:', err);
+      toast(err.message || 'Sign in failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = 'Sign In';
+    }
+  }
+
+  async function handleLogout() {
+    try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
+    // Don't carry an in-progress trip across logins — the next user
+    // (or a different browser tab) shouldn't inherit it.
+    clearSavedTrip();
+    trip = newTripState();
+    guestEmails = [];
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('footerLogout').style.display = 'none';
+    showScreen('screenLogin');
+  }
+
+  // Single boot entry point. Decides which screen to show based on
+  // (1) whether there's an active Supabase session and (2) whether
+  // there's a mid-trip in localStorage.
+  async function bootApp() {
+    let session = null;
+    try {
+      const { data } = await sb.auth.getSession();
+      session = data.session;
+    } catch (e) { /* offline / SDK not loaded — treat as logged out */ }
+
+    if (!session) {
+      document.getElementById('footerLogout').style.display = 'none';
+      showScreen('screenLogin');
+      return;
+    }
+
+    document.getElementById('footerLogout').style.display = 'inline';
+
+    // Logged in — restore mid-trip if any, otherwise land on start screen.
+    // restoreTrip() handles both navigation and resuming GPS/timer.
+    const savedTrip = localStorage.getItem(STORAGE_KEY);
+    if (savedTrip) {
+      restoreTrip();
+    } else {
+      showScreen('screenStart');
+      fetchBuoyConditions(false);
+    }
+  }
+
+  // React to session expiry / sign-out events from Supabase (e.g., refresh
+  // token expired, signed out from another tab).
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      document.getElementById('footerLogout').style.display = 'none';
+      showScreen('screenLogin');
+    }
+  });
+
+  bootApp();
 </script>
 </body>
 </html>
