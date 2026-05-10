@@ -93,4 +93,16 @@ async function authenticate(req, res, opts = {}) {
   return { user, operatorId, isSuperAdmin };
 }
 
-module.exports = { verifyJWT, getOperatorIdForUser, getUserProfile, authenticate };
+// Convenience wrapper for admin endpoints. Returns the auth context only if
+// the user is a super admin; writes 403 otherwise.
+async function authenticateAsSuperAdmin(req, res) {
+  const auth = await authenticate(req, res, { requireOperator: false });
+  if (!auth) return null;
+  if (!auth.isSuperAdmin) {
+    res.status(403).json({ error: 'Super admin only' });
+    return null;
+  }
+  return auth;
+}
+
+module.exports = { verifyJWT, getOperatorIdForUser, getUserProfile, authenticate, authenticateAsSuperAdmin };

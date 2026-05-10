@@ -544,6 +544,92 @@
     <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
   </div>
 
+  <!-- Admin (super admin only) — list of every operator -->
+  <div class="screen" id="screenAdmin">
+    <div class="section">
+      <div class="section-label">Operators</div>
+      <div id="adminOperatorsList"><div class="empty">Loading…</div></div>
+      <button class="btn btn-primary" type="button" onclick="openAdminEdit(null)" style="margin-top:14px;">+ New Operator</button>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
+    </div>
+  </div>
+
+  <!-- Admin edit / create form (super admin only) — every operator field -->
+  <div class="screen" id="screenAdminEdit">
+    <div class="section">
+      <div class="section-label" id="adminEditTitle">Edit Operator</div>
+      <div class="field">
+        <label>Slug <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(URL-safe id, lowercase, hyphens)</span></label>
+        <input type="text" id="adminSlug" autocapitalize="none" autocorrect="off" placeholder="e.g. big-blue-tours">
+      </div>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="adminName" placeholder="e.g. Big Blue Tours">
+      </div>
+      <div class="field">
+        <label>Active</label>
+        <select id="adminActive">
+          <option value="true">Active</option>
+          <option value="false">Inactive (login + send disabled)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Branding</div>
+      <div class="field"><label>Website URL</label><input type="url" id="adminWebsiteUrl" placeholder="https://…"></div>
+      <div class="field"><label>Tagline (PDF/email footer)</label><input type="text" id="adminTagline" placeholder="MOSS LANDING HARBOR, MONTEREY BAY"></div>
+      <div class="field"><label>Logo URL — PDF (dark logo on white)</label><input type="url" id="adminLogoUrl"></div>
+      <div class="field"><label>Logo URL — Email (light logo on dark)</label><input type="url" id="adminLogoUrlEmail"></div>
+      <div class="field"><label>Review URL</label><input type="url" id="adminReviewUrl"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Email (Gmail SMTP)</div>
+      <div class="field"><label>"From" Email Address</label><input type="email" id="adminFromEmail" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Gmail User</label><input type="email" id="adminGmailUser" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Gmail App Password <span id="adminGmailPwHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;"></span></label><input type="password" id="adminGmailPw" autocomplete="off" placeholder="16-char app password"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Mailchimp</div>
+      <div class="field"><label>API Key <span id="adminMailchimpKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;"></span></label><input type="password" id="adminMailchimpKey" autocomplete="off"></div>
+      <div class="field"><label>Audience ID</label><input type="text" id="adminMailchimpAudience" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Server Prefix</label><input type="text" id="adminMailchimpServer" placeholder="us1" autocapitalize="none" autocorrect="off"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Geography</div>
+      <div class="field"><label>NOAA Buoy Station</label><input type="text" id="adminBuoyStation" placeholder="46092" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Default Map Center (lat,lng)</label><input type="text" id="adminMapCenter" placeholder="36.78,-122.05" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Default Map Zoom</label><input type="number" id="adminMapZoom" min="1" max="20" placeholder="10"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">FareHarbor (optional)</div>
+      <div class="field"><label>Company Shortname</label><input type="text" id="adminFhShortname" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>App Key <span id="adminFhAppKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;"></span></label><input type="password" id="adminFhAppKey" autocomplete="off"></div>
+      <div class="field"><label>User Key <span id="adminFhUserKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;"></span></label><input type="password" id="adminFhUserKey" autocomplete="off"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">External IDs (optional)</div>
+      <div class="field"><label>TripAdvisor ID</label><input type="text" id="adminTripadvisorId" autocapitalize="none" autocorrect="off"></div>
+      <div class="field"><label>Google Business ID</label><input type="text" id="adminGoogleBusinessId" autocapitalize="none" autocorrect="off"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Species List</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Same shape as the operator-facing editor. Leave empty if the new operator will fill this themselves later.</p>
+      <div id="adminSpeciesGroups"></div>
+      <button class="btn btn-outline" type="button" onclick="addAdminSpeciesGroup()" style="margin-top:8px;">+ Add group</button>
+    </div>
+
+    <button class="btn btn-primary" id="adminSaveBtn" onclick="saveAdminEdit()">Save</button>
+    <button class="btn btn-danger" id="adminDeleteBtn" type="button" onclick="deleteAdminOperator()" style="display:none;">Delete Operator</button>
+    <button class="btn btn-outline" type="button" onclick="showScreen('screenAdmin')">Back to list</button>
+  </div>
+
   <!-- Logging -->
   <div class="screen" id="screenLog">
     <div class="status-bar">
@@ -660,6 +746,7 @@
   <div class="footer">
     <span>Logging the Wild Monterey</span>
     <a href="#" id="footerSettings" onclick="event.preventDefault(); openSettings();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Settings</a>
+    <a href="#" id="footerAdmin" onclick="event.preventDefault(); openAdmin();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Admin</a>
     <a href="#" id="footerLogout" onclick="event.preventDefault(); handleLogout();" style="display:none; margin-left:14px; color:var(--text-muted); text-decoration:none; border-bottom:1px solid var(--hairline-strong);">Log out</a>
   </div>
 </div>
@@ -1409,6 +1496,7 @@
     document.getElementById('loginPassword').value = '';
     document.getElementById('footerLogout').style.display = 'none';
     document.getElementById('footerSettings').style.display = 'none';
+    document.getElementById('footerAdmin').style.display = 'none';
     showScreen('screenLogin');
   }
 
@@ -1450,6 +1538,7 @@
 
   // Fetch /api/me and apply the returned operator config to the UI.
   // Populates the species dropdown if the operator has a species_list.
+  // Also toggles the Admin footer link based on super-admin status.
   async function loadMe(token) {
     try {
       const res = await fetch('/api/me', {
@@ -1461,6 +1550,8 @@
       if (operatorConfig && operatorConfig.species_list && operatorConfig.species_list.length) {
         renderSpeciesDropdown(operatorConfig.species_list);
       }
+      const adminLink = document.getElementById('footerAdmin');
+      if (adminLink) adminLink.style.display = (body.user && body.user.is_super_admin) ? 'inline' : 'none';
     } catch (e) {
       console.warn('loadMe failed, using hardcoded defaults:', e.message);
       operatorConfig = null;
@@ -1642,6 +1733,216 @@
     } finally {
       btn.disabled = false;
       btn.textContent = originalLabel;
+    }
+  }
+
+  // ── Admin portal (super admin only) ──────────────────────────────
+  // List + create + edit any operator. The Admin link in the footer is
+  // gated by user.is_super_admin from /api/me, but the server endpoints
+  // independently enforce the same check so client tampering can't bypass.
+
+  let adminEditingId = null; // null = create mode, otherwise = operator id
+
+  async function adminAuthHeader() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { handleLogout(); throw new Error('No session'); }
+    return { 'Authorization': `Bearer ${session.access_token}` };
+  }
+
+  async function openAdmin() {
+    showScreen('screenAdmin');
+    const list = document.getElementById('adminOperatorsList');
+    list.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const res = await fetch('/api/admin/operators', { headers: await adminAuthHeader() });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const operators = await res.json();
+      renderAdminList(operators);
+    } catch (err) {
+      list.innerHTML = `<div class="empty">Could not load: ${err.message || err}</div>`;
+    }
+  }
+
+  function renderAdminList(operators) {
+    const list = document.getElementById('adminOperatorsList');
+    if (!operators.length) { list.innerHTML = '<div class="empty">No operators yet</div>'; return; }
+    list.innerHTML = operators.map(op => {
+      const status = op.active === false ? '<span style="color:var(--text-dim);">· inactive</span>' : '';
+      return `<div class="sighting-row" style="cursor:pointer;" onclick="openAdminEdit('${op.id}')">
+        <div>
+          <div class="sighting-species">${escapeHtml(op.name)} ${status}</div>
+          <div class="sighting-meta">${escapeHtml(op.slug)}</div>
+        </div>
+        <div class="sighting-badge">Edit</div>
+      </div>`;
+    }).join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function openAdminEdit(id) {
+    showScreen('screenAdminEdit');
+    adminEditingId = id;
+    document.getElementById('adminEditTitle').textContent = id ? 'Edit Operator' : 'New Operator';
+    document.getElementById('adminDeleteBtn').style.display = id ? 'block' : 'none';
+
+    if (!id) {
+      // Create mode — clear the form
+      populateAdminForm({ active: true, species_list: [] });
+      document.getElementById('adminSlug').disabled = false;
+      return;
+    }
+
+    // Edit mode — load the operator
+    try {
+      const res = await fetch(`/api/admin/operators/${id}`, { headers: await adminAuthHeader() });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const op = await res.json();
+      populateAdminForm(op);
+      document.getElementById('adminSlug').disabled = true; // slug locked once created
+    } catch (err) {
+      toast('Could not load operator: ' + (err.message || err), 'error');
+    }
+  }
+
+  function populateAdminForm(op) {
+    document.getElementById('adminSlug').value             = op.slug || '';
+    document.getElementById('adminName').value             = op.name || '';
+    document.getElementById('adminActive').value           = (op.active === false ? 'false' : 'true');
+    document.getElementById('adminWebsiteUrl').value       = op.website_url || '';
+    document.getElementById('adminTagline').value          = op.tagline || '';
+    document.getElementById('adminLogoUrl').value          = op.logo_url || '';
+    document.getElementById('adminLogoUrlEmail').value     = op.logo_url_email || '';
+    document.getElementById('adminReviewUrl').value        = op.review_url || '';
+    document.getElementById('adminFromEmail').value        = op.from_email || '';
+    document.getElementById('adminGmailUser').value        = op.gmail_user || '';
+    document.getElementById('adminGmailPw').value          = '';
+    document.getElementById('adminGmailPwHint').textContent = op.has_gmail_app_password ? '(leave blank to keep current)' : '(not set)';
+    document.getElementById('adminMailchimpKey').value     = '';
+    document.getElementById('adminMailchimpKeyHint').textContent = op.has_mailchimp_api_key ? '(leave blank to keep current)' : '(not set)';
+    document.getElementById('adminMailchimpAudience').value = op.mailchimp_audience_id || '';
+    document.getElementById('adminMailchimpServer').value   = op.mailchimp_server_prefix || '';
+    document.getElementById('adminBuoyStation').value      = op.noaa_buoy_station || '';
+    document.getElementById('adminMapCenter').value        = op.default_map_center || '';
+    document.getElementById('adminMapZoom').value          = op.default_map_zoom || '';
+    document.getElementById('adminFhShortname').value      = op.fh_company_shortname || '';
+    document.getElementById('adminFhAppKey').value         = '';
+    document.getElementById('adminFhAppKeyHint').textContent = op.has_fh_app_key ? '(leave blank to keep current)' : '(not set)';
+    document.getElementById('adminFhUserKey').value        = '';
+    document.getElementById('adminFhUserKeyHint').textContent = op.has_fh_user_key ? '(leave blank to keep current)' : '(not set)';
+    document.getElementById('adminTripadvisorId').value    = op.tripadvisor_id || '';
+    document.getElementById('adminGoogleBusinessId').value = op.google_business_id || '';
+    renderAdminSpeciesGroups(op.species_list || []);
+  }
+
+  function renderAdminSpeciesGroups(groups) {
+    const wrap = document.getElementById('adminSpeciesGroups');
+    wrap.innerHTML = '';
+    for (const g of groups) appendAdminSpeciesGroupRow(g.group || '', (g.species || []).join(', '));
+  }
+
+  function appendAdminSpeciesGroupRow(name, csv) {
+    const wrap = document.getElementById('adminSpeciesGroups');
+    const row = document.createElement('div');
+    row.className = 'admin-species-row';
+    row.style.cssText = 'background:var(--surface-2);border:1px solid var(--hairline);border-radius:12px;padding:12px;margin-bottom:10px;';
+    row.innerHTML =
+      '<div class="field" style="margin-bottom:8px;"><label>Group name</label>' +
+        '<input type="text" class="ag-name" autocapitalize="words" autocorrect="off"></div>' +
+      '<div class="field" style="margin-bottom:8px;"><label>Species (comma-separated)</label>' +
+        '<textarea class="ag-species" rows="2" style="width:100%;padding:14px;background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:12px;color:var(--text);font-size:15px;font-family:inherit;resize:vertical;"></textarea></div>' +
+      '<button type="button" class="btn btn-outline" style="margin-top:0;font-size:12px;padding:8px;">Remove group</button>';
+    row.querySelector('.ag-name').value = name;
+    row.querySelector('.ag-species').value = csv;
+    row.querySelector('button').onclick = () => row.remove();
+    wrap.appendChild(row);
+  }
+
+  function addAdminSpeciesGroup() { appendAdminSpeciesGroupRow('', ''); }
+
+  function serializeAdminSpeciesGroups() {
+    const out = [];
+    document.querySelectorAll('#adminSpeciesGroups .admin-species-row').forEach(row => {
+      const name = row.querySelector('.ag-name').value.trim();
+      const species = row.querySelector('.ag-species').value.split(',').map(s => s.trim()).filter(Boolean);
+      if (name && species.length) out.push({ group: name, species });
+    });
+    return out;
+  }
+
+  async function saveAdminEdit() {
+    const btn = document.getElementById('adminSaveBtn');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving…';
+
+    const body = {
+      slug:                    document.getElementById('adminSlug').value.trim().toLowerCase(),
+      name:                    document.getElementById('adminName').value.trim(),
+      active:                  document.getElementById('adminActive').value === 'true',
+      website_url:             document.getElementById('adminWebsiteUrl').value.trim() || null,
+      tagline:                 document.getElementById('adminTagline').value.trim() || null,
+      logo_url:                document.getElementById('adminLogoUrl').value.trim() || null,
+      logo_url_email:          document.getElementById('adminLogoUrlEmail').value.trim() || null,
+      review_url:              document.getElementById('adminReviewUrl').value.trim() || null,
+      from_email:              document.getElementById('adminFromEmail').value.trim() || null,
+      gmail_user:              document.getElementById('adminGmailUser').value.trim() || null,
+      gmail_app_password:      document.getElementById('adminGmailPw').value, // empty = keep
+      mailchimp_api_key:       document.getElementById('adminMailchimpKey').value, // empty = keep
+      mailchimp_audience_id:   document.getElementById('adminMailchimpAudience').value.trim() || null,
+      mailchimp_server_prefix: document.getElementById('adminMailchimpServer').value.trim() || null,
+      noaa_buoy_station:       document.getElementById('adminBuoyStation').value.trim() || null,
+      default_map_center:      document.getElementById('adminMapCenter').value.trim() || null,
+      default_map_zoom:        parseInt(document.getElementById('adminMapZoom').value, 10) || null,
+      fh_company_shortname:    document.getElementById('adminFhShortname').value.trim() || null,
+      fh_app_key:              document.getElementById('adminFhAppKey').value, // empty = keep
+      fh_user_key:             document.getElementById('adminFhUserKey').value, // empty = keep
+      tripadvisor_id:          document.getElementById('adminTripadvisorId').value.trim() || null,
+      google_business_id:      document.getElementById('adminGoogleBusinessId').value.trim() || null,
+      species_list:            serializeAdminSpeciesGroups(),
+    };
+
+    try {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, await adminAuthHeader());
+      const url = adminEditingId ? `/api/admin/operators/${adminEditingId}` : '/api/admin/operators';
+      const method = adminEditingId ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'HTTP ' + res.status);
+
+      toast(adminEditingId ? 'Operator updated' : 'Operator created', 'success');
+      adminEditingId = result.id;
+      populateAdminForm(result);
+      document.getElementById('adminSlug').disabled = true;
+      document.getElementById('adminEditTitle').textContent = 'Edit Operator';
+      document.getElementById('adminDeleteBtn').style.display = 'block';
+    } catch (err) {
+      toast('Save failed: ' + (err.message || err), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
+  async function deleteAdminOperator() {
+    if (!adminEditingId) return;
+    const slug = document.getElementById('adminSlug').value;
+    if (!confirm(`Permanently delete operator "${slug}"?\n\nThis cascades to all their sightings and user links. Cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/admin/operators/${adminEditingId}`, { method: 'DELETE', headers: await adminAuthHeader() });
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'HTTP ' + res.status);
+      }
+      toast('Operator deleted', 'success');
+      adminEditingId = null;
+      openAdmin(); // back to list
+    } catch (err) {
+      toast('Delete failed: ' + (err.message || err), 'error');
     }
   }
 
