@@ -22,12 +22,21 @@ const { authenticate } = require('../lib/auth');
 const { getOperator } = require('../lib/operators');
 
 const BUCKET = 'trip-audio';
+// Map base MIME types (no codec suffix) to file extensions. Browsers commonly
+// emit MediaRecorder MIME strings with codec params appended, e.g.
+//   "audio/webm; codecs=opus"   (Chrome, Firefox)
+//   "audio/mp4;  codecs=mp4a.40.2" (Safari)
+// We strip everything after the ";" before looking up so those still match.
 const ALLOWED_TYPES = {
   'audio/mp4':  'm4a',
   'audio/m4a':  'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/aac':  'm4a',
   'audio/webm': 'webm',
   'audio/mpeg': 'mp3',
+  'audio/mp3':  'mp3',
   'audio/ogg':  'ogg',
+  'audio/wav':  'wav',
 };
 const MAX_BYTES = 3 * 1024 * 1024; // 3MB — comfortably fits a 3-min recording
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -97,8 +106,10 @@ module.exports = async function handler(req, res) {
     if (!DATE_RE.test(String(trip_date || ''))) {
       return res.status(400).json({ error: 'trip_date must be YYYY-MM-DD' });
     }
-    const ext = ALLOWED_TYPES[content_type];
-    if (!ext) return res.status(400).json({ error: 'unsupported content_type' });
+    // Strip codec suffix like "; codecs=opus" before matching
+    const baseType = String(content_type || '').split(';')[0].trim().toLowerCase();
+    const ext = ALLOWED_TYPES[baseType];
+    if (!ext) return res.status(400).json({ error: `unsupported content_type: ${content_type}` });
     if (typeof data_base64 !== 'string' || !data_base64) {
       return res.status(400).json({ error: 'data_base64 missing' });
     }
