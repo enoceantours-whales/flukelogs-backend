@@ -5,86 +5,295 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Recent Sightings – Enocean Tours</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0a0a0a; --surface: #141414; --border: #222;
-    --text: #f0f0f0; --muted: #888; --accent: #fff; --tag-bg: #1e1e1e;
+    /* Match the operator app — same ink palette so embed feels native */
+    --ink:    #0a0c0e;
+    --ink-2:  #0f1316;
+    --ink-3:  #161b1f;
+    --ink-4:  #1d2429;
+    --hair:   rgba(255,255,255,0.08);
+    --hair-2: rgba(255,255,255,0.14);
+    --text:       #f4f6f7;
+    --text-dim:   rgba(244,246,247,0.62);
+    --text-faint: rgba(244,246,247,0.42);
+    --teal:   #6fb1ac;
+    --gold:   #c8a86b;
+    --accent: #e6f0f0;
+    /* Backward-compat aliases for unchanged JS */
+    --bg: var(--ink);
+    --surface: var(--ink-3);
+    --border: var(--hair);
+    --muted: var(--text-dim);
+    --tag-bg: var(--ink-4);
   }
-  html, body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh; }
-  .widget-wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 48px; }
-  .widget-header { margin-bottom: 20px; }
-  .widget-header h2 { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
-  .widget-header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  html, body {
+    background:
+      radial-gradient(120% 60% at 50% 110%, rgba(64,108,118,.35) 0%, rgba(20,32,38,.35) 35%, transparent 70%),
+      radial-gradient(80% 50% at 50% -10%, rgba(80,118,128,.12) 0%, transparent 60%),
+      linear-gradient(180deg, #06090b 0%, #0a0e11 40%, #0d1418 70%, #0a1014 100%);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .widget-wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 40px; }
+
+  .widget-header { margin-bottom: 18px; }
+  .widget-header h2 { font: 400 22px/1.2 "Open Sans", sans-serif; letter-spacing: 0.005em; color: var(--text); }
+  .widget-header p { font-size: 11px; color: var(--text-faint); margin-top: 4px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
 
   /* ── What's out there now banner ── */
-  .now-banner { background: linear-gradient(135deg, #0d1f0d 0%, #0a1a0a 100%); border: 1px solid #1a3a1a; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 14px; }
-  .now-dot { width: 10px; height: 10px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; flex-shrink: 0; margin-top: 3px; }
-  @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74,222,128,0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74,222,128,0); } }
+  .now-banner {
+    background:
+      radial-gradient(120% 100% at 0% 100%, rgba(111,177,172,.12) 0%, rgba(111,177,172,0) 60%),
+      var(--ink-3);
+    border: 1px solid rgba(111,177,172,.28);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 14px 28px rgba(0,0,0,.35);
+  }
+  .now-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 12px var(--teal); animation: nowPulse 2.4s ease-in-out infinite; flex-shrink: 0; }
+  @keyframes nowPulse { 0%,100%{ opacity: 1; transform: scale(1); } 50%{ opacity: .55; transform: scale(.85); } }
   .now-content { flex: 1; }
-  .now-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #4ade80; margin-bottom: 4px; }
-  .now-species { font-size: 15px; font-weight: 600; color: #fff; line-height: 1.4; }
-  .now-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .now-cta { background: #fff; color: #000; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; flex-shrink: 0; align-self: center; transition: opacity .15s; }
-  .now-cta:hover { opacity: .85; }
+  .now-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.26em; color: var(--teal); margin-bottom: 4px; }
+  .now-species { font: 600 14px/1.4 "Open Sans", sans-serif; color: var(--text); }
+  .now-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.02em; }
+  .now-cta {
+    background: linear-gradient(180deg, #fff 0%, #e8edee 100%);
+    color: #0a0c0e;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 18px;
+    font: 700 10px/1 "Open Sans", sans-serif;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 14px 28px rgba(0,0,0,.45);
+    transition: transform .15s ease;
+  }
+  .now-cta:hover { transform: translateY(-1px); }
 
-  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
-  .status-text { font-size: 12px; color: var(--muted); }
-  .totals-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-  .total-chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 20px; display: flex; flex-direction: column; align-items: center; min-width: 110px; gap: 4px; }
-  .total-chip .chip-num { font-size: 28px; font-weight: 600; color: var(--accent); }
-  .total-chip .chip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .status-text { font-size: 11px; color: var(--text-faint); letter-spacing: 0.04em; }
+
+  .totals-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .total-chip {
+    background: var(--ink-3);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    padding: 12px 22px;
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 110px; gap: 4px;
+  }
+  .total-chip .chip-num { font: 500 26px/1 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0; }
+  .total-chip .chip-label { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.26em; font-weight: 600; }
 
   /* ── Species filter pills ── */
-  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-  .filter-pill { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
-  .filter-pill:hover { border-color: #444; color: var(--text); }
-  .filter-pill.active { background: #fff; border-color: #fff; color: #000; }
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .filter-pill {
+    background: var(--ink-3);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font: 600 11px/1 "Open Sans", sans-serif;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .filter-pill:hover { border-color: var(--hair-2); color: var(--text); }
+  .filter-pill.active {
+    background: rgba(255,255,255,.92);
+    border-color: rgba(255,255,255,.92);
+    color: #0a0c0e;
+    box-shadow: 0 6px 14px rgba(0,0,0,.3);
+  }
   .filter-pill .pill-icon { font-size: 13px; }
 
-  .map-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; height: 380px; position: relative; }
+  .map-wrap {
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    height: 380px;
+    position: relative;
+    box-shadow: 0 14px 28px rgba(0,0,0,.35);
+  }
   #sightings-map { width: 100%; height: 100%; background: #0a1628; }
   .leaflet-tile { filter: brightness(0.92) contrast(1.05); }
-  .leaflet-container { background: #0a1628 !important; }
-  .leaflet-popup-content-wrapper { background: #1a1a1a; color: #f0f0f0; border: 1px solid #333; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
-  .leaflet-popup-tip { background: #1a1a1a; }
-  .leaflet-popup-close-button { color: #888 !important; }
+  .leaflet-container { background: #0a1628 !important; font-family: "Open Sans", sans-serif !important; }
+  .leaflet-popup-content-wrapper { background: var(--ink-3); color: var(--text); border: 1px solid var(--hair-2); border-radius: 10px; box-shadow: 0 14px 28px rgba(0,0,0,.5); }
+  .leaflet-popup-tip { background: var(--ink-3); }
+  .leaflet-popup-close-button { color: var(--text-dim) !important; }
 
-  /* Map hint */
-  .map-hint { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.65); color: #888; font-size: 10px; padding: 4px 8px; border-radius: 4px; z-index: 1000; pointer-events: none; }
+  .map-hint {
+    position: absolute; bottom: 10px; right: 10px;
+    background: rgba(0,0,0,0.65);
+    color: var(--text-dim);
+    font-size: 9px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    z-index: 1000;
+    pointer-events: none;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
 
-  .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
-  .feed-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .feed-count { font-size: 11px; color: var(--muted); }
-  .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; transition: border-color .15s; }
-  .trip-card.selected { border-color: #444; }
-  .trip-date-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background .1s; }
-  .trip-date-header:hover { background: #1a1a1a; }
-  .trip-date-header.active-trip { background: #1a1a1a; }
-  .trip-date-label { font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-  .active-indicator { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; display: none; }
+  .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .feed-header h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.28em; color: var(--text-dim); }
+  .feed-count { font-size: 10px; color: var(--text-faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
+
+  .trip-card {
+    background: var(--ink-3);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: border-color .15s, transform .15s;
+    box-shadow: 0 8px 18px rgba(0,0,0,.25);
+  }
+  .trip-card.selected { border-color: var(--hair-2); }
+  .trip-date-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--hair);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .trip-date-header:hover { background: rgba(255,255,255,0.025); }
+  .trip-date-header.active-trip { background: rgba(255,255,255,0.04); }
+  .trip-date-label { font: 600 13px/1 "Open Sans", sans-serif; color: var(--text); display: flex; align-items: center; gap: 8px; letter-spacing: 0.005em; }
+  .active-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); display: none; }
   .trip-date-header.active-trip .active-indicator { display: inline-block; }
-  .trip-summary { font-size: 11px; color: var(--muted); }
+  .trip-summary { font-size: 10px; color: var(--text-faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
   .trip-sightings { padding: 4px 0; }
-  .sighting-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background .1s; }
+
+  .sighting-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--hair);
+    cursor: pointer;
+    transition: background .1s;
+  }
   .sighting-row:last-child { border-bottom: none; }
-  .sighting-row:hover { background: #1c1c1c; }
-  .sighting-row.active { background: #1e1e1e; border-left: 2px solid #fff; padding-left: 14px; }
-  .sighting-row .species-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
-  .sighting-row .species-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
-  .sighting-row .species-count { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .sighting-row:hover { background: rgba(255,255,255,0.025); }
+  .sighting-row.active { background: rgba(255,255,255,0.04); border-left: 2px solid var(--teal); padding-left: 14px; }
+  .sighting-row .species-icon { font-size: 15px; width: 22px; text-align: center; flex-shrink: 0; }
+  .sighting-row .species-name { flex: 1; font: 500 13px/1.3 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0.005em; }
+  .sighting-row .species-count { font: 600 12px/1 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0.04em; }
   .trip-card.hidden { display: none; }
 
-  .state-msg { text-align: center; color: var(--muted); padding: 48px 0; font-size: 13px; }
-  .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
+  /* ── Captain audio player — custom waveform ───────────────── */
+  .trip-audio {
+    padding: 12px 16px 14px;
+    border-bottom: 1px solid var(--hair);
+    background: linear-gradient(180deg, rgba(111,177,172,.04) 0%, transparent 100%);
+  }
+  .audio-meta {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.26em;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .audio-meta .audio-meta-icon { color: var(--teal); font-size: 11px; }
+  .audio-player {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--ink-4);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    padding: 6px 14px 6px 6px;
+  }
+  .audio-play {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 0;
+    background: linear-gradient(180deg, #fff 0%, #e8edee 100%);
+    color: #0a0c0e;
+    cursor: pointer;
+    display: grid; place-items: center;
+    box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 6px 14px rgba(0,0,0,.4);
+    transition: transform .12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .audio-play:hover { transform: scale(1.05); }
+  .audio-play:active { transform: scale(0.96); }
+  .audio-play svg { width: 12px; height: 12px; fill: currentColor; }
+  .audio-waveform {
+    flex: 1;
+    display: flex; align-items: center; gap: 2px;
+    height: 32px;
+    cursor: pointer;
+    min-width: 60px;
+  }
+  .audio-waveform .bar {
+    flex: 1;
+    min-width: 2px;
+    background: var(--text-faint);
+    border-radius: 2px;
+    transition: background .12s ease;
+  }
+  .audio-waveform .bar.played { background: var(--teal); box-shadow: 0 0 4px rgba(111,177,172,.4); }
+  .audio-time {
+    flex-shrink: 0;
+    font: 600 11px/1 "Open Sans", sans-serif;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    min-width: 64px;
+    text-align: right;
+  }
+
+  .state-msg { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
+  .spinner { width: 22px; height: 22px; border: 2px solid var(--hair); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .cta-strip { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .cta-text { font-size: 13px; color: var(--muted); }
-  .cta-btn { background: #fff; color: #000; border: none; border-radius: 6px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; transition: opacity .15s; }
-  .cta-btn:hover { opacity: .85; }
+  .cta-strip {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--hair);
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .cta-text { font-size: 12px; color: var(--text-dim); letter-spacing: 0.02em; }
+  .cta-btn {
+    background: linear-gradient(180deg, #fff 0%, #e8edee 100%);
+    color: #0a0c0e;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 22px;
+    font: 700 11px/1 "Open Sans", sans-serif;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 14px 28px rgba(0,0,0,.45);
+    transition: transform .15s ease;
+  }
+  .cta-btn:hover { transform: translateY(-1px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .now-dot, .spinner, .audio-waveform .bar { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -285,6 +494,132 @@ async function fetchTripAudio() {
   } catch (e) { return new Map(); }
 }
 
+// ── Custom audio player with decorative waveform ────────────────────────────
+// We render 36 vertical bars per player. Heights are PSEUDO-RANDOM but
+// derived from a hash of the audio URL, so the same recording always shows
+// the same waveform — feels deterministic without doing real audio decoding.
+// As the audio plays, bars to the left of the playhead fill teal.
+//
+// Kept self-contained: one play-pause toggle, one Audio element per player,
+// click-to-seek on the waveform, automatic pause-others when a new player
+// starts. No dependencies, no library.
+
+const WAVE_BARS = 36;
+const SVG_PLAY  = '<svg viewBox="0 0 24 24"><path d="M7 4l13 8L7 20V4z"/></svg>';
+const SVG_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+function fmtAudioTime(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// Cheap deterministic PRNG seeded from a string. Returns a function that
+// yields successive pseudo-random floats in [0, 1).
+function seededRng(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return () => {
+    h ^= h << 13; h >>>= 0;
+    h ^= h >> 17; h >>>= 0;
+    h ^= h << 5;  h >>>= 0;
+    return (h >>> 0) / 4294967296;
+  };
+}
+
+function renderAudioPlayer(audio) {
+  const dur = audio.duration_seconds || 0;
+  const rng = seededRng(audio.audio_url);
+  // Bias toward varied but plausible-looking waveform heights (peaks + valleys)
+  const bars = [];
+  for (let i = 0; i < WAVE_BARS; i++) {
+    // Weighted mix of two random values + an envelope so middle bars trend
+    // taller — looks more like real captain narration than uniform noise.
+    const env = 0.55 + 0.45 * Math.sin((i / WAVE_BARS) * Math.PI);
+    const h = Math.round((rng() * 0.6 + rng() * 0.4) * 60 * env + 22);
+    bars.push(`<span class="bar" style="height:${h}%"></span>`);
+  }
+  return `
+    <div class="trip-audio">
+      <div class="audio-meta"><span class="audio-meta-icon">●</span>Captain's notes from this trip${dur ? ' · ' + fmtAudioTime(dur) : ''}</div>
+      <div class="audio-player" data-src="${audio.audio_url}" data-dur="${dur}">
+        <button class="audio-play" type="button" aria-label="Play">${SVG_PLAY}</button>
+        <div class="audio-waveform">${bars.join('')}</div>
+        <span class="audio-time">${dur ? '0:00 / ' + fmtAudioTime(dur) : '0:00'}</span>
+      </div>
+    </div>`;
+}
+
+// Wires up every .audio-player on the page. Call after renderFeed paints the
+// markup. Idempotent — replays are fine; the dataset.bound flag prevents
+// double-binding the same element.
+const _audioRegistry = []; // [{ player, audio }] so we can pause-others on play
+function bindAudioPlayers(root) {
+  root.querySelectorAll('.audio-player').forEach(player => {
+    if (player.dataset.bound) return;
+    player.dataset.bound = '1';
+
+    const playBtn  = player.querySelector('.audio-play');
+    const waveform = player.querySelector('.audio-waveform');
+    const timeEl   = player.querySelector('.audio-time');
+    const bars     = Array.from(waveform.querySelectorAll('.bar'));
+    const src      = player.dataset.src;
+    const dur      = parseFloat(player.dataset.dur) || 0;
+
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.src = src;
+
+    _audioRegistry.push({ player, audio });
+
+    function paint(currentTime, totalTime) {
+      const pct = totalTime > 0 ? Math.min(1, currentTime / totalTime) : 0;
+      const filled = Math.floor(pct * bars.length);
+      bars.forEach((b, i) => b.classList.toggle('played', i < filled));
+      timeEl.textContent = totalTime > 0
+        ? fmtAudioTime(currentTime) + ' / ' + fmtAudioTime(totalTime)
+        : fmtAudioTime(currentTime);
+    }
+    paint(0, dur || audio.duration || 0);
+
+    audio.addEventListener('timeupdate', () => paint(audio.currentTime, audio.duration || dur));
+    audio.addEventListener('loadedmetadata', () => paint(audio.currentTime, audio.duration || dur));
+    audio.addEventListener('ended', () => {
+      playBtn.innerHTML = SVG_PLAY;
+      playBtn.setAttribute('aria-label', 'Play');
+      paint(0, audio.duration || dur);
+    });
+
+    playBtn.addEventListener('click', () => {
+      if (audio.paused) {
+        // Pause every other player first so two trip audios can't overlap
+        _audioRegistry.forEach(({ audio: a, player: p }) => {
+          if (a !== audio && !a.paused) {
+            a.pause();
+            const otherBtn = p.querySelector('.audio-play');
+            if (otherBtn) { otherBtn.innerHTML = SVG_PLAY; otherBtn.setAttribute('aria-label', 'Play'); }
+          }
+        });
+        audio.play().then(() => {
+          playBtn.innerHTML = SVG_PAUSE;
+          playBtn.setAttribute('aria-label', 'Pause');
+        }).catch(() => { /* autoplay block / decode failure — ignore */ });
+      } else {
+        audio.pause();
+        playBtn.innerHTML = SVG_PLAY;
+        playBtn.setAttribute('aria-label', 'Play');
+      }
+    });
+
+    // Click-to-seek on the waveform
+    waveform.addEventListener('click', (e) => {
+      const rect = waveform.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const total = audio.duration || dur || 0;
+      if (total > 0) audio.currentTime = pct * total;
+    });
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '—';
@@ -417,13 +752,7 @@ function renderFeed(data) {
     }).join('');
 
     const audio = tripAudioByDate.get(dateKey);
-    const audioBlock = audio ? `
-      <div class="trip-audio" style="padding: 10px 16px 12px; border-bottom: 1px solid var(--border);">
-        <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">
-          🎙 Captain's notes from this trip${audio.duration_seconds ? ' · ' + Math.floor(audio.duration_seconds/60) + ':' + String(audio.duration_seconds%60).padStart(2,'0') : ''}
-        </div>
-        <audio controls preload="none" style="width: 100%; height: 32px;" src="${audio.audio_url}"></audio>
-      </div>` : '';
+    const audioBlock = audio ? renderAudioPlayer(audio) : '';
 
     return `<div class="trip-card" data-date="${dateKey}">
       <div class="trip-date-header" data-date="${dateKey}">
@@ -481,6 +810,9 @@ function renderFeed(data) {
       if (m) { map.panTo(m.getLatLng(), { animate: true }); setTimeout(() => m.openPopup(), 300); }
     });
   });
+
+  // Wire up the custom audio players that just got painted into trip cards
+  bindAudioPlayers(list);
 
   sendHeight();
 }
