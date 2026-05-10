@@ -482,14 +482,27 @@
 
     <div class="section">
       <div class="section-label">Branding</div>
+
       <div class="field">
-        <label>Logo URL — PDF (dark logo on white)</label>
-        <input type="url" id="settingsLogoUrl" placeholder="https://…/logo-dark.png">
+        <label>Logo — PDF (dark logo on white)</label>
+        <div style="display:flex; gap:8px; align-items:stretch;">
+          <input type="url" id="settingsLogoUrl" placeholder="https://…/logo-dark.png" style="flex:1; min-width:0;">
+          <button type="button" class="btn btn-outline" style="margin:0; width:auto; padding:0 18px; white-space:nowrap;" onclick="document.getElementById('settingsLogoUrlFile').click()">Upload</button>
+        </div>
+        <input type="file" id="settingsLogoUrlFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'pdf', 'settingsLogoUrl', 'settingsLogoUrlPreview')">
+        <img id="settingsLogoUrlPreview" alt="" style="display:none; max-height:48px; margin-top:8px; background:#fff; padding:6px; border-radius:8px;">
       </div>
+
       <div class="field">
-        <label>Logo URL — Email (light logo on dark)</label>
-        <input type="url" id="settingsLogoUrlEmail" placeholder="https://…/logo-light.png">
+        <label>Logo — Email (light logo on dark)</label>
+        <div style="display:flex; gap:8px; align-items:stretch;">
+          <input type="url" id="settingsLogoUrlEmail" placeholder="https://…/logo-light.png" style="flex:1; min-width:0;">
+          <button type="button" class="btn btn-outline" style="margin:0; width:auto; padding:0 18px; white-space:nowrap;" onclick="document.getElementById('settingsLogoUrlEmailFile').click()">Upload</button>
+        </div>
+        <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
+        <img id="settingsLogoUrlEmailPreview" alt="" style="display:none; max-height:48px; margin-top:8px; background:#000; padding:6px; border-radius:8px;">
       </div>
+
       <div class="field">
         <label>Review URL</label>
         <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
@@ -1487,6 +1500,59 @@
     document.getElementById('settingsMailchimpAudience').value = cfg.mailchimp_audience_id || '';
     document.getElementById('settingsMailchimpServer').value   = cfg.mailchimp_server_prefix || '';
     renderSpeciesGroupEditor(cfg.species_list || []);
+    showLogoPreview('settingsLogoUrlPreview',      cfg.logo_url);
+    showLogoPreview('settingsLogoUrlEmailPreview', cfg.logo_url_email);
+  }
+
+  function showLogoPreview(imgId, url) {
+    const img = document.getElementById(imgId);
+    if (!img) return;
+    if (url) { img.src = url; img.style.display = 'inline-block'; }
+    else     { img.removeAttribute('src'); img.style.display = 'none'; }
+  }
+
+  // File picker → POST base64 to /api/operator-logo-upload → fill the URL
+  // input + preview. Captain still has to hit Save Settings to commit the
+  // URL change to the operators row.
+  async function handleLogoUpload(evt, kind, urlInputId, previewId) {
+    const file = evt.target.files && evt.target.files[0];
+    evt.target.value = ''; // reset so picking the same file again still fires onchange
+    if (!file) return;
+
+    const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(file.type)) return toast('Logo must be PNG, JPEG, or WebP', 'error');
+    if (file.size > 2 * 1024 * 1024) return toast('Logo too large (max 2MB)', 'error');
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return handleLogout();
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    const data_base64 = String(dataUrl).split(',', 2)[1];
+
+    toast('Uploading logo…', 'success');
+
+    try {
+      const res = await fetch('/api/operator-logo-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ kind, content_type: file.type, data_base64 }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
+      document.getElementById(urlInputId).value = body.url;
+      showLogoPreview(previewId, body.url);
+      toast('Uploaded — hit Save Settings to apply', 'success');
+    } catch (err) {
+      toast('Upload failed: ' + (err.message || err), 'error');
+    }
   }
 
   // Renders one row per species group: group-name input + comma-separated
