@@ -1,0 +1,96 @@
+// Shared authentication helpers for the API endpoints.
+//
+// Verifies a Supabase JWT against the project's auth server, then resolves
+// which operator the user belongs to. Both lookups use the service role key
+// so they bypass RLS — endpoints that import this code MUST gate any
+// per-operator data access on the returned operatorId.
+
+async function verifyJWT(token) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !token) return null;
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { 'apikey': key, 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body && body.id ? body : null;
+  } catch (e) {
+    console.error('verifyJWT error:', e.message);
+    return null;
+  }
+}
+
+async function getOperatorIdForUser(userId) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !userId) return null;
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/operator_users?user_id=eq.${userId}&select=operator_id&limit=1`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return (rows[0] && rows[0].operator_id) || null;
+  } catch (e) {
+    console.error('getOperatorIdForUser error:', e.message);
+    return null;
+  }
+}
+
+async function getUserProfile(userId) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !userId) return null;
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/user_profiles?user_id=eq.${userId}&select=is_super_admin&limit=1`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) {
+    console.error('getUserProfile error:', e.message);
+    return null;
+  }
+}
+
+// Verifies the bearer token, resolves operator_id, and returns
+// { user, operatorId, isSuperAdmin } — or null after writing a 401/403 to
+// res. Caller should `return` immediately on null.
+//
+// Pass { requireOperator: false } if the endpoint is callable by a super
+// admin who isn't bound to an operator (e.g., admin portal endpoints).
+async function authenticate(req, res, opts = {}) {
+  const requireOperator = opts.requireOperator !== false;
+
+  const header = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: 'Missing Authorization bearer token' });
+    return null;
+  }
+  const user = await verifyJWT(token);
+  if (!user) {
+    res.status(401).json({ error: 'Invalid or expired session' });
+    return null;
+  }
+
+  const [operatorId, profile] = await Promise.all([
+    getOperatorIdForUser(user.id),
+    getUserProfile(user.id),
+  ]);
+  const isSuperAdmin = !!(profile && profile.is_super_admin);
+
+  if (requireOperator && !operatorId) {
+    res.status(403).json({ error: 'User is not linked to any operator' });
+    return null;
+  }
+
+  return { user, operatorId, isSuperAdmin };
+}
+
+module.exports = { verifyJWT, getOperatorIdForUser, getUserProfile, authenticate };

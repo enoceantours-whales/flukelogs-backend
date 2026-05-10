@@ -3,20 +3,53 @@ const PDFDocument = require('pdfkit');
 const nodemailer = require('nodemailer');
 const https = require('https');
 
-// Initialize Mailchimp
-mailchimp.setConfig({
-  apiKey: process.env.MAILCHIMP_API_KEY,
-  server: process.env.MAILCHIMP_SERVER_PREFIX || 'us1',
-});
+const { authenticate } = require('../lib/auth');
+const { getOperator, pick } = require('../lib/operators');
 
-// Initialize Gmail
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+// Per-request transporter — Gmail credentials live on the operator row now,
+// so we can't build a module-level singleton. createTransport returns a fresh
+// pool that's used once and discarded; nodemailer handles the actual reuse
+// internally for the duration of a single sendMail call.
+function buildTransporter(operator) {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: pick(operator, 'gmail_user', process.env.GMAIL_USER),
+      pass: pick(operator, 'gmail_app_password', process.env.GMAIL_APP_PASSWORD),
+    },
+  });
+}
+
+// Mailchimp's SDK is a singleton — calling setConfig mutates global state.
+// In Vercel serverless this is fine because each function invocation runs in
+// its own (or warm-reused) instance; we re-set per request to make sure the
+// right operator's audience is targeted.
+function configureMailchimp(operator) {
+  mailchimp.setConfig({
+    apiKey: pick(operator, 'mailchimp_api_key',       process.env.MAILCHIMP_API_KEY),
+    server: pick(operator, 'mailchimp_server_prefix', process.env.MAILCHIMP_SERVER_PREFIX) || 'us1',
+  });
+}
+
+// Resolves every per-operator branding string used by the PDF, email, and
+// captain copy. Centralized so adding a new branded surface = one edit here
+// instead of hunting for hardcoded "Enocean" strings.
+function brand(operator) {
+  const websiteUrl = pick(operator, 'website_url', 'https://enoceantours.com');
+  const websiteHost = (websiteUrl || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toUpperCase();
+  return {
+    name:        pick(operator, 'name',           'Enocean Tours'),
+    slug:        pick(operator, 'slug',           'enocean'),
+    tagline:     pick(operator, 'tagline',        'MOSS LANDING HARBOR, MONTEREY BAY'),
+    logoPdf:     pick(operator, 'logo_url',       'https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-05.png'),
+    logoEmail:   pick(operator, 'logo_url_email', 'https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-03.png'),
+    reviewUrl:   pick(operator, 'review_url',     'https://www.enoceantours.com/reviews'),
+    websiteUrl,
+    websiteHost,
+    fromEmail:   pick(operator, 'from_email',     process.env.GMAIL_USER),
+    audienceId:  pick(operator, 'mailchimp_audience_id', process.env.MAILCHIMP_AUDIENCE_ID),
+  };
+}
 
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,68 +57,8 @@ function setCORS(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-// Validates a Supabase JWT on the Authorization: Bearer header by calling
-// Supabase's /auth/v1/user endpoint, then looks up which operator the user
-// belongs to. Both lookups use the service role key.
-//
-// Returns { user, operatorId } on success, or null after writing the
-// appropriate 401/403 to res. Caller should `return` immediately on null.
-
-async function verifyJWT(token) {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key || !token) return null;
-  try {
-    const res = await fetch(`${url}/auth/v1/user`, {
-      headers: { 'apikey': key, 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const body = await res.json();
-    return body && body.id ? body : null;
-  } catch (e) {
-    console.error('verifyJWT error:', e.message);
-    return null;
-  }
-}
-
-async function getOperatorIdForUser(userId) {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key || !userId) return null;
-  try {
-    const res = await fetch(
-      `${url}/rest/v1/operator_users?user_id=eq.${userId}&select=operator_id&limit=1`,
-      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
-    );
-    if (!res.ok) return null;
-    const rows = await res.json();
-    return (rows[0] && rows[0].operator_id) || null;
-  } catch (e) {
-    console.error('getOperatorIdForUser error:', e.message);
-    return null;
-  }
-}
-
-async function authenticate(req, res) {
-  const header = req.headers['authorization'] || req.headers['Authorization'] || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) {
-    res.status(401).json({ error: 'Missing Authorization bearer token' });
-    return null;
-  }
-  const user = await verifyJWT(token);
-  if (!user) {
-    res.status(401).json({ error: 'Invalid or expired session' });
-    return null;
-  }
-  const operatorId = await getOperatorIdForUser(user.id);
-  if (!operatorId) {
-    res.status(403).json({ error: 'User is not linked to any operator' });
-    return null;
-  }
-  return { user, operatorId };
-}
+// Auth helpers live in ../lib/auth.js so /api/me and future endpoints share
+// the same JWT verification and operator-resolution logic.
 
 function getFormattedDuration(startTime, endTime) {
   const diffMs = new Date(endTime) - new Date(startTime);
@@ -192,12 +165,12 @@ function formatDepthLabel(m) {
 
 // ─── PDF Generator ───────────────────────────────────────────────────────────
 
-async function generatePDF(tripData) {
+async function generatePDF(tripData, b) {
   const mapImageBuffer = await fetchMapImage(tripData.sightings);
 
   let logoBuffer = null;
   try {
-    logoBuffer = await fetchURL('https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-05.png');
+    logoBuffer = await fetchURL(b.logoPdf);
   } catch(e) {
     console.log('Logo fetch failed:', e.message);
   }
@@ -398,8 +371,9 @@ async function generatePDF(tripData) {
 
     // ── FOOTER ──
     doc.rect(0, H - 44, W, 44).fill(BLACK);
+    const footerText = [b.name.toUpperCase(), b.tagline, b.websiteHost].filter(Boolean).join('  •  ');
     doc.fillColor(WHITE).font(bold).fontSize(7)
-       .text('ENOCEAN TOURS  •  MOSS LANDING HARBOR, MONTEREY BAY  •  ENOCEANTOURS.COM', M, H - 26, { align: 'center', width: CW, lineBreak: false, characterSpacing: 1 });
+       .text(footerText, M, H - 26, { align: 'center', width: CW, lineBreak: false, characterSpacing: 1 });
 
     doc.end();
   });
@@ -473,9 +447,10 @@ async function saveToSupabase(tripData, operatorId) {
 
 // ─── Mailchimp ────────────────────────────────────────────────────────────────
 
-async function addToMailchimp(email) {
+async function addToMailchimp(email, b) {
+  if (!b.audienceId) { console.log('No Mailchimp audience configured for this operator, skipping'); return; }
   try {
-    await mailchimp.lists.addListMember(process.env.MAILCHIMP_AUDIENCE_ID, {
+    await mailchimp.lists.addListMember(b.audienceId, {
       email_address: email,
       status: 'subscribed',
       tags: ['Trip Guest'],
@@ -487,19 +462,19 @@ async function addToMailchimp(email) {
 
 // ─── Send Email ───────────────────────────────────────────────────────────────
 
-async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
+async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, transporter) {
   const date = new Date(tripData.startTime).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings logged';
   const duration = getFormattedDuration(tripData.startTime, tripData.endTime);
 
   const result = await transporter.sendMail({
-    from: `"Enocean Tours" <${process.env.GMAIL_USER}>`,
+    from: `"${b.name}" <${b.fromEmail}>`,
     to: guestEmail,
-    subject: `Your Enocean Tours Trip Report — ${date}`,
+    subject: `Your ${b.name} Trip Report — ${date}`,
     html: `<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
 <table width="600" style="margin:0 auto;background:#1a1a1a;overflow:hidden;">
   <tr><td style="background:#000000;padding:32px;text-align:center;border-bottom:1px solid #222;">
-    <img src="https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours" width="180" style="display:block;margin:0 auto 12px;">
+    <img src="${b.logoEmail}" alt="${b.name}" width="180" style="display:block;margin:0 auto 12px;">
     <p style="color:rgba(255,255,255,0.5);margin:0;font-size:10px;letter-spacing:3px;text-transform:uppercase;">TRIP REPORT</p>
   </td></tr>
   <tr><td style="padding:32px;">
@@ -523,21 +498,21 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
       <p style="margin:0;color:#ffffff;font-size:14px;">${speciesList}</p>
     </div>
     <div style="text-align:center;margin-bottom:24px;">
-      <a href="https://www.enoceantours.com/reviews" style="background:#ffffff;color:#000000;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;letter-spacing:0.5px;">LEAVE US A REVIEW</a>
+      <a href="${b.reviewUrl}" style="background:#ffffff;color:#000000;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;letter-spacing:0.5px;">LEAVE US A REVIEW</a>
       <p style="margin:10px 0 0;color:#555;font-size:12px;">It takes 2 minutes and means the world to us.</p>
     </div>
-    <p style="color:#444;font-size:12px;text-align:center;margin:0;border-top:1px solid #222;padding-top:20px;">Moss Landing Harbor, Monterey Bay, CA<br><a href="https://enoceantours.com" style="color:#888;">enoceantours.com</a></p>
+    <p style="color:#444;font-size:12px;text-align:center;margin:0;border-top:1px solid #222;padding-top:20px;">${b.tagline}<br><a href="${b.websiteUrl}" style="color:#888;">${b.websiteHost.toLowerCase()}</a></p>
   </td></tr>
 </table>
 </body>`,
     attachments: [
       {
-        filename: `Enocean_Trip_${new Date(tripData.startTime).toISOString().split('T')[0]}.pdf`,
+        filename: `${b.slug}-trip-${new Date(tripData.startTime).toISOString().split('T')[0]}.pdf`,
         content: pdfBuffer,
         contentType: 'application/pdf',
       },
       ...(socialCardData ? [{
-        filename: `Enocean_Story_${new Date(tripData.startTime).toISOString().split('T')[0]}.jpg`,
+        filename: `${b.slug}-story-${new Date(tripData.startTime).toISOString().split('T')[0]}.jpg`,
         content: Buffer.from(socialCardData.replace(/^data:image\/\w+;base64,/, ''), 'base64'),
         contentType: 'image/jpeg',
       }] : []),
@@ -553,10 +528,10 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData) {
 // PDF-styled 1080x1920 captain card attached. The captain downloads it from
 // their inbox and decides whether to post to Instagram. Best-effort: any
 // failure here is logged but doesn't fail the trip end response.
-async function sendCaptainCopy(captainCardData, tripData) {
+async function sendCaptainCopy(captainCardData, tripData, b, transporter) {
   if (!captainCardData) return;
-  if (!process.env.GMAIL_USER) {
-    console.log('GMAIL_USER not set, skipping captain copy');
+  if (!b.fromEmail) {
+    console.log('No from_email configured for this operator, skipping captain copy');
     return;
   }
   try {
@@ -567,17 +542,17 @@ async function sendCaptainCopy(captainCardData, tripData) {
     const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings';
 
     await transporter.sendMail({
-      from: `"Enocean Tours" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
+      from: `"${b.name}" <${b.fromEmail}>`,
+      to: b.fromEmail,
       subject: `Captain copy — ${date} — ready for Instagram`,
       text: `Captain copy for the ${date} trip.\n\nSpecies: ${speciesList}\nSightings: ${tripData.sightings.length}\n\nDownload the attached image and post it to Instagram if you want — guests did NOT receive this.`,
       attachments: [{
-        filename: `Enocean_Captain_${dateSlug}.jpg`,
+        filename: `${b.slug}-captain-${dateSlug}.jpg`,
         content: Buffer.from(captainCardData.replace(/^data:image\/\w+;base64,/, ''), 'base64'),
         contentType: 'image/jpeg',
       }],
     });
-    console.log('Captain copy emailed to', process.env.GMAIL_USER);
+    console.log('Captain copy emailed to', b.fromEmail);
   } catch (err) {
     console.error('Captain copy email failed:', err.message);
   }
@@ -598,6 +573,13 @@ module.exports = async function handler(req, res) {
   if (!auth) return;
   const { operatorId } = auth;
 
+  // Step 4: pull the full operator row so every branding string, credential,
+  // and email destination comes from the database instead of process.env.
+  const operator = await getOperator(operatorId);
+  const b = brand(operator);
+  const transporter = buildTransporter(operator);
+  configureMailchimp(operator);
+
   const { tripData, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
 
@@ -615,7 +597,7 @@ module.exports = async function handler(req, res) {
     await attachDepthsToSightings(tripData.sightings);
 
     console.log('Generating PDF...');
-    const pdfBuffer = await generatePDF(tripData);
+    const pdfBuffer = await generatePDF(tripData, b);
     console.log('PDF done, size:', pdfBuffer.length);
 
     // Save to Supabase ONCE regardless of how many guests. Every row is
@@ -628,10 +610,10 @@ module.exports = async function handler(req, res) {
     // guest emails (it swallows its own errors inside sendCaptainCopy).
     await Promise.all([
       ...validEmails.map(email => Promise.all([
-        sendEmail(email, pdfBuffer, socialCardData, tripData),
-        addToMailchimp(email),
+        sendEmail(email, pdfBuffer, socialCardData, tripData, b, transporter),
+        addToMailchimp(email, b),
       ])),
-      sendCaptainCopy(captainCardData, tripData),
+      sendCaptainCopy(captainCardData, tripData, b, transporter),
     ]);
 
     return res.status(200).json({ success: true, message: `Trip report sent to ${validEmails.join(', ')}` });

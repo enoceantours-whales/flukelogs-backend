@@ -605,6 +605,9 @@
 
   let trip = newTripState();
   let guestEmails = [];
+  // Per-operator config loaded from /api/me after a successful session check.
+  // Stays null until then so callers fall back to hardcoded defaults.
+  let operatorConfig = null;
 
   function newTripState() {
     return {
@@ -691,7 +694,11 @@
     const btn = document.getElementById('btnRefresh');
     if (force && btn) btn.classList.add('spinning');
     try {
-      const res = await fetch('/api/buoy-conditions', { cache: force ? 'reload' : 'default' });
+      // Use the operator's preferred buoy if /api/me has loaded one,
+      // otherwise let the endpoint default (currently 46092).
+      const station = operatorConfig && operatorConfig.noaa_buoy_station;
+      const url = '/api/buoy-conditions' + (station ? `?station=${encodeURIComponent(station)}` : '');
+      const res = await fetch(url, { cache: force ? 'reload' : 'default' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const obs = await res.json();
       if (obs.error) throw new Error(obs.error);
@@ -894,6 +901,7 @@
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
+      const b = clientBrand();
       const speciesList = [...new Set(trip.sightings.map(s => s.species))];
       const date = new Date(trip.startTime).toLocaleDateString('en-US', {
         weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
@@ -917,10 +925,10 @@
         ctx.fillStyle = 'white';
         ctx.font = 'bold 52px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('ENOCEAN TOURS', W / 2, 96);
+        ctx.fillText(b.name.toUpperCase(), W / 2, 96);
         ctx.fillStyle = 'rgba(255,255,255,0.75)';
         ctx.font = '28px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
-        ctx.fillText('MONTEREY BAY, CALIFORNIA', W / 2, 140);
+        ctx.fillText(b.tagline, W / 2, 140);
 
         ctx.textAlign = 'left';
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -954,7 +962,7 @@
         ctx.fillStyle = 'white';
         ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('ENOCEANTOURS.COM', W / 2, H - 48);
+        ctx.fillText(b.websiteHost, W / 2, H - 48);
 
         resolve(canvas.toDataURL('image/jpeg', 0.92));
       };
@@ -974,6 +982,21 @@
         drawCard();
       }
     });
+  }
+
+  // Resolves operator-specific branding strings for the canvas cards. Falls
+  // back to current Enocean defaults when operatorConfig hasn't loaded or a
+  // field is missing, so the cards always render something sensible.
+  function clientBrand() {
+    const o = operatorConfig || {};
+    const websiteUrl = o.website_url || 'https://enoceantours.com';
+    const websiteHost = (websiteUrl || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toUpperCase();
+    return {
+      name:        o.name        || 'Enocean Tours',
+      tagline:     o.tagline     || 'MOSS LANDING HARBOR  ·  MONTEREY BAY',
+      logoPdf:     o.logo_url    || '/Public/Enocean_Tours_logo-05.png',
+      websiteHost,
+    };
   }
 
   // Loads an image, returns a Promise that resolves with the HTMLImageElement
@@ -1005,6 +1028,7 @@
 
     const BLACK = '#000000', WHITE = '#ffffff';
     const GRAY  = '#f0f0f0', MID = '#777777', RULE = '#cccccc';
+    const b = clientBrand();
 
     // ── 1. White background ──
     ctx.fillStyle = WHITE;
@@ -1015,10 +1039,10 @@
     ctx.fillStyle = BLACK;
     ctx.fillRect(0, 0, W, 320);
 
-    // Logo — black-on-white logo (logo-05) drawn into a white circle so it
-    // pops against the black header, matching the PDF style.
+    // Logo — black-on-white logo drawn into a white circle so it pops against
+    // the black header, matching the PDF style.
     try {
-      const logo = await loadCanvasImage('/Public/Enocean_Tours_logo-05.png');
+      const logo = await loadCanvasImage(b.logoPdf);
       const logoBoxY = 200;
       const logoSize = 90;
       const circleR = 56;
@@ -1160,10 +1184,10 @@
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 30px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('ENOCEANTOURS.COM', W / 2, footerY + 60);
+    ctx.fillText(b.websiteHost, W / 2, footerY + 60);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '22px -apple-system, BlinkMacSystemFont, Arial, sans-serif';
-    ctx.fillText('MOSS LANDING HARBOR  ·  MONTEREY BAY', W / 2, footerY + 100);
+    ctx.fillText(b.tagline, W / 2, footerY + 100);
 
     return canvas.toDataURL('image/jpeg', 0.92);
   }
@@ -1330,6 +1354,11 @@
 
     document.getElementById('footerLogout').style.display = 'inline';
 
+    // Pull per-operator config (logo, species list, buoy station, etc.).
+    // Best-effort — if /api/me fails we proceed with hardcoded defaults so
+    // the captain can still log a trip offline-ish.
+    await loadMe(session.access_token);
+
     // Logged in — restore mid-trip if any, otherwise land on start screen.
     // restoreTrip() handles both navigation and resuming GPS/timer.
     const savedTrip = localStorage.getItem(STORAGE_KEY);
@@ -1339,6 +1368,46 @@
       showScreen('screenStart');
       fetchBuoyConditions(false);
     }
+  }
+
+  // Fetch /api/me and apply the returned operator config to the UI.
+  // Populates the species dropdown if the operator has a species_list.
+  async function loadMe(token) {
+    try {
+      const res = await fetch('/api/me', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      operatorConfig = body.operator || null;
+      if (operatorConfig && operatorConfig.species_list && operatorConfig.species_list.length) {
+        renderSpeciesDropdown(operatorConfig.species_list);
+      }
+    } catch (e) {
+      console.warn('loadMe failed, using hardcoded defaults:', e.message);
+      operatorConfig = null;
+    }
+  }
+
+  // Replaces the contents of the #inputSpecies dropdown with optgroups built
+  // from the operator's species_list. Safe to call multiple times — replaces
+  // children each call.
+  function renderSpeciesDropdown(groups) {
+    const sel = document.getElementById('inputSpecies');
+    if (!sel) return;
+    const previous = sel.value; // preserve current selection across re-renders
+    sel.innerHTML = '<option value="">Select species…</option>';
+    for (const g of groups) {
+      const grp = document.createElement('optgroup');
+      grp.label = `── ${g.group} ──`;
+      for (const name of (g.species || [])) {
+        const opt = document.createElement('option');
+        opt.textContent = name;
+        grp.appendChild(opt);
+      }
+      sel.appendChild(grp);
+    }
+    if (previous) sel.value = previous;
   }
 
   // React to session expiry / sign-out events from Supabase (e.g., refresh
