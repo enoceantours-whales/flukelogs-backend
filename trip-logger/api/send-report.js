@@ -21,7 +21,70 @@ const transporter = nodemailer.createTransport({
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+// Validates a Supabase JWT on the Authorization: Bearer header by calling
+// Supabase's /auth/v1/user endpoint, then looks up which operator the user
+// belongs to. Both lookups use the service role key.
+//
+// Returns { user, operatorId } on success, or null after writing the
+// appropriate 401/403 to res. Caller should `return` immediately on null.
+
+async function verifyJWT(token) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !token) return null;
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { 'apikey': key, 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body && body.id ? body : null;
+  } catch (e) {
+    console.error('verifyJWT error:', e.message);
+    return null;
+  }
+}
+
+async function getOperatorIdForUser(userId) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !userId) return null;
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/operator_users?user_id=eq.${userId}&select=operator_id&limit=1`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return (rows[0] && rows[0].operator_id) || null;
+  } catch (e) {
+    console.error('getOperatorIdForUser error:', e.message);
+    return null;
+  }
+}
+
+async function authenticate(req, res) {
+  const header = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: 'Missing Authorization bearer token' });
+    return null;
+  }
+  const user = await verifyJWT(token);
+  if (!user) {
+    res.status(401).json({ error: 'Invalid or expired session' });
+    return null;
+  }
+  const operatorId = await getOperatorIdForUser(user.id);
+  if (!operatorId) {
+    res.status(403).json({ error: 'User is not linked to any operator' });
+    return null;
+  }
+  return { user, operatorId };
 }
 
 function getFormattedDuration(startTime, endTime) {
@@ -344,12 +407,16 @@ async function generatePDF(tripData) {
 
 // ─── Save to Supabase ─────────────────────────────────────────────────────────
 
-async function saveToSupabase(tripData) {
+async function saveToSupabase(tripData, operatorId) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SECRET_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.log('Supabase not configured, skipping save');
+    return;
+  }
+  if (!operatorId) {
+    console.error('saveToSupabase called without operatorId — refusing to insert untagged rows');
     return;
   }
 
@@ -358,6 +425,7 @@ async function saveToSupabase(tripData) {
   const durationMinutes = Math.floor(durationMs / 60000);
 
   const rows = tripData.sightings.map(s => ({
+    operator_id: operatorId,
     trip_date: tripDate,
     duration_minutes: durationMinutes,
     distance_nm: parseFloat((tripData.distanceNM || 0).toFixed(2)),
@@ -522,6 +590,14 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Step 3 lockdown: every send must come from a logged-in operator user.
+  // authenticate() returns null after writing the appropriate 401/403; we
+  // bail out immediately so no PDF is rendered, no email is sent, no
+  // sighting is saved on a request without a valid session.
+  const auth = await authenticate(req, res);
+  if (!auth) return;
+  const { operatorId } = auth;
+
   const { tripData, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
 
@@ -542,8 +618,10 @@ module.exports = async function handler(req, res) {
     const pdfBuffer = await generatePDF(tripData);
     console.log('PDF done, size:', pdfBuffer.length);
 
-    // Save to Supabase ONCE regardless of how many guests
-    await saveToSupabase(tripData);
+    // Save to Supabase ONCE regardless of how many guests. Every row is
+    // tagged with the operator_id derived from the verified JWT, so a
+    // request from one operator can never write into another's data.
+    await saveToSupabase(tripData, operatorId);
 
     // Send email + Mailchimp to each guest, plus the captain copy back to
     // ourselves — all in parallel. Captain copy failure never blocks the

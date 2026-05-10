@@ -1181,10 +1181,19 @@
       let captainCardData = null;
       try { captainCardData = await generateCaptainCard(); }
       catch (e) { console.warn('Captain card failed, continuing:', e); }
+      // Grab the current session token so the server can verify which
+      // operator this trip belongs to. If the session has expired between
+      // login and trip end (rare — sessions auto-refresh), bail to login.
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { handleLogout(); throw new Error('Session expired — sign in again'); }
+
       // Single API call with all emails — Supabase saves once
       const res = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ tripData: trip, guestEmails, socialCardData, captainCardData }),
       });
       const result = await res.json();
