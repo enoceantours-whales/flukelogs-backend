@@ -127,9 +127,9 @@
       position: sticky;
       top: 0;
       z-index: 10;
-      padding: 22px 24px 18px;
+      padding: 14px 20px 12px;
       display: grid;
-      grid-template-columns: 44px 1fr 44px;
+      grid-template-columns: 40px 1fr 40px;
       align-items: center;
       gap: 10px;
       border-bottom: 1px solid var(--hair);
@@ -137,14 +137,18 @@
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
     }
-    .header-logo { width: 100%; max-width: 220px; height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
+    .header-logo { width: 100%; max-width: 200px; height: 44px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
     .header-logo img { width: 100%; height: 100%; object-fit: contain; }
     .header h1, .header p { display: none; }
 
     /* ── Screen wrappers + sections ─────────────────────────────── */
-    .screen { display: none; flex: 1; padding: 28px 20px 110px; overflow-y: auto; max-width: 560px; width: 100%; margin: 0 auto; }
+    .screen { display: none; flex: 1; padding: 14px 18px 78px; overflow-y: auto; max-width: 560px; width: 100%; margin: 0 auto; }
     .screen.active { display: block; animation: screenIn 0.3s var(--ease); }
     @keyframes screenIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* Start screen: lay out greeting / glance / card with tighter rhythm */
+    #screenStart { display: none; padding: 14px 18px 78px; }
+    #screenStart.active { display: grid; gap: 14px; align-content: start; }
 
     .section {
       position: relative;
@@ -152,12 +156,13 @@
         linear-gradient(180deg, rgba(255,255,255,.025) 0%, rgba(255,255,255,0) 100%),
         var(--ink-3);
       border: 1px solid var(--hair);
-      border-radius: 18px;
-      padding: 22px 22px 24px;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 30px 60px rgba(0,0,0,.45);
+      border-radius: 16px;
+      padding: 16px 18px 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 18px 36px rgba(0,0,0,.4);
       overflow: hidden;
     }
+    #screenStart .section { margin-bottom: 0; }
     .section::before {
       content: "";
       position: absolute;
@@ -167,22 +172,22 @@
     }
     .section > * { position: relative; }
     .section-label {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       color: var(--text);
       text-transform: uppercase;
-      letter-spacing: 0.28em;
-      margin-bottom: 18px;
-      padding-bottom: 14px;
+      letter-spacing: 0.26em;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--hair);
     }
 
     /* ── Form fields ─────────────────────────────────────────────── */
-    .field { display: grid; gap: 8px; margin-top: 16px; }
-    .field:first-of-type { margin-top: 6px; }
+    .field { display: grid; gap: 6px; margin-top: 10px; }
+    .field:first-of-type { margin-top: 4px; }
     .field:last-child { margin-bottom: 0; }
     .field label {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
       color: var(--text-faint);
       letter-spacing: 0.26em;
@@ -190,12 +195,12 @@
     }
     .field input, .field select, .field textarea {
       width: 100%;
-      padding: 16px 18px;
+      padding: 13px 16px;
       background: var(--ink-4);
       border: 1px solid var(--hair);
-      border-radius: 12px;
+      border-radius: 10px;
       color: var(--text);
-      font: 500 16px/1.2 "Open Sans", sans-serif;
+      font: 500 15px/1.2 "Open Sans", sans-serif;
       letter-spacing: 0.005em;
       appearance: none;
       -webkit-appearance: none;
@@ -218,19 +223,19 @@
     /* ── Stepper (passenger count) ──────────────────────────────── */
     .stepper {
       display: grid;
-      grid-template-columns: 56px 1fr 56px;
+      grid-template-columns: 48px 1fr 48px;
       align-items: center;
       background: var(--ink-4);
       border: 1px solid var(--hair);
-      border-radius: 12px;
+      border-radius: 10px;
       overflow: hidden;
     }
     .stepper button {
-      height: 54px;
+      height: 44px;
       background: transparent;
       border: 0;
       color: var(--text);
-      font: 400 22px/1 "Open Sans", sans-serif;
+      font: 400 20px/1 "Open Sans", sans-serif;
       cursor: pointer;
       transition: background .15s ease;
       -webkit-tap-highlight-color: transparent;
@@ -239,20 +244,20 @@
     .stepper button:disabled { opacity: .3; cursor: not-allowed; }
     .stepper .val {
       text-align: center;
-      font-size: 22px;
+      font-size: 18px;
       font-weight: 500;
       color: var(--text);
       border-left: 1px solid var(--hair);
       border-right: 1px solid var(--hair);
-      padding: 12px 0 8px;
+      padding: 6px 0 5px;
     }
     .stepper .val small {
       display: block;
-      font-size: 9px;
+      font-size: 8px;
       font-weight: 600;
-      letter-spacing: 0.24em;
+      letter-spacing: 0.22em;
       color: var(--text-faint);
-      margin-top: 2px;
+      margin-top: 1px;
       text-transform: uppercase;
     }
 
@@ -263,20 +268,20 @@
       grid-auto-columns: 1fr;
       background: var(--ink-4);
       border: 1px solid var(--hair);
-      border-radius: 12px;
-      padding: 4px;
-      gap: 4px;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
     }
     .seg button {
       appearance: none;
       background: transparent;
       border: 0;
       color: var(--text-dim);
-      padding: 12px 6px;
-      font: 600 11px/1 "Open Sans", sans-serif;
-      letter-spacing: 0.18em;
+      padding: 9px 4px;
+      font: 600 10px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      border-radius: 9px;
+      border-radius: 8px;
       cursor: pointer;
       transition: background .2s ease, color .2s ease;
       -webkit-tap-highlight-color: transparent;
@@ -284,7 +289,7 @@
     .seg button.on {
       background: rgba(255,255,255,.92);
       color: #0d1014;
-      box-shadow: 0 8px 20px rgba(0,0,0,.35);
+      box-shadow: 0 6px 14px rgba(0,0,0,.3);
     }
     .seg button:not(.on):hover { color: var(--text); background: rgba(255,255,255,.04); }
 
@@ -292,12 +297,13 @@
     .btn {
       width: 100%;
       display: flex; align-items: center; justify-content: center;
-      gap: 12px;
-      padding: 18px 24px;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 14px 20px;
       border: 0;
       border-radius: 999px;
-      font: 700 12px/1 "Open Sans", sans-serif;
-      letter-spacing: 0.32em;
+      font: 700 11px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.26em;
       text-transform: uppercase;
       cursor: pointer;
       transition: transform var(--t-fast), box-shadow var(--t-med), opacity var(--t-fast), background var(--t-fast);
@@ -388,28 +394,28 @@
     @keyframes pillPulse { 0%,100%{ opacity: 1; transform: scale(1); } 50%{ opacity: .55; transform: scale(.85); } }
 
     /* Card head — section-label + pill */
-    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
-    .section-head h2 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: var(--text); }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--hair); }
+    .section-head h2 { margin: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: var(--text); }
 
     /* ── Greeting strip (start screen) ──────────────────────────── */
-    .greeting { display: grid; gap: 6px; text-align: center; padding: 4px 0 8px; }
-    .greeting .kicker { font-size: 10px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
-    .greeting h1 { margin: 0; font: 400 26px/1.2 "Open Sans", sans-serif; letter-spacing: 0.005em; color: var(--text); }
-    .greeting .meta { font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; }
+    .greeting { display: grid; gap: 4px; text-align: center; padding: 0; }
+    .greeting .kicker { font-size: 9px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold); }
+    .greeting h1 { margin: 0; font: 400 20px/1.2 "Open Sans", sans-serif; letter-spacing: 0.005em; color: var(--text); }
+    .greeting .meta { font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; }
     .greeting .meta b { color: var(--text); font-weight: 600; }
 
     /* ── Glance tiles (Sea Temp / Swell / Wind from buoy) ───────── */
-    .glance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+    .glance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .glance .tile {
       background: var(--ink-3);
       border: 1px solid var(--hair);
-      border-radius: 14px;
-      padding: 14px 14px 12px;
-      display: grid; gap: 6px;
+      border-radius: 12px;
+      padding: 10px 12px 9px;
+      display: grid; gap: 4px;
     }
-    .glance .tile .lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase; color: var(--text-faint); }
-    .glance .tile .val { font: 500 18px/1.1 "Open Sans", sans-serif; color: var(--text); display: flex; align-items: baseline; gap: 4px; }
-    .glance .tile .val small { font-size: 10px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.08em; }
+    .glance .tile .lbl { font-size: 8px; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase; color: var(--text-faint); }
+    .glance .tile .val { font: 500 16px/1.1 "Open Sans", sans-serif; color: var(--text); display: flex; align-items: baseline; gap: 3px; }
+    .glance .tile .val small { font-size: 9px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.06em; }
     .glance .tile .val.placeholder { color: var(--text-faint); font-weight: 400; }
 
     /* ── Sighting list ───────────────────────────────────────────── */
@@ -571,7 +577,7 @@
       position: sticky;
       bottom: 0;
       z-index: 5;
-      padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
       background:
         linear-gradient(180deg, rgba(10,12,14,0) 0%, rgba(10,12,14,.85) 30%, rgba(10,12,14,.96) 100%);
       backdrop-filter: blur(14px);
@@ -586,14 +592,14 @@
       position: absolute;
       top: 0; left: 50%;
       transform: translateX(-50%);
-      width: min(560px, calc(100% - 32px));
+      width: min(560px, calc(100% - 28px));
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--hair-2), transparent);
     }
     .ribbon-inner {
       display: grid;
-      grid-template-columns: 1.4fr repeat(3, 1fr);
-      gap: 8px;
+      grid-template-columns: 1.3fr repeat(3, 1fr);
+      gap: 6px;
     }
     .nav {
       appearance: none;
@@ -601,12 +607,12 @@
       color: var(--text);
       background: var(--ink-3);
       border: 1px solid var(--hair);
-      border-radius: 14px;
-      padding: 12px 10px 10px;
+      border-radius: 12px;
+      padding: 8px 10px 8px;
       display: grid;
-      grid-template-rows: 22px auto auto;
+      grid-template-rows: 18px auto auto;
       align-items: end;
-      gap: 4px;
+      gap: 2px;
       cursor: pointer;
       text-align: left;
       transition: transform .15s ease, border-color .2s ease, background .2s ease;
@@ -615,9 +621,9 @@
       -webkit-tap-highlight-color: transparent;
     }
     .nav:hover { border-color: var(--hair-2); transform: translateY(-2px); }
-    .nav .glyph { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.5; color: var(--text); opacity: .9; }
-    .nav .lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); }
-    .nav .sub { font-size: 10px; color: var(--text-dim); letter-spacing: 0.02em; }
+    .nav .glyph { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; color: var(--text); opacity: .9; }
+    .nav .lbl { font-size: 8px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text); }
+    .nav .sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.02em; }
     .nav.feature {
       background:
         radial-gradient(140% 100% at 0% 100%, rgba(111,177,172,.18) 0%, rgba(111,177,172,0) 60%),
