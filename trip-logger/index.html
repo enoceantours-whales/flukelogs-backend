@@ -256,18 +256,6 @@
       min-width: 0;
     }
     .logo-actions .btn { margin: 0; width: auto; padding: 0 16px; white-space: nowrap; }
-    .logo-url-toggle {
-      background: none;
-      border: 0;
-      color: var(--text-dim);
-      font: 500 11px/1 "Open Sans", sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      padding: 6px 4px;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .logo-url-toggle:hover { color: var(--text); }
 
     /* ── Toggle switch (used for boolean settings) ───────────────── */
     .toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
@@ -1008,48 +996,54 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-label">Branding</div>
-
-      <div class="field">
-        <label>Logo — PDF (dark logo on white)</label>
-        <div class="logo-preview-row">
-          <img id="settingsLogoUrlPreview" class="logo-thumb pdf-bg empty" alt="">
-          <div class="logo-actions">
-            <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlFile').click()">Upload new</button>
-            <button type="button" class="logo-url-toggle" onclick="toggleLogoUrl('settingsLogoUrl', this)">Show URL</button>
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Branding</div>
+        <span class="section-status" id="settingsBrandingStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <div class="field">
+          <label>Logo — PDF (dark logo on white)</label>
+          <div class="logo-preview-row">
+            <img id="settingsLogoUrlPreview" class="logo-thumb pdf-bg empty" alt="">
+            <div class="logo-actions">
+              <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlFile').click()">Upload new</button>
+            </div>
           </div>
+          <input type="url" id="settingsLogoUrl" hidden>
+          <input type="file" id="settingsLogoUrlFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'pdf', 'settingsLogoUrl', 'settingsLogoUrlPreview')">
         </div>
-        <input type="url" id="settingsLogoUrl" placeholder="https://…/logo-dark.png" style="display:none; margin-top:10px;">
-        <input type="file" id="settingsLogoUrlFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'pdf', 'settingsLogoUrl', 'settingsLogoUrlPreview')">
-      </div>
 
-      <div class="field">
-        <label>Logo — Email (light logo on dark)</label>
-        <div class="logo-preview-row">
-          <img id="settingsLogoUrlEmailPreview" class="logo-thumb email-bg empty" alt="">
-          <div class="logo-actions">
-            <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlEmailFile').click()">Upload new</button>
-            <button type="button" class="logo-url-toggle" onclick="toggleLogoUrl('settingsLogoUrlEmail', this)">Show URL</button>
+        <div class="field">
+          <label>Logo — Email (light logo on dark)</label>
+          <div class="logo-preview-row">
+            <img id="settingsLogoUrlEmailPreview" class="logo-thumb email-bg empty" alt="">
+            <div class="logo-actions">
+              <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlEmailFile').click()">Upload new</button>
+            </div>
           </div>
+          <input type="url" id="settingsLogoUrlEmail" hidden>
+          <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
         </div>
-        <input type="url" id="settingsLogoUrlEmail" placeholder="https://…/logo-light.png" style="display:none; margin-top:10px;">
-        <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
       </div>
+    </details>
 
-      <div class="field">
-        <label>Review URL</label>
-        <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Email</div>
+        <span class="section-status" id="settingsEmailStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <div class="field">
+          <label>"From" Email Address</label>
+          <input type="email" id="settingsFromEmail" autocapitalize="none" autocorrect="off">
+        </div>
+        <div class="field">
+          <label>Review URL</label>
+          <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
+        </div>
       </div>
-    </div>
-
-    <div class="section">
-      <div class="section-label">Email</div>
-      <div class="field">
-        <label>"From" Email Address</label>
-        <input type="email" id="settingsFromEmail" autocapitalize="none" autocorrect="off">
-      </div>
-    </div>
+    </details>
 
     <details class="section section-collapsible">
       <summary>
@@ -2532,6 +2526,19 @@
   // Status text shown to the right of each collapsed section header so the
   // captain can tell what's configured without expanding everything.
   function setSettingsStatusIndicators(cfg) {
+    const br = document.getElementById('settingsBrandingStatus');
+    if (br) {
+      const pdf = !!cfg.logo_url;
+      const eml = !!cfg.logo_url_email;
+      br.textContent = pdf && eml ? 'Both logos set'
+        : pdf ? 'PDF logo set'
+        : eml ? 'Email logo set'
+        : 'No logos set';
+    }
+    const em = document.getElementById('settingsEmailStatus');
+    if (em) {
+      em.textContent = cfg.from_email || 'Not set';
+    }
     const mc = document.getElementById('settingsMailchimpStatus');
     if (mc) {
       mc.textContent = cfg.has_mailchimp_api_key ? 'Configured' : 'Not set';
@@ -2614,16 +2621,6 @@ window.addEventListener('message', function(e) {
     }
   }
 
-  // Show/hide the raw URL input for a logo field. Most captains never need
-  // it — they upload via the file picker and the URL is set automatically.
-  function toggleLogoUrl(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const showing = input.style.display !== 'none';
-    input.style.display = showing ? 'none' : '';
-    if (btn) btn.textContent = showing ? 'Show URL' : 'Hide URL';
-    if (!showing) input.focus();
-  }
 
   // File picker → POST base64 to /api/operator-logo-upload → fill the URL
   // input + preview. Captain still has to hit Save Settings to commit the
