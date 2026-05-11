@@ -141,7 +141,12 @@
     gap: 22px;
     align-items: start;
     margin-bottom: 24px;
+    min-width: 0;
   }
+  /* min-width:0 on grid children prevents the species rail's horizontal
+     overflow (or any wide pin label) from blowing out the grid track
+     wider than the viewport. */
+  .fm-grid > * { min-width: 0; }
   .fm-grid .map-wrap { margin-bottom: 0; }
   /* When the operator has show_map_on_widget = false, the .map-wrap is
      removed from the DOM. Collapse the grid to a single column so the
@@ -217,16 +222,17 @@
   }
 
   /* ── Mobile filter (segmented + rail / C) — hidden on desktop ─── */
-  .filter-mobile { display: none; }
+  .filter-mobile { display: none; min-width: 0; }
   .seg-group {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
+    display: flex;
     border: 1px solid var(--hair);
     border-radius: 4px;
     overflow: hidden;
+    width: 100%;
   }
   .seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
     background: transparent;
     border: none;
     color: var(--text-dim);
@@ -248,7 +254,7 @@
   }
   .seg-btn.is-active .seg-btn-count { color: var(--text-dim); }
 
-  .rail-wrap { position: relative; margin-top: 10px; }
+  .rail-wrap { position: relative; margin-top: 10px; min-width: 0; }
   .species-rail {
     display: flex;
     gap: 6px;
@@ -292,6 +298,7 @@
 
   /* ── Responsive: < 720px → swap to mobile pattern ─────────────── */
   @media (max-width: 720px) {
+    .widget-wrap { padding: 20px 14px 32px; }
     .fm-grid {
       grid-template-columns: 1fr;
       gap: 14px;
