@@ -47,35 +47,22 @@
   }
   .widget-wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 40px; }
 
-  /* ── Editorial header (Fraunces numeral + monospace updated date) ── */
-  .ed-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 22px;
-    flex-wrap: wrap;
+  /* ── Editorial header (Fraunces title + monospace date) ── */
+  .ed-header { margin-bottom: 22px; }
+  .ed-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 38px;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    color: var(--text);
+    margin: 0;
   }
-  .ed-kicker {
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    font-weight: 500;
-  }
-  .ed-hdr-right { text-align: right; min-width: 0; }
-  .ed-updated-label {
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    font-weight: 500;
-  }
-  .ed-updated-mono {
+  .ed-date {
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
     color: var(--text-dim);
-    margin-top: 3px;
+    margin-top: 8px;
     letter-spacing: 0;
   }
 
@@ -286,7 +273,7 @@
     }
     .legend-col { display: none; }
     .filter-mobile { display: block; }
-    .ed-updated-label { display: none; }
+    .ed-title { font-size: 30px; }
   }
 
   .map-wrap {
@@ -462,15 +449,10 @@
 <body>
 <div class="widget-wrap">
 
-  <!-- Editorial header — kicker + Fraunces numeral / monospace updated date -->
+  <!-- Editorial header — Fraunces title + monospace date below -->
   <header class="ed-header">
-    <div class="ed-hdr-left">
-      <div class="ed-kicker" id="ed-kicker">Monterey Bay &middot; Sightings log</div>
-    </div>
-    <div class="ed-hdr-right">
-      <div class="ed-updated-label">Updated</div>
-      <div class="ed-updated-mono" id="status-text">&mdash;</div>
-    </div>
+    <h1 class="ed-title">Sightings Log</h1>
+    <div class="ed-date" id="status-text">&mdash;</div>
   </header>
 
   <!-- What's out there now -->
