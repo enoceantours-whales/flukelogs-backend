@@ -1532,6 +1532,7 @@
   // Per-operator config loaded from /api/me after a successful session check.
   // Stays null until then so callers fall back to hardcoded defaults.
   let operatorConfig = null;
+  let isSuperAdmin = false;
 
   function newTripState() {
     return {
@@ -2644,6 +2645,13 @@
     // the captain can still log a trip offline-ish.
     await loadMe(session.access_token);
 
+    // Super-admins don't run trips — drop them straight into the Admin
+    // portal where they can onboard a new operator or edit existing ones.
+    if (isSuperAdmin) {
+      openAdmin();
+      return;
+    }
+
     // Logged in — restore mid-trip if any, otherwise land on start screen.
     // restoreTrip() handles both navigation and resuming GPS/timer.
     const savedTrip = localStorage.getItem(STORAGE_KEY);
@@ -2690,8 +2698,23 @@
       if (kicker && operatorConfig && operatorConfig.tagline) {
         kicker.textContent = operatorConfig.tagline;
       }
+      isSuperAdmin = !!(body.user && body.user.is_super_admin);
+
+      // Super-admins don't run trips — they onboard operators and edit each
+      // operator's config. Hide the captain-side entries (Get Started / Past
+      // Trips / Settings) and just show Admin + Log Out.
       const adminLink = document.getElementById('footerAdmin');
-      if (adminLink) adminLink.classList.toggle('hidden', !(body.user && body.user.is_super_admin));
+      if (adminLink) adminLink.classList.toggle('hidden', !isSuperAdmin);
+      ['footerGetStarted', 'footerPastTrips', 'footerSettings'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', isSuperAdmin);
+      });
+      // Get Started also disappears for captains once required onboarding is
+      // done — symmetric with the boot-time auto-route to the checklist.
+      if (!isSuperAdmin) {
+        const getStarted = document.getElementById('footerGetStarted');
+        if (getStarted) getStarted.classList.toggle('hidden', !shouldShowWelcome());
+      }
     } catch (e) {
       console.warn('loadMe failed, using hardcoded defaults:', e.message);
       operatorConfig = null;
