@@ -182,6 +182,86 @@
       border-bottom: 1px solid var(--hair);
     }
 
+    /* ── Welcome / onboarding checklist ────────────────────────────── */
+    .welcome-checklist .check-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--hair);
+      cursor: pointer;
+      transition: background .12s ease;
+    }
+    .welcome-checklist .check-row:last-child { border-bottom: 0; }
+    .welcome-checklist .check-row:hover { background: rgba(255,255,255,0.02); }
+    .welcome-checklist .check-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1.5px solid var(--hair-2);
+    }
+    .welcome-checklist .check-row.done .check-icon {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: var(--ink-3);
+    }
+    .welcome-checklist .check-row.done .check-icon::after {
+      content: '';
+      display: block;
+      width: 5px;
+      height: 9px;
+      border-right: 1.8px solid currentColor;
+      border-bottom: 1.8px solid currentColor;
+      transform: rotate(45deg) translate(-1px, -1px);
+    }
+    .welcome-checklist .check-text { flex: 1; min-width: 0; }
+    .welcome-checklist .check-title {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .welcome-checklist .check-row.done .check-title {
+      color: var(--text-dim);
+    }
+    .welcome-checklist .check-help {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .welcome-checklist .check-cta {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+      white-space: nowrap;
+    }
+    .welcome-checklist .check-row.done .check-cta {
+      color: var(--text-faint);
+      font-weight: 500;
+    }
+    .welcome-checklist .check-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      padding: 2px 6px;
+      border: 1px solid var(--gold);
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .welcome-checklist .check-row.done .check-badge {
+      color: var(--text-faint);
+      border-color: var(--hair);
+    }
+
     /* ── Collapsible sections (<details>) ─────────────────────────── */
     .section.section-collapsible { padding: 0; }
     .section.section-collapsible > summary {
@@ -866,6 +946,10 @@
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-linejoin="round"/></svg>
     </button>
     <div class="header-menu" id="headerMenu" role="menu">
+      <a class="menu-item" id="footerGetStarted" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openWelcome();">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Get Started</span>
+      </a>
       <a class="menu-item" id="footerPastTrips" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openPastTrips();">
         <svg class="glyph" viewBox="0 0 24 24"><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Past Trips</span>
@@ -980,6 +1064,29 @@
         Start Trip
       </button>
     </section>
+  </div>
+
+  <!-- Welcome / onboarding checklist — auto-shown on first login when the
+       captain hasn't finished basic setup. Reachable from the header menu
+       any time via "Get Started". -->
+  <div class="screen" id="screenWelcome">
+    <section class="greeting">
+      <div class="kicker">Welcome aboard</div>
+      <h1 id="welcomeTitle">Let's get you live.</h1>
+      <div class="meta">A few quick setup steps and you'll be running trips.</div>
+    </section>
+
+    <section class="section">
+      <div class="section-label">Setup Checklist</div>
+      <div id="welcomeChecklist" class="welcome-checklist"><div class="empty">Loading…</div></div>
+    </section>
+
+    <div id="welcomeRequiredWarning" style="display:none; padding:14px; background:rgba(200,168,107,0.08); border:1px solid rgba(200,168,107,0.3); border-radius:12px; margin-bottom:14px;">
+      <div style="font-size:13px; color:var(--text); font-weight:500; margin-bottom:4px;">Email setup is required before sending trip reports.</div>
+      <div style="font-size:12px; color:var(--text-dim); line-height:1.5;">You can still explore the app, but the "Send to all guests" step at the end of a trip will fail until you've added a Gmail App Password.</div>
+    </div>
+
+    <button class="btn btn-primary" type="button" onclick="showScreen('screenStart')">Continue to Start Trip</button>
   </div>
 
   <!-- Settings (operator-editable subset of operator config) -->
@@ -2448,11 +2555,26 @@
     const savedTrip = localStorage.getItem(STORAGE_KEY);
     if (savedTrip) {
       restoreTrip();
+    } else if (shouldShowWelcome()) {
+      // First-time captain (or anyone who hasn't finished setup) lands on
+      // the checklist instead of Start Trip. Once they finish the required
+      // items they fall through to the normal Start screen on next login.
+      openWelcome();
     } else {
       showScreen('screenStart');
       fetchBuoyConditions(false);
       fetchTodayBookings(session.access_token);
     }
+  }
+
+  // True when any required onboarding step is incomplete. We only auto-route
+  // to Welcome on REQUIRED gaps so a captain who skipped Mailchimp doesn't
+  // get nagged every login. Recommended items still appear on the checklist
+  // when they open it manually.
+  function shouldShowWelcome() {
+    if (!operatorConfig) return false;
+    const emailDone = !!(operatorConfig.from_email && operatorConfig.has_gmail_app_password);
+    return !emailDone;
   }
 
   // Fetch /api/me and apply the returned operator config to the UI.
@@ -2482,12 +2604,107 @@
     }
   }
 
+  // ── Welcome / onboarding checklist ───────────────────────────────
+  // Reflects operatorConfig completeness. Auto-shown after login when any
+  // required step is missing (via shouldShowWelcome); reachable any time
+  // from the header menu.
+
+  function openWelcome() {
+    showScreen('screenWelcome');
+    // Greet by operator name when available — captain identity isn't in
+    // operatorConfig today, so the operator brand is the closest thing.
+    const title = document.getElementById('welcomeTitle');
+    if (title) {
+      title.textContent = (operatorConfig && operatorConfig.name)
+        ? `Welcome, ${operatorConfig.name}.`
+        : "Let's get you live.";
+    }
+    renderWelcomeChecklist();
+  }
+
+  // Each item: {key, title, help, required, done, focus}
+  //   focus = the section identifier passed to openSettings() so clicking
+  //           the row jumps straight to the right place. 'widget' is a
+  //           special target — we just scroll to the Public Widget section
+  //           since it's not collapsible.
+  function welcomeChecklistItems() {
+    const cfg = operatorConfig || {};
+    return [
+      {
+        key: 'email',
+        title: 'Email & app password',
+        help: 'Required to send trip reports to guests.',
+        required: true,
+        done: !!(cfg.from_email && cfg.has_gmail_app_password),
+        focus: 'email',
+      },
+      {
+        key: 'branding',
+        title: 'Logos uploaded',
+        help: 'Used on the PDF report and email header.',
+        required: false,
+        done: !!(cfg.logo_url && cfg.logo_url_email),
+        focus: 'branding',
+      },
+      {
+        key: 'species',
+        title: 'Species list',
+        help: 'What shows up in the dropdown when you log a sighting.',
+        required: false,
+        done: Array.isArray(cfg.species_list) && cfg.species_list.length > 0,
+        focus: 'species',
+      },
+      {
+        key: 'mailchimp',
+        title: 'Mailchimp (optional)',
+        help: 'Auto-adds guests to your audience after each trip.',
+        required: false,
+        done: !!(cfg.has_mailchimp_api_key && cfg.mailchimp_audience_id),
+        focus: 'mailchimp',
+      },
+      {
+        key: 'widget',
+        title: 'Embed sightings widget on your website',
+        help: 'Copy the snippet and paste it into your CMS.',
+        required: false,
+        // Not auto-detectable — we treat it as done once any other recommended
+        // item is finished, since the captain will have visited Settings at
+        // least once and seen the embed code by then. Soft signal, not exact.
+        done: !!(cfg.logo_url || cfg.logo_url_email || (Array.isArray(cfg.species_list) && cfg.species_list.length > 0)),
+        focus: 'widget',
+      },
+    ];
+  }
+
+  function renderWelcomeChecklist() {
+    const wrap = document.getElementById('welcomeChecklist');
+    if (!wrap) return;
+    const items = welcomeChecklistItems();
+    wrap.innerHTML = items.map(item => {
+      const badge = item.required && !item.done ? '<span class="check-badge">Required</span>' : '';
+      const cta = item.done ? 'Done' : (item.required ? 'Set up →' : 'Open →');
+      return `<div class="check-row ${item.done ? 'done' : ''}" onclick="openSettings('${item.focus}')">
+        <div class="check-icon"></div>
+        <div class="check-text">
+          <div class="check-title">${item.title}${badge}</div>
+          <div class="check-help">${item.help}</div>
+        </div>
+        <div class="check-cta">${cta}</div>
+      </div>`;
+    }).join('');
+
+    // Banner for the required-but-missing case.
+    const warn = document.getElementById('welcomeRequiredWarning');
+    const anyRequiredMissing = items.some(i => i.required && !i.done);
+    if (warn) warn.style.display = anyRequiredMissing ? 'block' : 'none';
+  }
+
   // ── Settings (operator-editable subset) ──────────────────────────
   // Fetched fresh from /api/operator-settings on every Settings open so the
   // form reflects whatever the captain (or super admin) has changed in
   // another tab / on another device since last view.
 
-  async function openSettings() {
+  async function openSettings(focus) {
     showScreen('screenSettings');
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return handleLogout();
@@ -2498,9 +2715,45 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const cfg = await res.json();
       populateSettingsForm(cfg);
+      if (focus) focusSettingsSection(focus);
     } catch (err) {
       toast('Could not load settings: ' + (err.message || err), 'error');
     }
+  }
+
+  // Called from the welcome checklist + future deep-links. Expands the
+  // matching <details>, scrolls it into view, and focuses the first input.
+  // The argument matches the welcome-item .focus value.
+  function focusSettingsSection(focus) {
+    const map = {
+      email:     { selector: 'details:has(#settingsFromEmail)', input: '#settingsGmailPwd' },
+      branding:  { selector: 'details:has(#settingsLogoUrlPreview)' },
+      species:   { selector: 'details:has(#settingsSpeciesGroups)' },
+      mailchimp: { selector: 'details:has(#settingsMailchimpKey)', input: '#settingsMailchimpKey' },
+      // The Public Widget section isn't collapsible — just scroll to the
+      // embed-code copy button which is the actionable bit.
+      widget:    { scrollTo: '#settingsEmbedCode' },
+    };
+    const target = map[focus];
+    if (!target) return;
+    // Defer to next tick so the screen swap has painted before we measure.
+    setTimeout(() => {
+      let scrollEl = null;
+      if (target.selector) {
+        const details = document.querySelector(target.selector);
+        if (details) {
+          details.open = true;
+          scrollEl = details;
+        }
+      } else if (target.scrollTo) {
+        scrollEl = document.querySelector(target.scrollTo);
+      }
+      if (scrollEl) scrollEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (target.input) {
+        const inp = document.querySelector(target.input);
+        if (inp) inp.focus({ preventScroll: true });
+      }
+    }, 60);
   }
 
   function populateSettingsForm(cfg) {

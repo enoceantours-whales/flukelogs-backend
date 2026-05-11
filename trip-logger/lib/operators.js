@@ -33,22 +33,28 @@ function pick(operator, field, fallback) {
 // Strip secrets out of an operator row before returning it to the client.
 // /api/me uses this. Anything sensitive (API keys, passwords, OTA creds)
 // stays server-only. UI-relevant fields are explicitly listed below.
+//
+// The has_X booleans let the welcome / onboarding checklist tell the captain
+// what's configured without ever sending the actual secret to the browser.
 function publicOperatorView(operator) {
   if (!operator) return null;
   return {
-    id:                 operator.id,
-    slug:               operator.slug,
-    name:               operator.name,
-    tagline:            operator.tagline,
-    logo_url:           operator.logo_url,
-    logo_url_email:     operator.logo_url_email,
-    review_url:         operator.review_url,
-    species_list:       operator.species_list || [],
-    website_url:        operator.website_url,
-    noaa_buoy_station:  operator.noaa_buoy_station,
-    default_map_center: operator.default_map_center,
-    default_map_zoom:   operator.default_map_zoom,
-    from_email:         operator.from_email,
+    id:                       operator.id,
+    slug:                     operator.slug,
+    name:                     operator.name,
+    tagline:                  operator.tagline,
+    logo_url:                 operator.logo_url,
+    logo_url_email:           operator.logo_url_email,
+    review_url:               operator.review_url,
+    species_list:             operator.species_list || [],
+    website_url:              operator.website_url,
+    noaa_buoy_station:        operator.noaa_buoy_station,
+    default_map_center:       operator.default_map_center,
+    default_map_zoom:         operator.default_map_zoom,
+    from_email:               operator.from_email,
+    has_gmail_app_password:   !!operator.gmail_app_password,
+    has_mailchimp_api_key:    !!operator.mailchimp_api_key,
+    mailchimp_audience_id:    operator.mailchimp_audience_id,
   };
 }
 
