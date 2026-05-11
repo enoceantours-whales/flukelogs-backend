@@ -142,12 +142,12 @@
     .header h1, .header p { display: none; }
 
     /* ── Screen wrappers + sections ─────────────────────────────── */
-    .screen { display: none; flex: 1; padding: 14px 18px 78px; overflow-y: auto; max-width: 560px; width: 100%; margin: 0 auto; }
+    .screen { display: none; flex: 1; padding: 14px 18px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; max-width: 560px; width: 100%; margin: 0 auto; }
     .screen.active { display: block; animation: screenIn 0.3s var(--ease); }
     @keyframes screenIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
     /* Start screen: lay out greeting / glance / card with tighter rhythm */
-    #screenStart { display: none; padding: 14px 18px 78px; }
+    #screenStart { display: none; padding: 14px 18px calc(24px + env(safe-area-inset-bottom)); }
     #screenStart.active { display: grid; gap: 14px; align-content: start; }
 
     .section {
@@ -602,79 +602,56 @@
     .btn-refresh { display: none; }
     .btn-refresh.show { display: grid; }
 
-    /* ── Bottom ribbon — amplified nav (replaces text-link footer) */
-    .footer.ribbon {
-      position: sticky;
-      bottom: 0;
-      z-index: 5;
-      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-      background:
-        linear-gradient(180deg, rgba(10,12,14,0) 0%, rgba(10,12,14,.85) 30%, rgba(10,12,14,.96) 100%);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 0;
-      width: 100%;
-      max-width: 560px;
-      margin: 0 auto;
-    }
-    .footer.ribbon::before {
-      content: "";
+    /* ── Header menu (hamburger dropdown, replaces bottom ribbon) ── */
+    .menu-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; }
+    body.is-login .menu-btn { visibility: hidden; }
+
+    .header-menu {
       position: absolute;
-      top: 0; left: 50%;
-      transform: translateX(-50%);
-      width: min(560px, calc(100% - 28px));
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--hair-2), transparent);
+      top: calc(100% + 8px);
+      right: 14px;
+      z-index: 20;
+      min-width: 220px;
+      background: linear-gradient(180deg, rgba(16,22,26,0.96) 0%, rgba(12,16,20,0.96) 100%);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 18px 36px rgba(0,0,0,0.5);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: none;
     }
-    .ribbon-inner {
-      display: grid;
-      grid-template-columns: 1.3fr repeat(3, 1fr);
-      gap: 6px;
-    }
-    .nav {
+    .header-menu.open { display: grid; gap: 2px; }
+
+    .menu-item {
       appearance: none;
       text-decoration: none;
       color: var(--text);
-      background: var(--ink-3);
-      border: 1px solid var(--hair);
-      border-radius: 12px;
-      padding: 8px 10px 8px;
+      background: transparent;
+      border: 0;
       display: grid;
-      grid-template-rows: 18px auto auto;
-      align-items: end;
-      gap: 2px;
+      grid-template-columns: 18px 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: 10px;
+      font: 500 13px/1.1 "Open Sans", sans-serif;
+      letter-spacing: 0.02em;
       cursor: pointer;
       text-align: left;
-      transition: transform .15s ease, border-color .2s ease, background .2s ease;
-      position: relative;
-      overflow: hidden;
       -webkit-tap-highlight-color: transparent;
+      transition: background var(--t-fast);
     }
-    .nav:hover { border-color: var(--hair-2); transform: translateY(-2px); }
-    .nav .glyph { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; color: var(--text); opacity: .9; }
-    .nav .lbl { font-size: 8px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text); }
-    .nav .sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.02em; }
-    .nav.feature {
-      background:
-        radial-gradient(140% 100% at 0% 100%, rgba(111,177,172,.18) 0%, rgba(111,177,172,0) 60%),
-        linear-gradient(180deg, #15201f 0%, #0f1718 100%);
-      border-color: rgba(111,177,172,.28);
+    .menu-item:hover { background: rgba(255,255,255,0.05); }
+    .menu-item .glyph { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: 0.85; }
+    .menu-item.danger { color: #d6a597; }
+    .menu-item.hidden { display: none; }
+    .menu-divider {
+      height: 1px;
+      background: var(--hair);
+      margin: 4px 6px;
     }
-    .nav.feature .lbl { color: var(--accent); }
-    .nav.feature .sub { color: rgba(230,240,240,.8); }
-    .nav.feature .glyph { color: var(--teal); opacity: 1; }
-    .nav.danger:hover { border-color: rgba(214,165,151,.5); }
-    .nav.danger .glyph { color: #d6a597; }
-    .nav.hidden { display: none; }
-
-    /* Hide ribbon on the login screen via body class */
-    body.is-login .footer.ribbon { display: none; }
-
-    /* Responsive ribbon */
-    @media (max-width: 480px) {
-      .ribbon-inner { grid-template-columns: 1fr 1fr; }
-      .nav.feature { grid-column: 1 / -1; }
-    }
+    body.is-login .header-menu { display: none !important; }
 
     /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
@@ -696,7 +673,28 @@
     <div class="header-logo">
       <img src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
     </div>
-    <div class="iconbtn" style="visibility:hidden" aria-hidden="true"></div>
+    <button class="iconbtn menu-btn" id="btnMenu" type="button" onclick="toggleHeaderMenu(event)" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="header-menu" id="headerMenu" role="menu">
+      <a class="menu-item" id="footerPastTrips" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openPastTrips();">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Past Trips</span>
+      </a>
+      <a class="menu-item" id="footerSettings" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openSettings();">
+        <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5A7 7 0 0 0 19 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Settings</span>
+      </a>
+      <a class="menu-item hidden" id="footerAdmin" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openAdmin();">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M12 3l9 4-9 4-9-4 9-4Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12l9 4 9-4M3 16l9 4 9-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Admin</span>
+      </a>
+      <div class="menu-divider"></div>
+      <a class="menu-item danger" id="footerLogout" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); handleLogout();">
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Log Out</span>
+      </a>
+    </div>
   </header>
 
   <!-- Login (default screen until a Supabase session is found on boot) -->
@@ -1109,30 +1107,6 @@
     <button class="btn btn-danger" onclick="discardTrip()">Discard Trip</button>
   </div>
 
-  <footer class="footer ribbon">
-    <div class="ribbon-inner">
-      <a class="nav feature hidden" id="footerPastTrips" href="#" onclick="event.preventDefault(); openPastTrips();" aria-label="Past Trips">
-        <svg class="glyph" viewBox="0 0 24 24"><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="lbl">Past Trips</div>
-        <div class="sub">Audio recaps</div>
-      </a>
-      <a class="nav hidden" id="footerSettings" href="#" onclick="event.preventDefault(); openSettings();" aria-label="Settings">
-        <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5A7 7 0 0 0 19 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="lbl">Settings</div>
-        <div class="sub">Logo · Species</div>
-      </a>
-      <a class="nav hidden" id="footerAdmin" href="#" onclick="event.preventDefault(); openAdmin();" aria-label="Admin">
-        <svg class="glyph" viewBox="0 0 24 24"><path d="M12 3l9 4-9 4-9-4 9-4Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12l9 4 9-4M3 16l9 4 9-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="lbl">Admin</div>
-        <div class="sub">Operators</div>
-      </a>
-      <a class="nav danger hidden" id="footerLogout" href="#" onclick="event.preventDefault(); handleLogout();" aria-label="Log out">
-        <svg class="glyph" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h12" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="lbl">Log Out</div>
-        <div class="sub">End shift</div>
-      </a>
-    </div>
-  </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1976,11 +1950,12 @@
     showScreen('screenLogin');
   }
 
-  // Ribbon visibility helpers — toggle the .hidden class on each nav tile.
-  // The ribbon container itself is hidden via body.is-login when logged out
-  // so the empty bar doesn't show on the login screen.
+  // Header-menu visibility helpers — toggle the .hidden class on each item.
+  // The menu container itself is hidden via body.is-login when logged out
+  // so the menu button is never reachable on the login screen.
   function setRibbonForLoggedOut() {
     document.body.classList.add('is-login');
+    closeHeaderMenu();
     ['footerLogout','footerSettings','footerAdmin','footerPastTrips'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
@@ -1994,6 +1969,32 @@
     });
     // Admin link revealed by loadMe() based on is_super_admin
   }
+
+  // Header dropdown menu — open/close + dismiss on outside click or Escape.
+  function toggleHeaderMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('headerMenu');
+    const btn  = document.getElementById('btnMenu');
+    const open = menu.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function closeHeaderMenu() {
+    const menu = document.getElementById('headerMenu');
+    const btn  = document.getElementById('btnMenu');
+    if (!menu || !menu.classList.contains('open')) return;
+    menu.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('headerMenu');
+    const btn  = document.getElementById('btnMenu');
+    if (!menu || !menu.classList.contains('open')) return;
+    if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+    closeHeaderMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeHeaderMenu();
+  });
 
   // Single boot entry point. Decides which screen to show based on
   // (1) whether there's an active Supabase session and (2) whether
