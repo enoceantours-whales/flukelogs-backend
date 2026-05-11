@@ -2,31 +2,38 @@
 //
 // Lets the logged-in operator user read and update their own operator row,
 // restricted to the fields explicitly listed in OPERATOR_EDITABLE. Anything
-// outside that list (gmail credentials, NOAA buoy station, FareHarbor keys,
-// name/slug, etc.) stays super-admin-only and is ignored if it shows up in
-// a PATCH body.
+// outside that list (NOAA buoy station, FareHarbor keys, gmail_user
+// override, name/slug, etc.) stays super-admin-only and is ignored if it
+// shows up in a PATCH body.
 //
-// The Mailchimp API key is sensitive, so the GET response returns
-// `has_mailchimp_api_key: true|false` instead of the actual value, and a
-// PATCH with an empty string for that field is treated as "leave it alone."
+// Sensitive credentials (Mailchimp API key, Gmail App Password) are NEVER
+// returned by GET — the response carries has_X booleans instead. A PATCH
+// with an empty string for those fields means "leave it alone," so the
+// captain can edit other Settings without re-pasting their secrets.
 
 const { authenticate } = require('../lib/auth');
 const { getOperator } = require('../lib/operators');
 
 // Single source of truth for what the operator can edit themselves. Mirror
-// of the user's product spec: logo, review link, species list, from email,
-// Mailchimp credentials.
+// of the user's product spec: logo, review link, species list, from email +
+// Gmail app password, Mailchimp credentials.
 const OPERATOR_EDITABLE = [
   'logo_url',
   'logo_url_email',
   'review_url',
   'species_list',
   'from_email',
+  'gmail_app_password',
   'mailchimp_api_key',
   'mailchimp_audience_id',
   'mailchimp_server_prefix',
   'show_map_on_widget',
 ];
+
+// Sensitive fields where an empty-string PATCH means "keep current value."
+// The captain types into a masked input, so an empty input is the natural
+// "I'm not changing this" signal.
+const SECRET_FIELDS = new Set(['mailchimp_api_key', 'gmail_app_password']);
 
 function operatorSettingsView(operator) {
   if (!operator) return null;
@@ -39,6 +46,7 @@ function operatorSettingsView(operator) {
     review_url:               operator.review_url,
     species_list:             operator.species_list || [],
     from_email:               operator.from_email,
+    has_gmail_app_password:   !!operator.gmail_app_password,
     mailchimp_audience_id:    operator.mailchimp_audience_id,
     mailchimp_server_prefix:  operator.mailchimp_server_prefix,
     has_mailchimp_api_key:    !!operator.mailchimp_api_key,
@@ -88,9 +96,9 @@ module.exports = async function handler(req, res) {
     for (const field of OPERATOR_EDITABLE) {
       if (!(field in body)) continue;
       const val = body[field];
-      // Empty Mailchimp key means "keep what's there" — common pattern when
-      // the field is masked in the UI.
-      if (field === 'mailchimp_api_key' && (val === '' || val === null || val === undefined)) continue;
+      // Empty value on a masked secret field means "keep what's there" — the
+      // captain can save other Settings without re-pasting their credentials.
+      if (SECRET_FIELDS.has(field) && (val === '' || val === null || val === undefined)) continue;
       // Light shape check on species_list. Anything else passes through
       // and the JSONB column accepts it as-is.
       if (field === 'species_list' && !Array.isArray(val)) {
