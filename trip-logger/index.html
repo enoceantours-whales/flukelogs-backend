@@ -970,6 +970,25 @@
     </div>
   </header>
 
+  <!-- Set Password (shown when captain arrives via invite or recovery email) -->
+  <div class="screen" id="screenSetPassword">
+    <div class="section" style="margin-top: 40px;">
+      <div class="section-label">Set Your Password</div>
+      <p style="font-size:14px;color:var(--text-dim);margin:0 0 16px;line-height:1.5;">Welcome aboard. Choose a password to finish setting up your account — you'll use it to sign in from now on.</p>
+      <form id="setPasswordForm" onsubmit="event.preventDefault(); handleSetPassword();" autocomplete="on">
+        <div class="field">
+          <label>New Password</label>
+          <input type="password" id="setPasswordInput" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="field">
+          <label>Confirm Password</label>
+          <input type="password" id="setPasswordConfirm" autocomplete="new-password" minlength="8" required>
+        </div>
+        <button class="btn btn-primary" id="setPasswordBtn" type="submit">Set Password and Continue</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Login (default screen until a Supabase session is found on boot) -->
   <div class="screen active" id="screenLogin">
     <div class="section" style="margin-top: 40px;">
@@ -1486,6 +1505,18 @@
 
 <script>
   const API_URL = '/api/send-report';
+
+  // Captain arriving from a Supabase invite or password-recovery email
+  // lands here with either ?code=… (PKCE flow) or #access_token=…&type=…
+  // (implicit flow) in the URL. supabase-js consumes and strips that on
+  // init, so we have to capture it BEFORE createClient() runs — otherwise
+  // we lose the signal that this is a first-time setup and can't route
+  // the captain to the "set your password" screen.
+  const __initialAuthRedirect = (() => {
+    const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search);
+    return !!(hash.get('access_token') || hash.get('type') || query.get('code'));
+  })();
 
   // ── Supabase client (auth only at this stage) ────────────────────
   // Same project + anon key the public sightings widget already uses.
@@ -2475,6 +2506,31 @@
   // Step 3 will lock them down. For now this just controls which
   // screen the captain sees and gives us a real session to work with.
 
+  async function handleSetPassword() {
+    const pw  = document.getElementById('setPasswordInput').value;
+    const pw2 = document.getElementById('setPasswordConfirm').value;
+    if (pw.length < 8) return toast('Password must be at least 8 characters', 'error');
+    if (pw !== pw2)    return toast('Passwords do not match', 'error');
+
+    const btn = document.getElementById('setPasswordBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving…';
+
+    try {
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) throw error;
+      toast('Password set — welcome aboard', 'success');
+      // Reload at a clean URL so we re-enter through the normal logged-in
+      // boot path (Welcome checklist or Start screen, depending on setup).
+      window.location.replace(window.location.pathname);
+    } catch (err) {
+      console.error('set password failed:', err);
+      toast(err.message || 'Could not set password', 'error');
+      btn.disabled = false;
+      btn.innerHTML = 'Set Password and Continue';
+    }
+  }
+
   async function handleLogin() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -2568,6 +2624,16 @@
     if (!session) {
       setRibbonForLoggedOut();
       showScreen('screenLogin');
+      return;
+    }
+
+    // Captain arrived from an invite or password-recovery email — supabase-js
+    // has already created a session for them, but they don't have a password
+    // they can sign back in with. Force them through the set-password screen
+    // before they touch the rest of the app.
+    if (__initialAuthRedirect) {
+      setRibbonForLoggedOut();
+      showScreen('screenSetPassword');
       return;
     }
 
