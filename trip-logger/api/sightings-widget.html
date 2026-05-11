@@ -392,9 +392,19 @@ let activeDateKey = null;  // selected trip date or null
 const markers = [];
 
 // ── Map ──────────────────────────────────────────────────────────────────────
-const map = L.map('sightings-map', { center: [36.803, -121.787], zoom: 10, zoomControl: true, scrollWheelZoom: false, attributionControl: false });
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.7 }).addTo(map);
+// Per-operator: some operators don't want to publish GPS pins. When
+// show_map_on_widget is false, we skip Leaflet entirely and remove the
+// .map-wrap element so the feed slides up.
+const SHOW_MAP = !window.__OP_CONFIG || window.__OP_CONFIG.show_map_on_widget !== false;
+let map = null;
+if (SHOW_MAP) {
+  map = L.map('sightings-map', { center: [36.803, -121.787], zoom: 10, zoomControl: true, scrollWheelZoom: false, attributionControl: false });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.7 }).addTo(map);
+} else {
+  const wrap = document.querySelector('.map-wrap');
+  if (wrap) wrap.remove();
+}
 
 // Custom split circle marker for Orca (black/white)
 function createOrcaIcon(lat, lng) {
@@ -413,6 +423,7 @@ function createOrcaIcon(lat, lng) {
 }
 
 function refreshMarkers() {
+  if (!map) return;
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
 
@@ -463,15 +474,17 @@ function refreshMarkers() {
   }
 }
 
-// Click map background to deselect trip
-map.on('click', () => {
-  if (activeDateKey) {
-    activeDateKey = null;
-    refreshMarkers();
-    document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
-    document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
-  }
-});
+// Click map background to deselect trip (only registered when the map exists)
+if (map) {
+  map.on('click', () => {
+    if (activeDateKey) {
+      activeDateKey = null;
+      refreshMarkers();
+      document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+      document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
+    }
+  });
+}
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchSightings() {
@@ -782,11 +795,13 @@ function renderFeed(data) {
         document.querySelectorAll('.trip-card').forEach(c => { c.classList.remove('selected'); c.classList.remove('hidden'); });
         header.classList.add('active-trip');
         header.closest('.trip-card').classList.add('selected');
-        // Pan map to this trip's center
-        const dm = allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey && s.lat && s.lng);
-        if (dm.length) {
-          const lats = dm.map(s => +s.lat), lngs = dm.map(s => +s.lng);
-          map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
+        // Pan map to this trip's center (only when the map is rendered)
+        if (map) {
+          const dm = allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey && s.lat && s.lng);
+          if (dm.length) {
+            const lats = dm.map(s => +s.lat), lngs = dm.map(s => +s.lng);
+            map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
+          }
         }
       }
       refreshMarkers();
@@ -805,9 +820,11 @@ function renderFeed(data) {
       const header = list.querySelector(`.trip-date-header[data-date="${row.dataset.date}"]`);
       if (header) header.classList.add('active-trip');
       refreshMarkers();
-      // Pan to this specific marker
-      const m = markers.find(x => x._dateKey === row.dataset.date && x._species === row.dataset.species);
-      if (m) { map.panTo(m.getLatLng(), { animate: true }); setTimeout(() => m.openPopup(), 300); }
+      // Pan to this specific marker (no-op when the map is hidden)
+      if (map) {
+        const m = markers.find(x => x._dateKey === row.dataset.date && x._species === row.dataset.species);
+        if (m) { map.panTo(m.getLatLng(), { animate: true }); setTimeout(() => m.openPopup(), 300); }
+      }
     });
   });
 

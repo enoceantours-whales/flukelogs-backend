@@ -55,7 +55,7 @@ Every meaningful piece of operator-specific data is stored on a row in the `oper
 
 ### Roles
 
-- **Operator** (`operator_users.role = 'owner'`): a captain account tied to a single operator. Can use the trip-logger end-to-end and edit the operator-editable subset of their own settings (logo, review URL, species list, "from" email, Mailchimp credentials).
+- **Operator** (`operator_users.role = 'owner'`): a captain account tied to a single operator. Can use the trip-logger end-to-end and edit the operator-editable subset of their own settings (logo, review URL, species list, "from" email, Mailchimp credentials, public-widget map toggle).
 - **Super admin** (`user_profiles.is_super_admin = true`): can list / create / edit / delete any operator from the in-app Admin portal, including super-admin-only fields (Gmail SMTP credentials, NOAA buoy station, FareHarbor keys, name, slug, active flag).
 
 ### Isolation
@@ -75,7 +75,8 @@ trip-logger-backend/
 │       ├── 0001_init_multi_tenant.sql
 │       ├── 0002_operator_branding_extras.sql
 │       ├── 0003_trip_audio.sql
-│       └── 0004_trip_guests.sql
+│       ├── 0004_trip_guests.sql
+│       └── 0005_operator_widget_map_toggle.sql
 ├── trip-logger/
 │   ├── api/
 │   │   ├── admin/
@@ -189,7 +190,7 @@ One row per whale-watch company. Mix of operator-editable and super-admin-only f
 | Column | Type | Editable by | Notes |
 |---|---|---|---|
 | `id`, `slug`, `name`, `active`, `created_at`, `updated_at` | — | super admin | identity |
-| `logo_url`, `logo_url_email`, `review_url`, `species_list` (jsonb), `from_email`, `mailchimp_*` | — | operator | what the captain controls in Settings |
+| `logo_url`, `logo_url_email`, `review_url`, `species_list` (jsonb), `from_email`, `mailchimp_*`, `show_map_on_widget` | — | operator | what the captain controls in Settings |
 | `tagline`, `website_url`, `gmail_user`, `gmail_app_password`, `noaa_buoy_station`, `default_map_center`, `default_map_zoom`, `fh_*`, `tripadvisor_id`, `google_business_id` | — | super admin | infrastructure / external IDs |
 
 ### `user_profiles`
@@ -279,6 +280,7 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
    - `db/migrations/0002_operator_branding_extras.sql`
    - `db/migrations/0003_trip_audio.sql`
    - `db/migrations/0004_trip_guests.sql`
+   - `db/migrations/0005_operator_widget_map_toggle.sql`
 3. Create two Supabase Storage buckets (Dashboard → Storage → New bucket → toggle **Public bucket** ON):
    - `operator-logos`
    - `trip-audio`
