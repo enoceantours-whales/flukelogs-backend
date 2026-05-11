@@ -10,13 +10,19 @@ const { getOperator, pick } = require('../lib/operators');
 // so we can't build a module-level singleton. createTransport returns a fresh
 // pool that's used once and discarded; nodemailer handles the actual reuse
 // internally for the duration of a single sendMail call.
+//
+// Credentials come strictly from the operator row. gmail_user falls back to
+// from_email since for plain Gmail accounts those are always the same; the
+// captain only sees one field in Settings ("From" Email Address) plus their
+// 16-char App Password. The gmail_user column stays in the schema for
+// Workspace-alias setups where they legitimately differ — super-admin sets
+// that via the Admin UI when needed.
 function buildTransporter(operator) {
+  const user = (operator && (operator.gmail_user || operator.from_email)) || null;
+  const pass = (operator && operator.gmail_app_password) || null;
   return nodemailer.createTransport({
     service: 'gmail',
-    auth: {
-      user: pick(operator, 'gmail_user', process.env.GMAIL_USER),
-      pass: pick(operator, 'gmail_app_password', process.env.GMAIL_APP_PASSWORD),
-    },
+    auth: { user, pass },
   });
 }
 
@@ -127,7 +133,7 @@ function brand(operator) {
     reviewUrl:   pick(operator, 'review_url',     'https://www.enoceantours.com/reviews'),
     websiteUrl,
     websiteHost,
-    fromEmail:   pick(operator, 'from_email',     process.env.GMAIL_USER),
+    fromEmail:   operator && operator.from_email,
     audienceId:  operator && operator.mailchimp_audience_id,
   };
 }
@@ -614,10 +620,10 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
 }
 
 // ─── Captain copy (IG-ready image) ────────────────────────────────────────────
-// Sends a separate email back to GMAIL_USER (enoceantours@gmail.com) with the
-// PDF-styled 1080x1920 captain card attached. The captain downloads it from
-// their inbox and decides whether to post to Instagram. Best-effort: any
-// failure here is logged but doesn't fail the trip end response.
+// Sends a separate email back to the operator's from_email with the PDF-styled
+// 1080x1920 captain card attached. The captain downloads it from their inbox
+// and decides whether to post to Instagram. Best-effort: any failure here is
+// logged but doesn't fail the trip end response.
 async function sendCaptainCopy(captainCardData, tripData, b, transporter) {
   if (!captainCardData) return;
   if (!b.fromEmail) {
