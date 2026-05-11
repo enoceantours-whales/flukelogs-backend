@@ -1147,8 +1147,36 @@
     <div class="section">
       <div class="section-label">Operators</div>
       <div id="adminOperatorsList"><div class="empty">Loading…</div></div>
-      <button class="btn btn-primary" type="button" onclick="openAdminEdit(null)" style="margin-top:14px;">+ New Operator</button>
+      <button class="btn btn-primary" type="button" onclick="openAdminOnboard()" style="margin-top:14px;">+ New Operator</button>
       <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
+    </div>
+  </div>
+
+  <!-- Onboarding wizard (super admin only) — create operator + invite captain -->
+  <div class="screen" id="screenAdminOnboard">
+    <div class="section">
+      <div class="section-label">New Operator</div>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 16px;line-height:1.5;">Creates the operator row, invites the captain by email (Supabase sends a magic-link to set their password), and links the two. After this you'll land on the Edit screen to fine-tune their config.</p>
+
+      <div class="field">
+        <label>Operator name</label>
+        <input type="text" id="onboardName" placeholder="Big Blue Tours" autocapitalize="words">
+      </div>
+      <div class="field">
+        <label>Slug <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(used in widget embed URL: <code>?op=&lt;slug&gt;</code>)</span></label>
+        <input type="text" id="onboardSlug" placeholder="big-blue-tours" autocapitalize="none" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>Captain email</label>
+        <input type="email" id="onboardCaptainEmail" placeholder="captain@bigbluetours.com" autocapitalize="none" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>Captain name <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+        <input type="text" id="onboardCaptainName" placeholder="Steve Johnson" autocapitalize="words">
+      </div>
+
+      <button class="btn btn-primary" type="button" id="onboardSubmitBtn" onclick="submitAdminOnboard()">Create operator and invite captain</button>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenAdmin')">Cancel</button>
     </div>
   </div>
 
@@ -2810,6 +2838,72 @@ window.addEventListener('message', function(e) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Suggest a slug from the operator name as the user types. Standard
+  // kebab-case: lowercase, alphanumerics + hyphens, no leading/trailing
+  // hyphen, capped at 40 chars to match the API regex. Stops updating once
+  // the captain has manually edited the slug field.
+  function slugSuggest(name) {
+    return String(name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40);
+  }
+
+  function openAdminOnboard() {
+    showScreen('screenAdminOnboard');
+    const nameEl = document.getElementById('onboardName');
+    const slugEl = document.getElementById('onboardSlug');
+    const emailEl = document.getElementById('onboardCaptainEmail');
+    const captEl = document.getElementById('onboardCaptainName');
+    nameEl.value = ''; slugEl.value = ''; emailEl.value = ''; captEl.value = '';
+    slugEl.dataset.userEdited = '';
+    nameEl.oninput = () => {
+      if (!slugEl.dataset.userEdited) slugEl.value = slugSuggest(nameEl.value);
+    };
+    slugEl.oninput = () => { slugEl.dataset.userEdited = '1'; };
+    setTimeout(() => nameEl.focus(), 50);
+  }
+
+  async function submitAdminOnboard() {
+    const btn = document.getElementById('onboardSubmitBtn');
+    const originalLabel = btn.textContent;
+    const name = document.getElementById('onboardName').value.trim();
+    const slug = document.getElementById('onboardSlug').value.trim().toLowerCase();
+    const email = document.getElementById('onboardCaptainEmail').value.trim().toLowerCase();
+    const captainName = document.getElementById('onboardCaptainName').value.trim();
+
+    if (!name)  return toast('Operator name is required', 'error');
+    if (!slug)  return toast('Slug is required', 'error');
+    if (!email) return toast('Captain email is required', 'error');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Creating…';
+
+    try {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, await adminAuthHeader());
+      const res = await fetch('/api/admin/operators/invite', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          slug, name,
+          captain_email: email,
+          captain_name: captainName || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast(`Invited ${email} — they'll get a magic-link email shortly`, 'success');
+      // Land on the Edit screen for the fresh operator so the super-admin
+      // can fill in branding, FH shortname, etc. without an extra click.
+      openAdminEdit(data.operator_id);
+    } catch (err) {
+      toast('Onboard failed: ' + (err.message || err), 'error');
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }
 
   async function openAdminEdit(id) {
