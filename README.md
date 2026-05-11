@@ -296,18 +296,17 @@ UNIQUE on `(operator_id, fh_uuid)`. Indexed on `(operator_id, trip_date)` for th
 
 ## Environment Variables
 
-Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **most operator-specific values now live on the `operators` row** — these env vars are fall-back defaults only, used when a column is null.
+Set in Vercel → Settings → Environment Variables. **Operator-specific values (Mailchimp credentials) live on the `operators` row** and are no longer accepted from env vars — each operator must paste their own keys into Settings. The vars below are infrastructure shared across operators or fall-backs that are still in flight.
 
 | Variable | Description |
 |---|---|
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SECRET_KEY` | Supabase service-role key (never expose client-side) |
 | `GOOGLE_MAPS_API_KEY` | Google Static Maps API key (shared, server-side only) |
-| `MAILCHIMP_API_KEY` | Fallback Mailchimp API key (operator row preferred) |
-| `MAILCHIMP_AUDIENCE_ID` | Fallback audience id |
-| `MAILCHIMP_SERVER_PREFIX` | e.g. `us1` |
 | `GMAIL_USER` | Fallback sending Gmail address |
 | `GMAIL_APP_PASSWORD` | Fallback Gmail app password (16 chars, no spaces) |
+
+> The `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, and `MAILCHIMP_SERVER_PREFIX` env vars are no longer read by the server. Delete them from Vercel after this change ships.
 
 ---
 
@@ -355,6 +354,7 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
    - In the operator's **FareHarbor Dashboard**: Settings → Users & Permissions → [their user] → Webhooks → **+ Add webhook**. Schema: `Bookings only`. Triggers: `New bookings` + `Updated bookings`. URL: `https://trip-logger-backend.vercel.app/api/fh-webhook`.
    - Trigger one test booking and confirm a row appears in `bookings` for that operator.
 6. Tell the new captain the URL + their credentials. They sign in, open Settings, fill in their logo / Mailchimp / species list. They're live.
+   - **Mailchimp is per-operator and required for guest emails.** The captain must paste their own Mailchimp API key, audience id, and server prefix into Settings — there is no shared env-var fallback. Without these, signups from the trip report silently skip Mailchimp (which is the safer default than routing through someone else's audience).
 
 > **Note on the iframe URL:** Each operator embeds the widget at `https://trip-logger-backend.vercel.app/api/sightings?op=<their-slug>`. The widget filters sightings and audio by `operator_id` resolved server-side from that slug, so embeds stay isolated even when multiple operators are logging. Enocean's existing iframe (no `?op=` param) defaults to the `enocean` slug for backwards compatibility.
 
