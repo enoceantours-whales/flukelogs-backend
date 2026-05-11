@@ -329,6 +329,38 @@
       text-transform: uppercase;
     }
 
+    /* ── Booking slot picker (FareHarbor pre-fill) ────────────── */
+    .booking-slot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color var(--t-fast), background var(--t-fast);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .booking-slot + .booking-slot { margin-top: 8px; }
+    .booking-slot:hover { background: #1f262b; }
+    .booking-slot.on {
+      border-color: var(--text);
+      background: #1f262b;
+    }
+    .booking-slot.readonly { cursor: default; }
+    .booking-slot .slot-time { font: 600 15px/1.1 "Open Sans", sans-serif; color: var(--text); }
+    .booking-slot .slot-sub { font-size: 11px; color: var(--text-dim); margin-top: 3px; letter-spacing: 0.02em; }
+    .booking-slot .slot-count {
+      font: 600 13px/1 "Open Sans", sans-serif;
+      color: var(--text);
+      background: rgba(255,255,255,.06);
+      padding: 6px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
     /* ── Segmented control (visibility, sea conditions) ─────────── */
     .seg {
       display: grid;
@@ -807,6 +839,11 @@
       <div class="section-head">
         <h2>New Trip</h2>
         <span class="pill"><span class="dot"></span>Live Conditions</span>
+      </div>
+
+      <div class="field" id="bookingSlotField" style="display:none;">
+        <label>FareHarbor Bookings &middot; Today</label>
+        <div id="bookingSlotPicker"></div>
       </div>
 
       <div class="field">
@@ -1382,6 +1419,114 @@
     } finally {
       if (force && btn) setTimeout(() => btn.classList.remove('spinning'), 400);
     }
+  }
+
+  // ── FareHarbor bookings pre-fill (silent) ─────────────────────────
+  // Fetches today's bookings for this operator from /api/operator/bookings
+  // and renders a slot picker above the passenger count. One slot →
+  // auto-select. Two or more → tappable radio cards. Selecting a slot
+  // sets the passenger count to the booked total and stages the booker
+  // emails into the guestEmails array (deduped) so they're pre-loaded
+  // when the captain reaches the trip-end review screen. The captain can
+  // still adjust everything manually.
+  //
+  // Failures are silent — the captain shouldn't see noise if FH or the
+  // network is flaky. The form just stays empty and they fill it in.
+  function todayLocalDate() {
+    // YYYY-MM-DD in the device's local timezone. Matches how the webhook
+    // handler derives trip_date from FH's offset-tagged start_at.
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
+  function fmtSlotTime(startAt) {
+    if (!startAt) return '';
+    const d = new Date(startAt);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function fetchTodayBookings(token) {
+    if (!token) return;
+    try {
+      const tripDate = todayLocalDate();
+      const res = await fetch(`/api/operator/bookings?trip_date=${tripDate}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      renderBookingSlots(body.slots || []);
+    } catch (e) {
+      // Silent — captain just fills the form manually
+    }
+  }
+
+  function renderBookingSlots(slots) {
+    const field = document.getElementById('bookingSlotField');
+    const wrap = document.getElementById('bookingSlotPicker');
+    if (!field || !wrap) return;
+    wrap.innerHTML = '';
+
+    if (!slots.length) {
+      field.style.display = 'none';
+      return;
+    }
+    field.style.display = '';
+
+    slots.forEach((slot, i) => {
+      const card = document.createElement('div');
+      card.className = 'booking-slot' + (slots.length === 1 ? ' readonly' : '');
+      const time = fmtSlotTime(slot.start_at);
+      const item = slot.item_name ? ` · ${slot.item_name}` : '';
+      const pax = slot.customer_count;
+      const bookings = slot.booking_count;
+      const sub = `${bookings} booking${bookings === 1 ? '' : 's'}`;
+      card.innerHTML = `
+        <div>
+          <div class="slot-time">${time}${item}</div>
+          <div class="slot-sub">${sub}</div>
+        </div>
+        <div class="slot-count">${pax} ${pax === 1 ? 'guest' : 'guests'}</div>
+      `;
+      if (slots.length > 1) {
+        card.addEventListener('click', () => {
+          wrap.querySelectorAll('.booking-slot').forEach(el => el.classList.remove('on'));
+          card.classList.add('on');
+          applyBookingSlot(slot);
+        });
+      }
+      wrap.appendChild(card);
+    });
+
+    // Auto-apply if there's only one slot. Otherwise the captain picks.
+    if (slots.length === 1) applyBookingSlot(slots[0]);
+  }
+
+  function applyBookingSlot(slot) {
+    // Set passenger count (the stepper's setPax is scoped inside
+    // DOMContentLoaded, so we drive the hidden input + UI directly here)
+    const PAX_MAX = 6;
+    const n = Math.max(0, Math.min(PAX_MAX, slot.customer_count | 0));
+    const paxHidden = document.getElementById('inputPassengers');
+    const paxValEl = document.getElementById('paxVal');
+    const paxLblEl = document.getElementById('paxLabel');
+    if (paxHidden) paxHidden.value = String(n);
+    if (paxValEl) paxValEl.textContent = n;
+    if (paxLblEl) paxLblEl.textContent = n === 1 ? 'of 6 guests' : `of ${PAX_MAX} guests`;
+    const dec = document.getElementById('paxDec');
+    const inc = document.getElementById('paxInc');
+    if (dec) dec.disabled = n <= 0;
+    if (inc) inc.disabled = n >= PAX_MAX;
+
+    // Stage booker emails (deduped). renderEmailTags rebuilds the review-
+    // screen tag wrap from this array, so the tags will be visible when
+    // the captain navigates there.
+    for (const email of (slot.booker_emails || [])) {
+      if (email && !guestEmails.includes(email)) guestEmails.push(email);
+    }
+    renderEmailTags();
   }
 
   // Updates the three Sea Temp / Swell / Wind tiles on the start screen with
@@ -2183,6 +2328,7 @@
     } else {
       showScreen('screenStart');
       fetchBuoyConditions(false);
+      fetchTodayBookings(session.access_token);
     }
   }
 
