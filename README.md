@@ -356,7 +356,7 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
    - Trigger one test booking and confirm a row appears in `bookings` for that operator.
 6. Tell the new captain the URL + their credentials. They sign in, open Settings, fill in their logo / Mailchimp / species list. They're live.
 
-> **Note:** The public sightings widget currently shows sightings from every operator. Per-operator widget filtering is required before a second operator can log live trips without polluting Enocean's widget. Tracked as a known follow-up.
+> **Note on the iframe URL:** Each operator embeds the widget at `https://trip-logger-backend.vercel.app/api/sightings?op=<their-slug>`. The widget filters sightings and audio by `operator_id` resolved server-side from that slug, so embeds stay isolated even when multiple operators are logging. Enocean's existing iframe (no `?op=` param) defaults to the `enocean` slug for backwards compatibility.
 
 ---
 
