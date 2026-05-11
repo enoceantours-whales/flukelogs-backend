@@ -41,7 +41,12 @@ function operatorSettingsView(operator) {
     from_email:               operator.from_email,
     mailchimp_audience_id:    operator.mailchimp_audience_id,
     mailchimp_server_prefix:  operator.mailchimp_server_prefix,
-    has_mailchimp_api_key:    !!operator.mailchimp_api_key,
+    // True if Mailchimp will actually work for this operator — either the
+    // operator row carries a key, or the shared MAILCHIMP_API_KEY env fallback
+    // is set. Otherwise the captain would see "Not set" even though the
+    // integration is functional. (Per README: env vars are fall-back defaults
+    // when an operator-row column is null.)
+    has_mailchimp_api_key:    !!(operator.mailchimp_api_key || process.env.MAILCHIMP_API_KEY),
     show_map_on_widget:       operator.show_map_on_widget !== false,
   };
 }
