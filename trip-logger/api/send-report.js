@@ -24,10 +24,15 @@ function buildTransporter(operator) {
 // In Vercel serverless this is fine because each function invocation runs in
 // its own (or warm-reused) instance; we re-set per request to make sure the
 // right operator's audience is targeted.
+//
+// Credentials come strictly from the operator row. There used to be env-var
+// fallbacks (MAILCHIMP_API_KEY etc.) for single-tenant back-compat, but those
+// would silently route a misconfigured operator's signups through whoever
+// owned the env var — a footgun once we onboard a second operator.
 function configureMailchimp(operator) {
   mailchimp.setConfig({
-    apiKey: pick(operator, 'mailchimp_api_key',       process.env.MAILCHIMP_API_KEY),
-    server: pick(operator, 'mailchimp_server_prefix', process.env.MAILCHIMP_SERVER_PREFIX) || 'us1',
+    apiKey: operator && operator.mailchimp_api_key,
+    server: (operator && operator.mailchimp_server_prefix) || 'us1',
   });
 }
 
@@ -123,7 +128,7 @@ function brand(operator) {
     websiteUrl,
     websiteHost,
     fromEmail:   pick(operator, 'from_email',     process.env.GMAIL_USER),
-    audienceId:  pick(operator, 'mailchimp_audience_id', process.env.MAILCHIMP_AUDIENCE_ID),
+    audienceId:  operator && operator.mailchimp_audience_id,
   };
 }
 
