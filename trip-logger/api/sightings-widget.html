@@ -521,6 +521,13 @@ const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
 const TABLE = 'sightings';
 const FEED_LIMIT = 100;
+
+// Operator scope is resolved server-side from ?op=<slug> and injected here.
+// If id is null, the slug didn't match any operator row — show an empty
+// state instead of falling through to an unscoped query (which would mix
+// every operator's sightings into the embed).
+const OP = (typeof window !== 'undefined' && window.__OP_CONFIG) || {};
+const OPERATOR_ID = OP.id || null;
 const BOOK_URL = 'https://enoceantours.com/tours';
 
 const WHALE_SPECIES = ['Humpback Whale','Blue Whale','Gray Whale','Fin Whale','Minke Whale','Orca','Transient Orcas','Offshore Orcas','Resident Orcas','Sperm Whale'];
@@ -684,7 +691,7 @@ if (map) {
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?select=trip_date,species,count,lat,lng,depth_meters&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_date,species,count,lat,lng,depth_meters&order=trip_date.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
@@ -695,7 +702,7 @@ async function fetchSightings() {
 // can do a synchronous lookup per trip card.
 async function fetchTripAudio() {
   try {
-    const url = `${SUPABASE_URL}/rest/v1/trip_audio?select=trip_date,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
+    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_date,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
     if (!res.ok) return new Map();
     const rows = await res.json();
@@ -1199,6 +1206,17 @@ function sendHeight() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
+  // Guard against unresolved operators (typo in the ?op= slug, or no operators
+  // table row matching). Without this, the queries below would filter on
+  // operator_id=eq.null, which PostgREST evaluates to "match nothing" — still
+  // safer than the old unfiltered query, but the captain deserves a clearer
+  // signal than "No data yet" when their slug is wrong.
+  if (!OPERATOR_ID) {
+    document.getElementById('feed-list').innerHTML = `<div class="state-msg">Operator not found.<br><small style="color:#555">Check the <code>?op=&lt;slug&gt;</code> in the embed URL.</small></div>`;
+    document.getElementById('status-text').textContent = 'No operator';
+    sendHeight();
+    return;
+  }
   try {
     [allData, tripAudioByDate] = await Promise.all([fetchSightings(), fetchTripAudio()]);
     renderNowBanner(allData);

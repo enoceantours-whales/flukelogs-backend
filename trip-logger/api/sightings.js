@@ -19,24 +19,25 @@ const DEFAULT_SLUG = 'enocean';
 async function loadOperatorConfig(slug) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) return { slug, show_map_on_widget: true };
+  if (!url || !key) return { id: null, slug, show_map_on_widget: true };
   try {
     const safeSlug = encodeURIComponent(slug);
     const res = await fetch(
-      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=slug,show_map_on_widget&limit=1`,
+      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=id,slug,show_map_on_widget&limit=1`,
       { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
     );
-    if (!res.ok) return { slug, show_map_on_widget: true };
+    if (!res.ok) return { id: null, slug, show_map_on_widget: true };
     const rows = await res.json();
     const row = rows[0];
-    if (!row) return { slug, show_map_on_widget: true };
+    if (!row) return { id: null, slug, show_map_on_widget: true };
     return {
+      id: row.id,
       slug: row.slug,
       show_map_on_widget: row.show_map_on_widget !== false,
     };
   } catch (e) {
     console.error('sightings widget: operator lookup failed:', e.message);
-    return { slug, show_map_on_widget: true };
+    return { id: null, slug, show_map_on_widget: true };
   }
 }
 
