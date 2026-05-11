@@ -182,6 +182,44 @@
       border-bottom: 1px solid var(--hair);
     }
 
+    /* ── Toggle switch (used for boolean settings) ───────────────── */
+    .toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .toggle-row-text { flex: 1; min-width: 0; }
+    .toggle-row-title { font-size: 14px; color: var(--text); font-weight: 500; }
+    .toggle-row-help { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.45; }
+    .toggle-switch {
+      appearance: none;
+      width: 44px;
+      height: 26px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair-2);
+      border-radius: 999px;
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin: 2px 0 0;
+      transition: background var(--t-fast), border-color var(--t-fast);
+    }
+    .toggle-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: var(--text-dim);
+      border-radius: 50%;
+      transition: transform var(--t-fast), background var(--t-fast);
+    }
+    .toggle-switch:checked {
+      background: rgba(111,177,172,0.28);
+      border-color: rgba(111,177,172,0.55);
+    }
+    .toggle-switch:checked::after {
+      background: var(--teal);
+      transform: translateX(18px);
+    }
+
     /* ── Collapsible section (uses native <details>) ─────────────── */
     details.section { padding: 0; }
     details.section > summary {
@@ -887,6 +925,17 @@
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Each row is a group shown as an optgroup in the dropdown. Species within a group are comma-separated.</p>
       <div id="settingsSpeciesGroups"></div>
       <button class="btn btn-outline" type="button" onclick="addSpeciesGroup()" style="margin-top:8px;">+ Add group</button>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Public Widget</div>
+      <label class="toggle-row" for="settingsShowMapOnWidget">
+        <div class="toggle-row-text">
+          <div class="toggle-row-title">Show map of sightings</div>
+          <div class="toggle-row-help">When off, the public widget hides the Leaflet map and only shows the trip-by-trip species log. Useful if you don't want to share the GPS locations of where whales were found.</div>
+        </div>
+        <input type="checkbox" id="settingsShowMapOnWidget" class="toggle-switch">
+      </label>
     </div>
 
     <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettings()">Save Settings</button>
@@ -2199,6 +2248,7 @@
     renderSpeciesGroupEditor(cfg.species_list || []);
     showLogoPreview('settingsLogoUrlPreview',      cfg.logo_url);
     showLogoPreview('settingsLogoUrlEmailPreview', cfg.logo_url_email);
+    document.getElementById('settingsShowMapOnWidget').checked = cfg.show_map_on_widget !== false;
   }
 
   function showLogoPreview(imgId, url) {
@@ -2310,6 +2360,7 @@
       mailchimp_audience_id:   document.getElementById('settingsMailchimpAudience').value.trim() || null,
       mailchimp_server_prefix: document.getElementById('settingsMailchimpServer').value.trim() || null,
       species_list:            serializeSpeciesGroups(),
+      show_map_on_widget:      document.getElementById('settingsShowMapOnWidget').checked,
     };
 
     try {

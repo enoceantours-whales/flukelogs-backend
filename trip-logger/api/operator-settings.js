@@ -25,6 +25,7 @@ const OPERATOR_EDITABLE = [
   'mailchimp_api_key',
   'mailchimp_audience_id',
   'mailchimp_server_prefix',
+  'show_map_on_widget',
 ];
 
 function operatorSettingsView(operator) {
@@ -41,6 +42,7 @@ function operatorSettingsView(operator) {
     mailchimp_audience_id:    operator.mailchimp_audience_id,
     mailchimp_server_prefix:  operator.mailchimp_server_prefix,
     has_mailchimp_api_key:    !!operator.mailchimp_api_key,
+    show_map_on_widget:       operator.show_map_on_widget !== false,
   };
 }
 
