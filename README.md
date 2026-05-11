@@ -8,21 +8,23 @@ Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoce
 
 ## What It Does
 
-1. Captain starts a trip, enters passenger count and conditions (water temp + sea state auto-fill from a NOAA buoy)
-2. GPS tracks position and calculates nautical miles traveled
-3. Captain logs each wildlife sighting (species, count, time, GPS coordinates, notes)
-4. At trip end, captain uploads a group photo and enters guest emails
-5. App generates and emails each guest:
+1. Guest books a trip on FareHarbor → FH fires a webhook to the app → the booking is saved to Supabase tagged with the operator
+2. Captain opens the app on trip morning — the day's bookings appear as a slot picker on the start screen (one slot auto-applies, multiple slots become tappable cards), passenger count pre-fills, booker emails are staged
+3. Captain starts the trip, conditions (water temp + sea state) auto-fill from a NOAA buoy
+4. GPS tracks position and calculates nautical miles traveled
+5. Captain logs each wildlife sighting (species, count, time, GPS coordinates, notes)
+6. At trip end, captain uploads a group photo and confirms the staged guest emails (adding any additional passengers as needed)
+7. App generates and emails each guest:
    - A one-page branded **PDF trip report** (photo, map, sightings log, depth at each pin)
    - A **1080×1920 Story card JPG** ready to post on Instagram
-6. Ocean depth at each sighting is looked up from NOAA's bathymetric DEM and saved with the row
-7. Trip sightings are saved to Supabase, tagged with the operator
-8. Guests are added to the operator's Mailchimp audience
-9. Email opens with a **personalized greeting** based on the guest's history — first-timer gets a "welcome aboard your first trip" line; returning guests see *"Welcome back — your 3rd trip with us. You've now spotted 8 species across all your trips."*
-10. Email includes a direct link to leave a review
-11. Captain receives a separate **captain-copy IG card** in their own inbox to post manually
-12. **After the trip** (privately, when there are no guests around) the captain can record a short audio recap for any trip date — it shows up as a player on the public sightings widget
-13. Public sightings widget on the operator's website updates automatically after every trip
+8. Ocean depth at each sighting is looked up from NOAA's bathymetric DEM and saved with the row
+9. Trip sightings are saved to Supabase, tagged with the operator
+10. Guests are added to the operator's Mailchimp audience
+11. Email opens with a **personalized greeting** based on the guest's history — first-timer gets a "welcome aboard your first trip" line; returning guests see *"Welcome back — your 3rd trip with us. You've now spotted 8 species across all your trips."*
+12. Email includes a direct link to leave a review
+13. Captain receives a separate **captain-copy IG card** in their own inbox to post manually
+14. **After the trip** (privately, when there are no guests around) the captain can record a short audio recap for any trip date — it shows up as a player on the public sightings widget
+15. Public sightings widget on the operator's website updates automatically after every trip
 
 ---
 
@@ -44,7 +46,8 @@ Built and operated by Slater Moore, Captain — [enoceantours.com](https://enoce
 | Sea Conditions | NOAA NDBC realtime2 buoy feed |
 | Email | Gmail SMTP via Nodemailer |
 | CRM | Mailchimp Marketing API |
-| Hosting | Vercel (Free tier) |
+| Bookings | FareHarbor outgoing webhooks (Bookings-only schema) |
+| Hosting | Vercel (Pro plan) |
 | Repo | GitHub — enoceantours-whales/trip-logger-backend |
 
 ---
@@ -60,7 +63,7 @@ Every meaningful piece of operator-specific data is stored on a row in the `oper
 
 ### Isolation
 
-- Sightings carry `operator_id`. The trip-end flow refuses to write a row without a verified operator id from the JWT.
+- Sightings and bookings both carry `operator_id`. The trip-end flow refuses to write a sighting row without a verified operator id from the JWT; the FareHarbor webhook resolves the operator from `booking.company.shortname` against `operators.fh_company_shortname` and silently drops the payload if no operator matches.
 - Operator credentials live behind RLS — only the service-role server endpoints read them, and only after `authenticate()` resolves the operator from the bearer token.
 - The `/api/me` and `/api/operator-settings` responses scrub secrets before they ever reach the browser (Mailchimp keys, Gmail passwords, FareHarbor keys come back as `has_X: true|false`).
 
@@ -76,15 +79,18 @@ trip-logger-backend/
 │       ├── 0002_operator_branding_extras.sql
 │       ├── 0003_trip_audio.sql
 │       ├── 0004_trip_guests.sql
-│       └── 0005_operator_widget_map_toggle.sql
+│       ├── 0005_operator_widget_map_toggle.sql
+│       └── 0006_bookings.sql
 ├── trip-logger/
 │   ├── api/
 │   │   ├── admin/
 │   │   │   ├── operators.js              # super admin: list / create
 │   │   │   └── operators/[id].js         # super admin: get / update / delete
 │   │   ├── operator/
+│   │   │   ├── bookings.js               # GET — FareHarbor bookings for a trip_date, grouped by slot
 │   │   │   └── trips.js                  # GET — operator's recent trip dates
 │   │   ├── buoy-conditions.js            # NOAA NDBC realtime2 proxy
+│   │   ├── fh-webhook.js                 # FareHarbor outgoing webhook receiver — upserts bookings
 │   │   ├── me.js                         # GET — current user + operator config
 │   │   ├── operator-logo-upload.js       # POST — upload PNG to Supabase Storage
 │   │   ├── operator-settings.js          # GET / PATCH — operator-editable settings
@@ -125,6 +131,15 @@ trip-logger-backend/
 - Live nautical miles counter (Haversine formula)
 - Trip duration timer
 - Water temp + sea state pre-filled from the operator's NOAA buoy on the start screen
+
+### FareHarbor Booking Pre-Fill
+- FareHarbor fires an outgoing webhook at `/api/fh-webhook` on every booking event (new + updated). The handler resolves the operator from `booking.company.shortname`, derives `trip_date` from the booking's local-offset start time, and upserts into `bookings` keyed on `(operator_id, fh_uuid)` so the same booking edited later updates in place.
+- On the trip-start screen, the PWA fetches `/api/operator/bookings?trip_date=<today>` and renders a smart slot picker above the passenger stepper:
+  - **0 slots** — picker hidden; form behaves exactly as before
+  - **1 slot** — auto-applied as a read-only card (e.g. `9:00 AM · 3hr Whale Watch · 4 guests`)
+  - **2+ slots** — tappable cards; captain picks which trip they're about to run (handles multi-trip days)
+- Selecting a slot sets the passenger count and stages the booker emails (deduped) into the existing `guestEmails` array, so they appear pre-loaded on the trip-end review screen. Captain can still adjust everything manually.
+- Cancelled bookings are filtered out of the read endpoint; the row is kept in `bookings` for audit. The raw FH payload is stored as `jsonb` on every row so new columns can be backfilled later without re-requesting from FH.
 
 ### PDF Report (single page)
 - Black header with logo
@@ -253,6 +268,30 @@ UNIQUE on `(operator_id, email, trip_date)` — re-sending the same trip is idem
 
 Backed by a `guest_stats(op_id, email_in)` PL/SQL function that returns `{trips, species}` — counts the guest's distinct trip dates and total distinct species across all those trips. Called from `send-report.js` to choose between first-timer and returning-guest copy.
 
+### `bookings`
+One row per FareHarbor booking. Captured from FH's outgoing webhook into `/api/fh-webhook`. The webhook fires on new + updated booking events, so the handler upserts on `(operator_id, fh_uuid)` — the same booking edited later updates in place. The captain's trip-start screen reads this table by `trip_date` to pre-fill passenger count and booker emails for the day's trip(s). Server-only access (RLS on, no anon policies).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | uuid | Auto-generated |
+| `operator_id` | uuid (FK) | Owning operator |
+| `fh_uuid` | uuid | FareHarbor's booking UUID — the dedupe key |
+| `fh_pk` | bigint | FareHarbor's internal booking pk |
+| `fh_display_id` | text | Human-readable id, e.g. `"#348358650"` |
+| `status` | text | `booked` / `cancelled` / … (cancelled rows are filtered out of the read endpoint but kept for audit) |
+| `trip_date` | date | Date in operator local TZ, derived from `availability.start_at`'s offset prefix |
+| `start_at`, `end_at` | timestamptz | Exact slot times |
+| `availability_pk` | bigint | Groups same-slot bookings (e.g. 9am vs 1pm on the same date) |
+| `item_pk`, `item_name` | bigint / text | The product, e.g. `"3hr Whale Watch"` |
+| `contact_name`, `contact_email`, `contact_phone` | text | The booker (one per booking, **not** per passenger). `contact_email` is stored lowercased |
+| `customer_count` | int | Party size — what the trip-start screen uses to set the passenger stepper |
+| `receipt_total_cents`, `amount_paid_cents` | int | FH sends amounts in cents |
+| `heard_about_us` | text | Resolved `display_value` for the "How did you hear about us?" custom field |
+| `raw` | jsonb | Full FH payload — preserves data for future backfills without re-requesting from FH |
+| `created_at`, `updated_at` | timestamptz | Auto-generated |
+
+UNIQUE on `(operator_id, fh_uuid)`. Indexed on `(operator_id, trip_date)` for the captain's pre-fill query and on `(operator_id, availability_pk)` for slot grouping.
+
 ---
 
 ## Environment Variables
@@ -281,6 +320,7 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
    - `db/migrations/0003_trip_audio.sql`
    - `db/migrations/0004_trip_guests.sql`
    - `db/migrations/0005_operator_widget_map_toggle.sql`
+   - `db/migrations/0006_bookings.sql`
 3. Create two Supabase Storage buckets (Dashboard → Storage → New bucket → toggle **Public bucket** ON):
    - `operator-logos`
    - `trip-audio`
@@ -305,7 +345,16 @@ Set in Vercel → Settings → Environment Variables. With Step 4+ shipped, **mo
      'owner'
    );
    ```
-5. Tell the new captain the URL + their credentials. They sign in, open Settings, fill in their logo / Mailchimp / species list. They're live.
+5. **Wire FareHarbor bookings** (optional, but required for the trip-start pre-fill to do anything):
+   - In **Supabase SQL Editor**, set the FH shortname on the operator row so the webhook handler can resolve incoming events:
+     ```sql
+     UPDATE operators SET fh_company_shortname = 'their-fh-shortname'
+       WHERE slug = 'big-blue-tours';
+     ```
+     The shortname is whatever appears in the FH dashboard URL (e.g. `fareharbor.com/slatermoore/` → `slatermoore`).
+   - In the operator's **FareHarbor Dashboard**: Settings → Users & Permissions → [their user] → Webhooks → **+ Add webhook**. Schema: `Bookings only`. Triggers: `New bookings` + `Updated bookings`. URL: `https://trip-logger-backend.vercel.app/api/fh-webhook`.
+   - Trigger one test booking and confirm a row appears in `bookings` for that operator.
+6. Tell the new captain the URL + their credentials. They sign in, open Settings, fill in their logo / Mailchimp / species list. They're live.
 
 > **Note:** The public sightings widget currently shows sightings from every operator. Per-operator widget filtering is required before a second operator can log live trips without polluting Enocean's widget. Tracked as a known follow-up.
 
