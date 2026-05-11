@@ -46,11 +46,15 @@ async function pgRest(method, path, body) {
 
 // Supabase GoTrue admin API. The invite endpoint creates an auth user AND
 // sends them a magic-link email in one shot. Requires the service-role key.
+// We pass redirect_to so the email link points at the production app even if
+// the project's Site URL drifts back to the localhost default.
 async function inviteAuthUser(email, captainName) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
+  const appUrl = process.env.PUBLIC_APP_URL;
   const body = { email };
   if (captainName) body.data = { full_name: captainName };
+  if (appUrl) body.redirect_to = appUrl.replace(/\/$/, '') + '/';
   const res = await fetch(`${url}/auth/v1/invite`, {
     method: 'POST',
     headers: {
