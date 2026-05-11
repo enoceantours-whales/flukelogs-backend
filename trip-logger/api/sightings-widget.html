@@ -63,25 +63,6 @@
     color: var(--text-faint);
     font-weight: 500;
   }
-  .ed-numeral-row { margin-top: 8px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  .ed-numeral {
-    font-family: 'Fraunces', Georgia, serif;
-    font-size: 42px;
-    font-weight: 300;
-    letter-spacing: -0.02em;
-    line-height: 1;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-  .ed-numeral-sub {
-    font-family: 'Fraunces', Georgia, serif;
-    font-style: italic;
-    font-size: 15px;
-    font-weight: 400;
-    color: var(--text-dim);
-    line-height: 1.2;
-  }
-  .ed-numeral-sub strong { color: var(--text); font-weight: 400; }
   .ed-hdr-right { text-align: right; min-width: 0; }
   .ed-updated-label {
     font-size: 10px;
@@ -305,8 +286,6 @@
     }
     .legend-col { display: none; }
     .filter-mobile { display: block; }
-    .ed-numeral { font-size: 32px; }
-    .ed-numeral-sub { font-size: 13px; }
     .ed-updated-label { display: none; }
   }
 
@@ -487,10 +466,6 @@
   <header class="ed-header">
     <div class="ed-hdr-left">
       <div class="ed-kicker" id="ed-kicker">Monterey Bay &middot; Sightings log</div>
-      <div class="ed-numeral-row">
-        <span class="ed-numeral" id="ed-numeral">&mdash;</span>
-        <span class="ed-numeral-sub" id="ed-numeral-sub"></span>
-      </div>
     </div>
     <div class="ed-hdr-right">
       <div class="ed-updated-label">Updated</div>
@@ -920,20 +895,6 @@ function renderNowBanner(data) {
   document.getElementById('now-banner').style.display = 'flex';
 }
 
-// ── Editorial header — Fraunces numeral + italic subhead + dotted date ──────
-// Sets the big number (total animal sightings), the "across N species"
-// italic subhead, and the top-right monospace date. The date format is
-// "06 · MAY · 2026" on desktop (or just dotted on mobile via CSS).
-function renderEditorialHeader(data) {
-  const total = data.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
-  const speciesCount = new Set(data.map(s => s.species)).size;
-  document.getElementById('ed-numeral').textContent = total;
-  document.getElementById('ed-numeral-sub').innerHTML =
-    speciesCount === 0
-      ? 'no sightings yet'
-      : `sightings across <strong>${speciesCount}</strong> species`;
-}
-
 // Format a YYYY-MM-DD trip_date as "06 · MAY · 2026".
 function fmtDottedDate(dateStr) {
   if (!dateStr) return '—';
@@ -1245,7 +1206,6 @@ function sendHeight() {
   try {
     [allData, tripAudioByDate] = await Promise.all([fetchSightings(), fetchTripAudio()]);
     renderNowBanner(allData);
-    renderEditorialHeader(allData);
     renderLegend(allData);
     renderSegmentedRail(allData);
     refreshMarkers();
