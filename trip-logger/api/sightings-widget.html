@@ -6,7 +6,7 @@
 <title>Recent Sightings – Enocean Tours</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=JetBrains+Mono:wght@400;500&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -47,9 +47,56 @@
   }
   .widget-wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 40px; }
 
-  .widget-header { margin-bottom: 18px; }
-  .widget-header h2 { font: 400 22px/1.2 "Open Sans", sans-serif; letter-spacing: 0.005em; color: var(--text); }
-  .widget-header p { font-size: 11px; color: var(--text-faint); margin-top: 4px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
+  /* ── Editorial header (Fraunces numeral + monospace updated date) ── */
+  .ed-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .ed-kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .ed-numeral-row { margin-top: 8px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .ed-numeral {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 42px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .ed-numeral-sub {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text-dim);
+    line-height: 1.2;
+  }
+  .ed-numeral-sub strong { color: var(--text); font-weight: 400; }
+  .ed-hdr-right { text-align: right; min-width: 0; }
+  .ed-updated-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .ed-updated-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 3px;
+    letter-spacing: 0;
+  }
 
   /* ── What's out there now banner ── */
   .now-banner {
@@ -87,44 +134,174 @@
   }
   .now-cta:hover { transform: translateY(-1px); }
 
-  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-  .status-text { font-size: 11px; color: var(--text-faint); letter-spacing: 0.04em; }
-
-  .totals-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
-  .total-chip {
-    background: var(--ink-3);
-    border: 1px solid var(--hair);
-    border-radius: 12px;
-    padding: 12px 22px;
-    display: flex; flex-direction: column; align-items: center;
-    min-width: 110px; gap: 4px;
+  /* ── Filter + Map grid (D on desktop, C on mobile) ─────────────── */
+  .fm-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 22px;
+    align-items: start;
+    margin-bottom: 24px;
   }
-  .total-chip .chip-num { font: 500 26px/1 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0; }
-  .total-chip .chip-label { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.26em; font-weight: 600; }
+  .fm-grid .map-wrap { margin-bottom: 0; }
+  /* When the operator has show_map_on_widget = false, the .map-wrap is
+     removed from the DOM. Collapse the grid to a single column so the
+     legend doesn't sit next to an empty slot. */
+  .fm-grid.no-map { grid-template-columns: 1fr; }
+  .fm-grid.no-map .legend-col { max-width: 480px; }
 
-  /* ── Species filter pills ── */
-  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-  .filter-pill {
-    background: var(--ink-3);
-    border: 1px solid var(--hair);
-    border-radius: 999px;
-    padding: 7px 14px;
-    font: 600 11px/1 "Open Sans", sans-serif;
-    letter-spacing: 0.06em;
+  /* ── Legend column (desktop / D) ────────────────────────────────── */
+  .legend-head {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+    padding-bottom: 6px;
+  }
+  .legend-list { border-top: 1px solid var(--hair); }
+  .legend-row {
+    position: relative;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--hair);
     color: var(--text-dim);
+    padding: 10px 12px 10px 14px;
+    font-family: "Open Sans", sans-serif;
+    font-size: 12.5px;
     cursor: pointer;
-    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .legend-row:hover { background: rgba(255,255,255,.025); }
+  .legend-row.is-active { color: var(--text); font-weight: 500; letter-spacing: 0; }
+  .legend-row.is-dimmed { color: var(--text-faint); }
+  .legend-row::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: transparent;
+    transition: background .15s;
+  }
+  .legend-row.is-active::before { background: var(--text); }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.4);
+    flex-shrink: 0;
+    display: inline-block;
+    box-sizing: border-box;
+  }
+  .legend-dot.is-split { background: linear-gradient(90deg, #ffffff 50%, #000000 50%); }
+  .legend-dot.is-all { background: transparent; border: 1px dashed var(--text-faint); }
+  .legend-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .legend-row.is-active .legend-count { color: var(--text-dim); }
+  .legend-status {
+    margin-top: 12px;
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--text-faint);
+    line-height: 1.45;
+  }
+
+  /* ── Mobile filter (segmented + rail / C) — hidden on desktop ─── */
+  .filter-mobile { display: none; }
+  .seg-group {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    border: 1px solid var(--hair);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .seg-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 10px 4px;
+    font-family: "Open Sans", sans-serif;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: background .15s, color .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .seg-btn + .seg-btn { border-left: 1px solid var(--hair); }
+  .seg-btn.is-active { background: var(--ink-4); color: var(--text); }
+  .seg-btn-count {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+  .seg-btn.is-active .seg-btn-count { color: var(--text-dim); }
+
+  .rail-wrap { position: relative; margin-top: 10px; }
+  .species-rail {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+  }
+  .species-rail::-webkit-scrollbar { display: none; }
+  .rail-fade {
+    position: absolute;
+    right: 0; top: 0; bottom: 4px;
+    width: 28px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--ink));
+  }
+  .rail-pill {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--hair);
+    color: var(--text-dim);
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-family: "Open Sans", sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    display: inline-flex; align-items: center; gap: 6px;
     white-space: nowrap;
-    display: flex; align-items: center; gap: 6px;
+    scroll-snap-align: start;
+    -webkit-tap-highlight-color: transparent;
   }
-  .filter-pill:hover { border-color: var(--hair-2); color: var(--text); }
-  .filter-pill.active {
-    background: rgba(255,255,255,.92);
-    border-color: rgba(255,255,255,.92);
-    color: #0a0c0e;
-    box-shadow: 0 6px 14px rgba(0,0,0,.3);
+  .rail-pill.is-active { background: var(--ink-4); border-color: var(--hair-2); color: var(--text); }
+  .rail-pill .legend-dot { width: 6px; height: 6px; }
+  .rail-pill-count {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    color: var(--text-faint);
   }
-  .filter-pill .pill-icon { font-size: 13px; }
+
+  /* ── Responsive: < 720px → swap to mobile pattern ─────────────── */
+  @media (max-width: 720px) {
+    .fm-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .legend-col { display: none; }
+    .filter-mobile { display: block; }
+    .ed-numeral { font-size: 32px; }
+    .ed-numeral-sub { font-size: 13px; }
+    .ed-updated-label { display: none; }
+  }
 
   .map-wrap {
     border: 1px solid var(--hair);
@@ -299,10 +476,20 @@
 <body>
 <div class="widget-wrap">
 
-  <div class="widget-header">
-    <h2>Recent Sightings</h2>
-    <p>Monterey Bay &middot; Moss Landing</p>
-  </div>
+  <!-- Editorial header — kicker + Fraunces numeral / monospace updated date -->
+  <header class="ed-header">
+    <div class="ed-hdr-left">
+      <div class="ed-kicker" id="ed-kicker">Monterey Bay &middot; Sightings log</div>
+      <div class="ed-numeral-row">
+        <span class="ed-numeral" id="ed-numeral">&mdash;</span>
+        <span class="ed-numeral-sub" id="ed-numeral-sub"></span>
+      </div>
+    </div>
+    <div class="ed-hdr-right">
+      <div class="ed-updated-label">Updated</div>
+      <div class="ed-updated-mono" id="status-text">&mdash;</div>
+    </div>
+  </header>
 
   <!-- What's out there now -->
   <div class="now-banner" id="now-banner" style="display:none;">
@@ -315,18 +502,26 @@
     <a class="now-cta" href="https://enoceantours.com/tours" target="_blank">Book Now</a>
   </div>
 
-  <div class="status-row">
-    <div class="status-text" id="status-text">Loading latest data&hellip;</div>
-  </div>
+  <!-- Filter + Map: D · legend column on desktop, C · segmented + rail on mobile -->
+  <div class="fm-grid">
+    <aside class="legend-col" id="legend-col">
+      <div class="legend-head">Species &mdash; count</div>
+      <div class="legend-list" id="legend-list"></div>
+      <div class="legend-status" id="legend-status"></div>
+    </aside>
 
-  <div class="totals-bar" id="totals-bar"></div>
+    <div class="filter-mobile" id="filter-mobile">
+      <div class="seg-group" id="seg-group"></div>
+      <div class="rail-wrap">
+        <div class="species-rail" id="species-rail"></div>
+        <div class="rail-fade"></div>
+      </div>
+    </div>
 
-  <!-- Species filter -->
-  <div class="filter-bar" id="filter-bar"></div>
-
-  <div class="map-wrap">
-    <div id="sightings-map"></div>
-    <div class="map-hint" id="map-hint">Click a trip to see its pins</div>
+    <div class="map-wrap">
+      <div id="sightings-map"></div>
+      <div class="map-hint" id="map-hint">Click a trip to see its pins</div>
+    </div>
   </div>
 
   <div class="feed-header">
@@ -351,7 +546,23 @@ const FEED_LIMIT = 100;
 const BOOK_URL = 'https://enoceantours.com/tours';
 
 const WHALE_SPECIES = ['Humpback Whale','Blue Whale','Gray Whale','Fin Whale','Minke Whale','Orca','Transient Orcas','Offshore Orcas','Resident Orcas','Sperm Whale'];
-const DOLPHIN_SPECIES = ['Common Dolphin','Pacific White-sided Dolphin',"Risso's Dolphin",'Bottlenose Dolphin','Coastal Bottlenose Dolphin','Northern Right Whale Dolphin'];
+const DOLPHIN_SPECIES = ['Common Dolphin','Pacific White-sided Dolphin',"Risso's Dolphin",'Bottlenose Dolphin','Coastal Bottlenose Dolphin','Northern Right Whale Dolphin',"Dall's Porpoise",'Harbor Porpoise'];
+const BIRD_SPECIES = ['Black-footed Albatross'];
+
+// Buckets a species into one of the four segmented-control groups. Anything
+// not whale/dolphin/bird (sharks, otters, seals, mola mola, etc.) falls into
+// "other" — the segmented control hides the group when its count is zero.
+function speciesKind(name) {
+  if (WHALE_SPECIES.includes(name)) return 'whale';
+  if (DOLPHIN_SPECIES.includes(name)) return 'dolphin';
+  if (BIRD_SPECIES.includes(name)) return 'bird';
+  return 'other';
+}
+
+// Active segmented-group filter for the mobile rail. Independent of
+// activeFilter (species pin) so the user can browse one group at a time
+// without committing to a specific species.
+let activeKind = 'all';
 
 // Pin colors — your spec + my picks for the rest
 const SPECIES_META = {
@@ -404,6 +615,9 @@ if (SHOW_MAP) {
 } else {
   const wrap = document.querySelector('.map-wrap');
   if (wrap) wrap.remove();
+  // Collapse the legend+map grid to a single column so the legend doesn't
+  // sit next to an empty slot where the map used to be.
+  document.querySelector('.fm-grid')?.classList.add('no-map');
 }
 
 // Custom split circle marker for Orca (black/white)
@@ -427,26 +641,30 @@ function refreshMarkers() {
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
 
+  // Trip-date selection still hard-filters, but species filtering now dims
+  // non-matching pins instead of hiding them — keeps geographic context
+  // intact while highlighting the species the user picked (per design D).
   const dataToShow = activeDateKey
     ? allData.filter(s => (s.trip_date || '').slice(0, 10) === activeDateKey)
-    : activeFilter
-      ? allData.filter(s => s.species === activeFilter)
-      : allData;
+    : allData;
 
   dataToShow.forEach(s => {
     if (!s.lat || !s.lng) return;
     const meta = sm(s.species);
+    const isActiveSpecies = !activeFilter || s.species === activeFilter;
+    const dimOpacity = 0.18;
     let m;
 
     if (meta.isSplit) {
-      m = L.marker([+s.lat, +s.lng], { icon: createOrcaIcon() });
+      m = L.marker([+s.lat, +s.lng], { icon: createOrcaIcon(), opacity: isActiveSpecies ? 1 : dimOpacity });
     } else {
       m = L.circleMarker([+s.lat, +s.lng], {
-        radius: 7,
+        radius: isActiveSpecies && activeFilter ? 8.5 : 7,
         fillColor: meta.color,
         color: meta.borderColor || '#000',
-        weight: 1.5,
-        fillOpacity: 0.95,
+        weight: isActiveSpecies && activeFilter ? 2 : 1.5,
+        fillOpacity: isActiveSpecies ? 0.95 : dimOpacity,
+        opacity: isActiveSpecies ? 1 : dimOpacity,
       });
     }
 
@@ -468,7 +686,7 @@ function refreshMarkers() {
   if (activeDateKey) {
     hint.textContent = `Showing ${fmtDateShort(activeDateKey)} — click map to deselect`;
   } else if (activeFilter) {
-    hint.textContent = `Filtered: ${activeFilter}`;
+    hint.textContent = `Highlighting: ${activeFilter}`;
   } else {
     hint.textContent = 'Click a trip to see its pins';
   }
@@ -695,42 +913,219 @@ function renderNowBanner(data) {
   document.getElementById('now-banner').style.display = 'flex';
 }
 
-// ── Totals ────────────────────────────────────────────────────────────────────
-function renderTotals(data) {
-  let whales = 0, dolphins = 0;
-  data.forEach(s => {
-    const c = parseInt(s.count) || 1;
-    if (WHALE_SPECIES.includes(s.species)) whales += c;
-    else if (DOLPHIN_SPECIES.includes(s.species)) dolphins += c;
-  });
-  const chips = [];
-  if (whales > 0) chips.push(`<div class="total-chip"><div class="chip-num">🐳 ${whales}</div><div class="chip-label">Whales</div></div>`);
-  if (dolphins > 0) chips.push(`<div class="total-chip"><div class="chip-num">🐬 ${dolphins}</div><div class="chip-label">Dolphins</div></div>`);
-  document.getElementById('totals-bar').innerHTML = chips.join('');
+// ── Editorial header — Fraunces numeral + italic subhead + dotted date ──────
+// Sets the big number (total animal sightings), the "across N species"
+// italic subhead, and the top-right monospace date. The date format is
+// "06 · MAY · 2026" on desktop (or just dotted on mobile via CSS).
+function renderEditorialHeader(data) {
+  const total = data.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
+  const speciesCount = new Set(data.map(s => s.species)).size;
+  document.getElementById('ed-numeral').textContent = total;
+  document.getElementById('ed-numeral-sub').innerHTML =
+    speciesCount === 0
+      ? 'no sightings yet'
+      : `sightings across <strong>${speciesCount}</strong> species`;
 }
 
-// ── Filter pills ──────────────────────────────────────────────────────────────
-function renderFilters(data) {
-  const speciesSeen = [...new Set(data.map(s => s.species))].sort();
-  const bar = document.getElementById('filter-bar');
-  bar.innerHTML = `<div class="filter-pill active" data-species="all"><span class="pill-icon">🌊</span> All</div>` +
-    speciesSeen.map(name => {
-      const meta = sm(name);
-      return `<div class="filter-pill" data-species="${name}"><span class="pill-icon">${meta.icon}</span> ${name}</div>`;
-    }).join('');
+// Format a YYYY-MM-DD trip_date as "06 · MAY · 2026".
+function fmtDottedDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return '—';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  return `${day} · ${month} · ${d.getFullYear()}`;
+}
 
-  bar.querySelectorAll('.filter-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      bar.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      const val = pill.dataset.species;
-      activeFilter = val === 'all' ? null : val;
-      activeDateKey = null;
-      document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
-      refreshMarkers();
-      applyFeedFilter();
+// ── Group + species aggregation ───────────────────────────────────────────────
+function aggregateBySpecies(data) {
+  const map = new Map();
+  data.forEach(s => {
+    if (!s.species) return;
+    const c = parseInt(s.count) || 1;
+    const prev = map.get(s.species) || 0;
+    map.set(s.species, prev + c);
+  });
+  return [...map.entries()]
+    .map(([name, count]) => ({ name, count, kind: speciesKind(name), meta: sm(name) }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function totalsByKind(species) {
+  const t = { whale: 0, dolphin: 0, bird: 0, other: 0 };
+  species.forEach(s => { t[s.kind] += s.count; });
+  return t;
+}
+
+// Renders a small colored dot. Split species (orcas) get a half-and-half
+// dot so the legend reads as a true map legend.
+function legendDotHTML(spec, extraClass = '') {
+  if (!spec) return `<span class="legend-dot is-all ${extraClass}"></span>`;
+  if (spec.meta && spec.meta.isSplit) return `<span class="legend-dot is-split ${extraClass}"></span>`;
+  return `<span class="legend-dot ${extraClass}" style="background:${spec.meta.color};"></span>`;
+}
+
+// ── Desktop · D — legend column ──────────────────────────────────────────────
+function renderLegend(data) {
+  const list = document.getElementById('legend-list');
+  if (!list) return;
+  const species = aggregateBySpecies(data);
+  const total = species.reduce((s, x) => s + x.count, 0);
+
+  const rows = [];
+  rows.push(`
+    <button class="legend-row" type="button" data-species="all">
+      <span class="legend-dot is-all"></span>
+      <span class="legend-name">All species</span>
+      <span class="legend-count">${total}</span>
+    </button>`);
+  species.forEach(spec => {
+    rows.push(`
+      <button class="legend-row" type="button" data-species="${spec.name.replace(/"/g, '&quot;')}">
+        ${legendDotHTML(spec)}
+        <span class="legend-name" title="${spec.name.replace(/"/g, '&quot;')}">${spec.name}</span>
+        <span class="legend-count">${spec.count}</span>
+      </button>`);
+  });
+  list.innerHTML = rows.join('');
+
+  list.querySelectorAll('.legend-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const val = btn.dataset.species;
+      const next = val === 'all' ? null : (activeFilter === val ? null : val);
+      setActiveFilter(next);
     });
   });
+
+  syncFilterUI();
+}
+
+// ── Mobile · C — segmented group + horizontal species rail ──────────────────
+function renderSegmentedRail(data) {
+  const species = aggregateBySpecies(data);
+  const totals = totalsByKind(species);
+  const total = species.reduce((s, x) => s + x.count, 0);
+
+  const segs = [
+    { id: 'all',     label: 'All',      count: total },
+    { id: 'whale',   label: 'Whales',   count: totals.whale },
+    { id: 'dolphin', label: 'Dolphins', count: totals.dolphin },
+    { id: 'bird',    label: 'Birds',    count: totals.bird },
+    { id: 'other',   label: 'Other',    count: totals.other },
+  ].filter(g => g.id === 'all' || g.count > 0);
+
+  const seg = document.getElementById('seg-group');
+  if (seg) {
+    seg.innerHTML = segs.map(g => `
+      <button class="seg-btn" type="button" data-kind="${g.id}">
+        <span>${g.label}</span>
+        <span class="seg-btn-count">${g.count}</span>
+      </button>`).join('');
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeKind = btn.dataset.kind;
+        // Switching groups clears the species pin so the rail starts at "All"
+        setActiveFilter(null);
+      });
+    });
+  }
+
+  renderRailForKind(species);
+}
+
+function renderRailForKind(speciesPrecomputed) {
+  const rail = document.getElementById('species-rail');
+  if (!rail) return;
+  const all = speciesPrecomputed || aggregateBySpecies(allData);
+  const visible = activeKind === 'all' ? all : all.filter(s => s.kind === activeKind);
+
+  const pills = [];
+  pills.push(`
+    <button class="rail-pill" type="button" data-species="all">All</button>`);
+  visible.forEach(spec => {
+    pills.push(`
+      <button class="rail-pill" type="button" data-species="${spec.name.replace(/"/g, '&quot;')}">
+        ${legendDotHTML(spec)}
+        ${spec.name}
+        <span class="rail-pill-count">${spec.count}</span>
+      </button>`);
+  });
+  rail.innerHTML = pills.join('');
+
+  rail.querySelectorAll('.rail-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const val = btn.dataset.species;
+      const next = val === 'all' ? null : (activeFilter === val ? null : val);
+      setActiveFilter(next);
+    });
+  });
+
+  syncFilterUI();
+}
+
+// Updates the active visual state on the legend rows, segmented group, and
+// rail pills — called whenever activeFilter or activeKind changes. Keeps
+// every filter surface in sync so user mental model never breaks.
+function syncFilterUI() {
+  // Legend rows
+  document.querySelectorAll('#legend-list .legend-row').forEach(row => {
+    const sp = row.dataset.species;
+    const isAll = sp === 'all';
+    const isActive = (activeFilter === null && isAll) || sp === activeFilter;
+    const isDimmed = activeFilter !== null && !isActive;
+    row.classList.toggle('is-active', isActive);
+    row.classList.toggle('is-dimmed', isDimmed);
+  });
+
+  // Segmented group
+  document.querySelectorAll('#seg-group .seg-btn').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.kind === activeKind);
+  });
+
+  // Rail pills
+  document.querySelectorAll('#species-rail .rail-pill').forEach(btn => {
+    const sp = btn.dataset.species;
+    const isAll = sp === 'all';
+    const isActive = (activeFilter === null && isAll) || sp === activeFilter;
+    btn.classList.toggle('is-active', isActive);
+  });
+
+  // Legend italic status line
+  const status = document.getElementById('legend-status');
+  if (status) {
+    const totalPins = allData.filter(s => s.lat && s.lng).length;
+    if (activeFilter) {
+      const n = allData.filter(s => s.species === activeFilter && s.lat && s.lng).length;
+      status.textContent = `Highlighting ${n} ${activeFilter} pin${n === 1 ? '' : 's'}.`;
+    } else {
+      status.textContent = `Showing all ${totalPins} pin${totalPins === 1 ? '' : 's'}.`;
+    }
+  }
+}
+
+// Central click handler — sets the species filter (or clears it), then
+// re-syncs every surface that reflects it (map opacity, legend rows,
+// rail pills, trip-log filter).
+function setActiveFilter(speciesOrNull) {
+  activeFilter = speciesOrNull;
+  // Selecting a species also clears any active trip-date selection so the
+  // user is never looking at two filters at once.
+  activeDateKey = null;
+  document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+  // If a species got selected from outside the current segmented group,
+  // jump to its group so the rail keeps the pill in view.
+  if (speciesOrNull) {
+    const kind = speciesKind(speciesOrNull);
+    if (activeKind !== 'all' && activeKind !== kind) {
+      activeKind = kind;
+      renderRailForKind();
+    }
+  } else {
+    renderRailForKind();
+  }
+  refreshMarkers();
+  applyFeedFilter();
+  syncFilterUI();
 }
 
 function applyFeedFilter() {
@@ -843,14 +1238,13 @@ function sendHeight() {
   try {
     [allData, tripAudioByDate] = await Promise.all([fetchSightings(), fetchTripAudio()]);
     renderNowBanner(allData);
-    renderTotals(allData);
-    renderFilters(allData);
+    renderEditorialHeader(allData);
+    renderLegend(allData);
+    renderSegmentedRail(allData);
     refreshMarkers();
     renderFeed(allData);
-    const el = document.getElementById('status-text');
-    el.textContent = allData.length
-      ? `Last updated ${new Date(allData[0].trip_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
-      : 'No data yet';
+    document.getElementById('status-text').textContent =
+      allData.length ? fmtDottedDate(allData[0].trip_date) : 'No data yet';
     sendHeight();
   } catch (err) {
     document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
