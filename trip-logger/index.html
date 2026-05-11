@@ -2946,7 +2946,10 @@
       preview.style.pointerEvents = 'none';
       return;
     }
-    const src = `https://trip-logger-backend.vercel.app/api/sightings?op=${encodeURIComponent(slug)}`;
+    // Use the running app's origin so the embed code reflects whichever
+    // domain the operator is viewing Settings from (works on preview deploys
+    // and any future custom domain without code changes).
+    const src = `${window.location.origin}/api/sightings?op=${encodeURIComponent(slug)}`;
     ta.value =
 `<!-- Sightings Log -->
 <iframe class="sightings-widget-embed"
