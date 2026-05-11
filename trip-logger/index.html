@@ -182,6 +182,36 @@
       border-bottom: 1px solid var(--hair);
     }
 
+    /* ── Collapsible section (uses native <details>) ─────────────── */
+    details.section { padding: 0; }
+    details.section > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 18px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.26em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    details.section > summary::-webkit-details-marker { display: none; }
+    details.section > summary::after {
+      content: "›";
+      font: 600 18px/1 "Open Sans", sans-serif;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      transition: transform var(--t-fast);
+      transform-origin: 50% 50%;
+    }
+    details.section[open] > summary::after { transform: rotate(90deg); }
+    details.section[open] > summary { border-bottom: 1px solid var(--hair); }
+    details.section > .collapse-body { padding: 14px 18px 18px; }
+    details.section > .collapse-body > :last-child { margin-bottom: 0; }
+
     /* ── Form fields ─────────────────────────────────────────────── */
     .field { display: grid; gap: 6px; margin-top: 10px; }
     .field:first-of-type { margin-top: 4px; }
@@ -1036,20 +1066,10 @@
   <!-- Review & Send -->
   <div class="screen" id="screenReview">
     <div class="section">
-      <div class="section-label">Trip Summary</div>
-      <div class="summary-grid">
-        <div class="summary-card"><div class="card-label">Date</div><div class="card-value" id="revDate"></div></div>
-        <div class="summary-card"><div class="card-label">Duration</div><div class="card-value" id="revDuration"></div></div>
-        <div class="summary-card"><div class="card-label">Passengers</div><div class="card-value" id="revPassengers"></div></div>
-        <div class="summary-card"><div class="card-label">Sightings</div><div class="card-value" id="revSightings"></div></div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-label">Group Photo</div>
+      <div class="section-label">Photo</div>
       <div class="photo-drop" onclick="document.getElementById('inputPhoto').click()">
         <strong>Tap to add photo</strong>
-        <p>Upload your group photo</p>
+        <p>Group shot, whale, or anything from the trip</p>
         <input type="file" id="inputPhoto" accept="image/*" onchange="handlePhoto(event)">
         <img id="photoPreview" class="photo-preview">
       </div>
@@ -1066,10 +1086,24 @@
       <button class="btn btn-primary" id="btnSend" onclick="sendReport()">Send Trip Report</button>
     </div>
 
-    <div class="section">
-      <div class="section-label">Sightings</div>
-      <div class="sighting-list" id="reviewSightingList"></div>
-    </div>
+    <details class="section">
+      <summary>Trip Summary</summary>
+      <div class="collapse-body">
+        <div class="summary-grid">
+          <div class="summary-card"><div class="card-label">Date</div><div class="card-value" id="revDate"></div></div>
+          <div class="summary-card"><div class="card-label">Duration</div><div class="card-value" id="revDuration"></div></div>
+          <div class="summary-card"><div class="card-label">Passengers</div><div class="card-value" id="revPassengers"></div></div>
+          <div class="summary-card"><div class="card-label">Sightings</div><div class="card-value" id="revSightings"></div></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="section">
+      <summary>Sightings</summary>
+      <div class="collapse-body">
+        <div class="sighting-list" id="reviewSightingList"></div>
+      </div>
+    </details>
 
     <button class="btn btn-outline" onclick="startNewTrip()">Start New Trip</button>
     <button class="btn btn-danger" onclick="discardTrip()">Discard Trip</button>
@@ -1475,6 +1509,7 @@
             <div class="sighting-badge">×${s.count}</div>
           </div>`).join('');
     saveTrip();
+    document.querySelectorAll('#screenReview details.section').forEach(d => d.open = false);
     showScreen('screenReview');
   }
 
