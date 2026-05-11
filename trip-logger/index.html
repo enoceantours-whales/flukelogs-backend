@@ -288,6 +288,23 @@
     .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
     .field select option, .field select optgroup { background: var(--ink-4); color: var(--text); }
 
+    .embed-code {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
+      color: var(--text);
+      font: 400 12px/1.45 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0;
+      resize: vertical;
+      white-space: pre;
+      overflow: auto;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .embed-code:focus { outline: none; border-color: var(--hair-2); }
+
     /* ── Stepper (passenger count) ──────────────────────────────── */
     .stepper {
       display: grid;
@@ -973,6 +990,16 @@
         </div>
         <input type="checkbox" id="settingsShowMapOnWidget" class="toggle-switch">
       </label>
+
+      <div class="field" style="margin-top:18px;">
+        <label>Embed Code</label>
+        <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;line-height:1.5;">Paste this into your website's HTML where you want the sightings log to appear. The widget auto-resizes to fit its content as new trips are added.</p>
+        <textarea id="settingsEmbedCode" readonly rows="9" class="embed-code"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" class="btn btn-outline" style="margin:0; flex:1;" onclick="copyEmbedCode()">Copy code</button>
+          <a id="settingsEmbedPreview" class="btn btn-outline" style="margin:0; flex:1; text-align:center;" target="_blank" rel="noopener">Preview &rarr;</a>
+        </div>
+      </div>
     </div>
 
     <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettings()">Save Settings</button>
@@ -2395,6 +2422,57 @@
     showLogoPreview('settingsLogoUrlPreview',      cfg.logo_url);
     showLogoPreview('settingsLogoUrlEmailPreview', cfg.logo_url_email);
     document.getElementById('settingsShowMapOnWidget').checked = cfg.show_map_on_widget !== false;
+    populateEmbedCode(cfg.slug);
+  }
+
+  // Renders the iframe + auto-resize script the operator copy-pastes into
+  // their website. The widget already postMessages its scrollHeight on every
+  // render; the script in the snippet listens for that and resizes the iframe.
+  function populateEmbedCode(slug) {
+    const ta = document.getElementById('settingsEmbedCode');
+    const preview = document.getElementById('settingsEmbedPreview');
+    if (!ta || !preview) return;
+    if (!slug) {
+      ta.value = '';
+      preview.removeAttribute('href');
+      preview.style.opacity = '0.4';
+      preview.style.pointerEvents = 'none';
+      return;
+    }
+    const src = `https://trip-logger-backend.vercel.app/api/sightings?op=${encodeURIComponent(slug)}`;
+    ta.value =
+`<!-- Sightings Log -->
+<iframe class="sightings-widget-embed"
+  src="${src}"
+  width="100%" height="800"
+  style="border:0; max-width:860px; display:block; margin:0 auto;"
+  loading="lazy" title="Sightings Log"></iframe>
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.iframeHeight) {
+    document.querySelectorAll('iframe.sightings-widget-embed').forEach(function(f) {
+      f.style.height = e.data.iframeHeight + 'px';
+    });
+  }
+});
+</` + `script>`;
+    preview.href = src;
+    preview.style.opacity = '';
+    preview.style.pointerEvents = '';
+  }
+
+  async function copyEmbedCode() {
+    const ta = document.getElementById('settingsEmbedCode');
+    if (!ta || !ta.value) return;
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      toast('Embed code copied', 'success');
+    } catch (e) {
+      // Fallback for browsers / contexts where clipboard API is unavailable
+      ta.select();
+      try { document.execCommand('copy'); toast('Embed code copied', 'success'); }
+      catch (e2) { toast('Copy failed — select the text manually', 'error'); }
+    }
   }
 
   function showLogoPreview(imgId, url) {
