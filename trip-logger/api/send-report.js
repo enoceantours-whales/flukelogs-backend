@@ -124,12 +124,16 @@ async function getGuestStats(operatorId, email) {
 function brand(operator) {
   const websiteUrl = pick(operator, 'website_url', 'https://enoceantours.com');
   const websiteHost = (websiteUrl || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toUpperCase();
+  // Logo fallbacks point at /Public/ assets served by the running app, not a
+  // hardcoded vercel.app domain — so previews and any future custom domain
+  // still work. Only fires when an operator has no logo_url set yet.
+  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
   return {
     name:        pick(operator, 'name',           'Enocean Tours'),
     slug:        pick(operator, 'slug',           'enocean'),
     tagline:     pick(operator, 'tagline',        'MOSS LANDING HARBOR, MONTEREY BAY'),
-    logoPdf:     pick(operator, 'logo_url',       'https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-05.png'),
-    logoEmail:   pick(operator, 'logo_url_email', 'https://trip-logger-backend.vercel.app/Public/Enocean_Tours_logo-03.png'),
+    logoPdf:     pick(operator, 'logo_url',       `${appUrl}/Public/Enocean_Tours_logo-05.png`),
+    logoEmail:   pick(operator, 'logo_url_email', `${appUrl}/Public/Enocean_Tours_logo-03.png`),
     reviewUrl:   pick(operator, 'review_url',     'https://www.enoceantours.com/reviews'),
     websiteUrl,
     websiteHost,
