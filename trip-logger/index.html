@@ -3213,7 +3213,13 @@ window.addEventListener('message', function(e) {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok) {
+        // Surface server-side detail when present so onboarding failures
+        // (rate limits, SMTP creds, etc.) are self-diagnosing instead of
+        // forcing a trip to the Supabase auth logs.
+        const headline = data.error || `HTTP ${res.status}`;
+        throw new Error(data.detail ? `${headline} — ${data.detail}` : headline);
+      }
       toast(`Invited ${email} — they'll get a magic-link email shortly`, 'success');
       // Land on the Edit screen for the fresh operator so the super-admin
       // can fill in branding, FH shortname, etc. without an extra click.

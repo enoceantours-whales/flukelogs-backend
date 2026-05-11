@@ -151,6 +151,23 @@ module.exports = async function handler(req, res) {
         error: `An auth user with email ${email} already exists. Pick a different email or link the existing user manually.`,
       });
     }
+    // Supabase's built-in SMTP is hard-capped at 2 emails/hour and the auth
+    // service surfaces this as an HTTP 429. Tell the super-admin to switch to
+    // custom SMTP — same playbook we ran for Enocean in May 2026.
+    if (err.status === 429 || msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) {
+      return res.status(429).json({
+        error: 'Supabase email rate limit hit',
+        detail: 'The Supabase default SMTP is capped at ~2 emails/hour. Configure custom SMTP in Supabase → Authentication → Emails (Gmail SMTP creds in the operators row work fine), or wait an hour and retry.',
+      });
+    }
+    // SMTP rejected the saved credentials — common after rotating a Gmail
+    // app password or disabling 2-Step Verification on the sender account.
+    if (msg.includes('badcredentials') || msg.includes('username and password not accepted')) {
+      return res.status(502).json({
+        error: 'SMTP credentials rejected',
+        detail: 'Gmail rejected the SMTP login. Re-check the app password in Supabase → Authentication → Emails (no spaces, account has 2-Step Verification on).',
+      });
+    }
     return res.status(500).json({ error: 'Invite captain failed', detail: err.message });
   }
 
