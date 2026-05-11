@@ -596,8 +596,8 @@
     .greeting .meta { font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; }
     .greeting .meta b { color: var(--text); font-weight: 600; }
 
-    /* ── Glance tiles (Sea Temp / Swell / Wind from buoy) ───────── */
-    .glance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    /* ── Glance tiles (Sea Temp / Wind from buoy) ──────────────── */
+    .glance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .glance .tile {
       background: var(--ink-3);
       border: 1px solid var(--hair);
@@ -916,10 +916,6 @@
       <div class="tile">
         <div class="lbl">Sea Temp</div>
         <div class="val placeholder" id="glanceTemp">—<small>°F</small></div>
-      </div>
-      <div class="tile">
-        <div class="lbl">Swell</div>
-        <div class="val placeholder" id="glanceSwell">—<small>ft</small></div>
       </div>
       <div class="tile">
         <div class="lbl">Wind</div>
@@ -1653,10 +1649,9 @@
     renderEmailTags();
   }
 
-  // Updates the three Sea Temp / Swell / Wind tiles on the start screen with
-  // the latest buoy reading. M1 has no wave sensors, so swell stays muted
-  // ("—") on Enocean's default station; an offshore station (e.g. 46042)
-  // would populate it.
+  // Updates the Sea Temp / Wind tiles on the start screen with the latest
+  // buoy reading. Swell was removed because M1 (Enocean's default station)
+  // has no wave sensors — the tile sat permanently muted.
   function paintGlance(obs) {
     function set(id, value, unit) {
       const el = document.getElementById(id);
@@ -1670,7 +1665,6 @@
       }
     }
     set('glanceTemp',  obs && obs.water_temp_f,   '°F');
-    set('glanceSwell', obs && obs.wave_height_ft, 'ft');
     if (obs && obs.wind_kt != null) {
       const dir = (obs.wind_dir_deg != null) ? ' ' + degToCompass(obs.wind_dir_deg) : '';
       const el = document.getElementById('glanceWind');
