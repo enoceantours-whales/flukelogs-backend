@@ -182,6 +182,81 @@
       border-bottom: 1px solid var(--hair);
     }
 
+    /* ── Collapsible sections (<details>) ─────────────────────────── */
+    .section.section-collapsible { padding: 0; }
+    .section.section-collapsible > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid transparent;
+      transition: border-color .15s ease;
+    }
+    .section.section-collapsible > summary::-webkit-details-marker { display: none; }
+    .section.section-collapsible[open] > summary { border-bottom-color: var(--hair); }
+    .section.section-collapsible > summary > .section-label {
+      flex: 1;
+      margin: 0;
+      padding: 0;
+      border-bottom: 0;
+    }
+    .section-status {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-dim);
+      letter-spacing: 0.02em;
+      text-transform: none;
+      white-space: nowrap;
+    }
+    .section.section-collapsible > summary::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-right: 1.5px solid var(--text-dim);
+      border-bottom: 1.5px solid var(--text-dim);
+      transform: rotate(45deg);
+      margin-top: -3px;
+      transition: transform .2s ease;
+    }
+    .section.section-collapsible[open] > summary::after {
+      transform: rotate(-135deg);
+      margin-top: 2px;
+    }
+    .section.section-collapsible > .section-body {
+      padding: 14px 18px 18px;
+    }
+
+    /* ── Logo preview row ─────────────────────────────────────────── */
+    .logo-preview-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-thumb {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      border-radius: 8px;
+      padding: 6px;
+      flex-shrink: 0;
+    }
+    .logo-thumb.pdf-bg { background: #fff; }
+    .logo-thumb.email-bg { background: #000; border: 1px solid var(--hair); }
+    .logo-thumb.empty {
+      background: var(--ink-4);
+      border: 1px dashed var(--hair);
+    }
+    .logo-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+    .logo-actions .btn { margin: 0; width: auto; padding: 0 16px; white-space: nowrap; }
+
     /* ── Toggle switch (used for boolean settings) ───────────────── */
     .toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
     .toggle-row-text { flex: 1; min-width: 0; }
@@ -287,6 +362,23 @@
     }
     .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
     .field select option, .field select optgroup { background: var(--ink-4); color: var(--text); }
+
+    .embed-code {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--ink-4);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
+      color: var(--text);
+      font: 400 12px/1.45 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0;
+      resize: vertical;
+      white-space: pre;
+      overflow: auto;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .embed-code:focus { outline: none; border-color: var(--hair-2); }
 
     /* ── Stepper (passenger count) ──────────────────────────────── */
     .stepper {
@@ -904,65 +996,87 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-label">Branding</div>
-
-      <div class="field">
-        <label>Logo — PDF (dark logo on white)</label>
-        <div style="display:flex; gap:8px; align-items:stretch;">
-          <input type="url" id="settingsLogoUrl" placeholder="https://…/logo-dark.png" style="flex:1; min-width:0;">
-          <button type="button" class="btn btn-outline" style="margin:0; width:auto; padding:0 18px; white-space:nowrap;" onclick="document.getElementById('settingsLogoUrlFile').click()">Upload</button>
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Branding</div>
+        <span class="section-status" id="settingsBrandingStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <div class="field">
+          <label>Logo — PDF (dark logo on white)</label>
+          <div class="logo-preview-row">
+            <img id="settingsLogoUrlPreview" class="logo-thumb pdf-bg empty" alt="">
+            <div class="logo-actions">
+              <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlFile').click()">Upload new</button>
+            </div>
+          </div>
+          <input type="url" id="settingsLogoUrl" hidden>
+          <input type="file" id="settingsLogoUrlFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'pdf', 'settingsLogoUrl', 'settingsLogoUrlPreview')">
         </div>
-        <input type="file" id="settingsLogoUrlFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'pdf', 'settingsLogoUrl', 'settingsLogoUrlPreview')">
-        <img id="settingsLogoUrlPreview" alt="" style="display:none; max-height:48px; margin-top:8px; background:#fff; padding:6px; border-radius:8px;">
-      </div>
 
-      <div class="field">
-        <label>Logo — Email (light logo on dark)</label>
-        <div style="display:flex; gap:8px; align-items:stretch;">
-          <input type="url" id="settingsLogoUrlEmail" placeholder="https://…/logo-light.png" style="flex:1; min-width:0;">
-          <button type="button" class="btn btn-outline" style="margin:0; width:auto; padding:0 18px; white-space:nowrap;" onclick="document.getElementById('settingsLogoUrlEmailFile').click()">Upload</button>
+        <div class="field">
+          <label>Logo — Email (light logo on dark)</label>
+          <div class="logo-preview-row">
+            <img id="settingsLogoUrlEmailPreview" class="logo-thumb email-bg empty" alt="">
+            <div class="logo-actions">
+              <button type="button" class="btn btn-outline" onclick="document.getElementById('settingsLogoUrlEmailFile').click()">Upload new</button>
+            </div>
+          </div>
+          <input type="url" id="settingsLogoUrlEmail" hidden>
+          <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
         </div>
-        <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
-        <img id="settingsLogoUrlEmailPreview" alt="" style="display:none; max-height:48px; margin-top:8px; background:#000; padding:6px; border-radius:8px;">
       </div>
+    </details>
 
-      <div class="field">
-        <label>Review URL</label>
-        <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Email</div>
+        <span class="section-status" id="settingsEmailStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <div class="field">
+          <label>"From" Email Address</label>
+          <input type="email" id="settingsFromEmail" autocapitalize="none" autocorrect="off">
+        </div>
+        <div class="field">
+          <label>Review URL</label>
+          <input type="url" id="settingsReviewUrl" placeholder="https://…/reviews">
+        </div>
       </div>
-    </div>
+    </details>
 
-    <div class="section">
-      <div class="section-label">Email</div>
-      <div class="field">
-        <label>"From" Email Address</label>
-        <input type="email" id="settingsFromEmail" autocapitalize="none" autocorrect="off">
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Mailchimp</div>
+        <span class="section-status" id="settingsMailchimpStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <div class="field">
+          <label>API Key <span id="settingsMailchimpKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(leave blank to keep current)</span></label>
+          <input type="password" id="settingsMailchimpKey" autocomplete="off" placeholder="paste new key to replace">
+        </div>
+        <div class="field">
+          <label>Audience ID</label>
+          <input type="text" id="settingsMailchimpAudience" autocapitalize="none" autocorrect="off">
+        </div>
+        <div class="field">
+          <label>Server Prefix</label>
+          <input type="text" id="settingsMailchimpServer" placeholder="us1" autocapitalize="none" autocorrect="off">
+        </div>
       </div>
-    </div>
+    </details>
 
-    <div class="section">
-      <div class="section-label">Mailchimp</div>
-      <div class="field">
-        <label>API Key <span id="settingsMailchimpKeyHint" style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(leave blank to keep current)</span></label>
-        <input type="password" id="settingsMailchimpKey" autocomplete="off" placeholder="paste new key to replace">
+    <details class="section section-collapsible">
+      <summary>
+        <div class="section-label">Species List</div>
+        <span class="section-status" id="settingsSpeciesStatus">&mdash;</span>
+      </summary>
+      <div class="section-body">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Each row is a group shown as an optgroup in the dropdown. Species within a group are comma-separated.</p>
+        <div id="settingsSpeciesGroups"></div>
+        <button class="btn btn-outline" type="button" onclick="addSpeciesGroup()" style="margin-top:8px;">+ Add group</button>
       </div>
-      <div class="field">
-        <label>Audience ID</label>
-        <input type="text" id="settingsMailchimpAudience" autocapitalize="none" autocorrect="off">
-      </div>
-      <div class="field">
-        <label>Server Prefix</label>
-        <input type="text" id="settingsMailchimpServer" placeholder="us1" autocapitalize="none" autocorrect="off">
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-label">Species List</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Each row is a group shown as an optgroup in the dropdown. Species within a group are comma-separated.</p>
-      <div id="settingsSpeciesGroups"></div>
-      <button class="btn btn-outline" type="button" onclick="addSpeciesGroup()" style="margin-top:8px;">+ Add group</button>
-    </div>
+    </details>
 
     <div class="section">
       <div class="section-label">Public Widget</div>
@@ -973,6 +1087,16 @@
         </div>
         <input type="checkbox" id="settingsShowMapOnWidget" class="toggle-switch">
       </label>
+
+      <div class="field" style="margin-top:18px;">
+        <label>Embed Code</label>
+        <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;line-height:1.5;">Copy the HTML snippet and paste it into your website where you want the sightings log to appear. Auto-resizes as new trips land.</p>
+        <textarea id="settingsEmbedCode" readonly tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"></textarea>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-outline" style="margin:0; flex:1;" onclick="copyEmbedCode()">Copy embed code</button>
+          <a id="settingsEmbedPreview" class="btn btn-outline" style="margin:0; flex:1; text-align:center;" target="_blank" rel="noopener">Preview &rarr;</a>
+        </div>
+      </div>
     </div>
 
     <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettings()">Save Settings</button>
@@ -2395,14 +2519,108 @@
     showLogoPreview('settingsLogoUrlPreview',      cfg.logo_url);
     showLogoPreview('settingsLogoUrlEmailPreview', cfg.logo_url_email);
     document.getElementById('settingsShowMapOnWidget').checked = cfg.show_map_on_widget !== false;
+    populateEmbedCode(cfg.slug);
+    setSettingsStatusIndicators(cfg);
+  }
+
+  // Status text shown to the right of each collapsed section header so the
+  // captain can tell what's configured without expanding everything.
+  function setSettingsStatusIndicators(cfg) {
+    const br = document.getElementById('settingsBrandingStatus');
+    if (br) {
+      const pdf = !!cfg.logo_url;
+      const eml = !!cfg.logo_url_email;
+      br.textContent = pdf && eml ? 'Both logos set'
+        : pdf ? 'PDF logo set'
+        : eml ? 'Email logo set'
+        : 'No logos set';
+    }
+    const em = document.getElementById('settingsEmailStatus');
+    if (em) {
+      em.textContent = cfg.from_email || 'Not set';
+    }
+    const mc = document.getElementById('settingsMailchimpStatus');
+    if (mc) {
+      mc.textContent = cfg.has_mailchimp_api_key ? 'Configured' : 'Not set';
+    }
+    const sp = document.getElementById('settingsSpeciesStatus');
+    if (sp) {
+      const groups = Array.isArray(cfg.species_list) ? cfg.species_list : [];
+      const speciesCount = groups.reduce(
+        (n, g) => n + ((g && Array.isArray(g.species)) ? g.species.length : 0),
+        0
+      );
+      sp.textContent = groups.length === 0
+        ? 'Empty'
+        : `${groups.length} group${groups.length === 1 ? '' : 's'} · ${speciesCount} species`;
+    }
+  }
+
+  // Renders the iframe + auto-resize script the operator copy-pastes into
+  // their website. The widget already postMessages its scrollHeight on every
+  // render; the script in the snippet listens for that and resizes the iframe.
+  function populateEmbedCode(slug) {
+    const ta = document.getElementById('settingsEmbedCode');
+    const preview = document.getElementById('settingsEmbedPreview');
+    if (!ta || !preview) return;
+    if (!slug) {
+      ta.value = '';
+      preview.removeAttribute('href');
+      preview.style.opacity = '0.4';
+      preview.style.pointerEvents = 'none';
+      return;
+    }
+    const src = `https://trip-logger-backend.vercel.app/api/sightings?op=${encodeURIComponent(slug)}`;
+    ta.value =
+`<!-- Sightings Log -->
+<iframe class="sightings-widget-embed"
+  src="${src}"
+  width="100%" height="800"
+  style="border:0; max-width:860px; display:block; margin:0 auto;"
+  loading="lazy" title="Sightings Log"></iframe>
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.iframeHeight) {
+    document.querySelectorAll('iframe.sightings-widget-embed').forEach(function(f) {
+      f.style.height = e.data.iframeHeight + 'px';
+    });
+  }
+});
+</` + `script>`;
+    preview.href = src;
+    preview.style.opacity = '';
+    preview.style.pointerEvents = '';
+  }
+
+  async function copyEmbedCode() {
+    const ta = document.getElementById('settingsEmbedCode');
+    if (!ta || !ta.value) return;
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      toast('Embed code copied', 'success');
+    } catch (e) {
+      // Fallback for browsers / contexts where clipboard API is unavailable
+      ta.select();
+      try { document.execCommand('copy'); toast('Embed code copied', 'success'); }
+      catch (e2) { toast('Copy failed — select the text manually', 'error'); }
+    }
   }
 
   function showLogoPreview(imgId, url) {
     const img = document.getElementById(imgId);
     if (!img) return;
-    if (url) { img.src = url; img.style.display = 'inline-block'; }
-    else     { img.removeAttribute('src'); img.style.display = 'none'; }
+    // The thumbnail is always in the DOM now (collapsed-URL design). When a
+    // URL is set, fill it in and drop the dashed-empty placeholder styling;
+    // when it isn't, show the placeholder.
+    if (url) {
+      img.src = url;
+      img.classList.remove('empty');
+    } else {
+      img.removeAttribute('src');
+      img.classList.add('empty');
+    }
   }
+
 
   // File picker → POST base64 to /api/operator-logo-upload → fill the URL
   // input + preview. Captain still has to hit Save Settings to commit the
