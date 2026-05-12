@@ -21,6 +21,7 @@ const ADMIN_WRITABLE = [
   'noaa_buoy_station', 'default_map_center', 'default_map_zoom',
   'fh_company_shortname', 'fh_app_key', 'fh_user_key',
   'tripadvisor_id', 'google_business_id',
+  'widget_host_url',
   'active',
 ];
 

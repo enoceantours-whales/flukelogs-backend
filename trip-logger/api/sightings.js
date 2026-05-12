@@ -29,7 +29,7 @@ async function loadOperatorRow(slug) {
   try {
     const safeSlug = encodeURIComponent(slug);
     const res = await fetch(
-      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=id,slug,name,show_map_on_widget,logo_url,logo_url_email&limit=1`,
+      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=id,slug,name,show_map_on_widget,logo_url,logo_url_email,widget_host_url&limit=1`,
       { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
     );
     if (!res.ok) return null;
@@ -133,8 +133,16 @@ module.exports = async function handler(req, res) {
 
     const operator = await loadOperatorRow(slug);
     const opConfig = operator
-      ? { id: operator.id, slug: operator.slug, show_map_on_widget: operator.show_map_on_widget !== false }
-      : { id: null, slug, show_map_on_widget: true };
+      ? {
+          id: operator.id,
+          slug: operator.slug,
+          show_map_on_widget: operator.show_map_on_widget !== false,
+          // Public URL of the operator's embed page — used by the in-widget
+          // share button so shared links land on their branded site, not
+          // the bare vercel widget URL. Null = fall back to vercel domain.
+          widget_host_url: operator.widget_host_url || null,
+        }
+      : { id: null, slug, show_map_on_widget: true, widget_host_url: null };
 
     // Per-trip enrichment only when both the operator AND the trip resolve
     // — otherwise fall through to the generic operator-level OG.
