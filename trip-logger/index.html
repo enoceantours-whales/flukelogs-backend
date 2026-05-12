@@ -1366,7 +1366,7 @@
     <div class="section">
       <div class="section-label">All Sightings</div>
       <div class="admin-sightings-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
-        <select id="adminSightingsOp" onchange="renderAdminSightings()" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+        <select id="adminSightingsOp" onchange="clearAdminSightingsFocus(); renderAdminSightings();" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
           <option value="">All operators</option>
         </select>
         <div class="admin-sightings-chips" role="tablist" style="display:flex;gap:6px;">
@@ -3342,6 +3342,9 @@ window.addEventListener('message', function(e) {
     rangeDays: 'all',  // '7' | '30' | 'all'
     viewMode: 'individual', // 'individual' | 'grouped'
     showAll: false,    // expand the 5-row cap in individual view
+    focusedTripKey: null, // operator_id|trip_date — when set, the map only
+                          // shows that trip's pins (set by grouped-view
+                          // clicks, cleared on view/filter change)
     map: null,         // lazy Leaflet map instance
     markers: [],       // current marker layer
   };
@@ -3410,6 +3413,7 @@ window.addEventListener('message', function(e) {
   function setAdminSightingsRange(range) {
     adminSightingsState.rangeDays = range;
     adminSightingsState.showAll = false; // reset expand state on filter change
+    clearAdminSightingsFocus();
     document.querySelectorAll('#screenAdminSightings .chip[data-range]').forEach(c => {
       c.classList.toggle('active', String(c.dataset.range) === String(range));
     });
@@ -3419,6 +3423,9 @@ window.addEventListener('message', function(e) {
   function setAdminSightingsView(mode) {
     adminSightingsState.viewMode = mode;
     adminSightingsState.showAll = false;
+    // Switching to Individual restores every pin on the map — the user
+    // asked for the per-trip filter to apply only inside grouped mode.
+    if (mode === 'individual') clearAdminSightingsFocus();
     document.querySelectorAll('#screenAdminSightings .chip[data-view]').forEach(c => {
       c.classList.toggle('active', c.dataset.view === mode);
     });
@@ -3447,12 +3454,25 @@ window.addEventListener('message', function(e) {
     const tripCount = tripKeys.size;
     document.getElementById('adminSightingsCount').textContent =
       `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
-    renderAdminSightingsMarkers(rows);
+    // Map is narrowed when a trip is focused (set by clicking a grouped
+    // card); list stays full so the admin can hop to another trip.
+    const focused = adminSightingsState.focusedTripKey;
+    const mapRows = focused
+      ? rows.filter(r => `${r.operator_id}|${r.trip_date}` === focused)
+      : rows;
+    renderAdminSightingsMarkers(mapRows);
     if (adminSightingsState.viewMode === 'grouped') {
       renderAdminSightingsGrouped(rows);
     } else {
       renderAdminSightingsTable(rows);
     }
+  }
+
+  // Reset the single-trip map focus. Called when the user changes any
+  // top-level filter or switches back to Individual view — the focused
+  // trip might not even be in the new filtered set, so don't carry it.
+  function clearAdminSightingsFocus() {
+    adminSightingsState.focusedTripKey = null;
   }
 
   function renderAdminSightingsMarkers(rows) {
@@ -3514,10 +3534,20 @@ window.addEventListener('message', function(e) {
   }
 
   function focusAdminTripSpecies(tripKey, species) {
-    const matches = adminSightingsState.markers.filter(
-      x => x._tripKey === tripKey && (!species || x._species === species),
-    );
-    focusAdminSightingsMarkers(matches);
+    // Filter the map down to just this trip's pins. Re-render markers
+    // first so other days vanish; then zoom further to the species's
+    // pins if one was clicked, otherwise the fitBounds inside the
+    // marker rebuild already framed the whole trip.
+    adminSightingsState.focusedTripKey = tripKey;
+    renderAdminSightings();
+    if (species) {
+      const matches = adminSightingsState.markers.filter(x => x._species === species);
+      focusAdminSightingsMarkers(matches);
+    } else {
+      // Still scroll the map into view (the fitBounds inside the marker
+      // rebuild handles framing) so the admin sees the result of the click.
+      document.getElementById('adminSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   function renderAdminSightingsTable(rows) {
