@@ -1372,13 +1372,15 @@
           <button type="button" class="chip" data-range="30"  onclick="setAdminSightingsRange(30)">30d</button>
           <button type="button" class="chip active" data-range="all" onclick="setAdminSightingsRange('all')">All</button>
         </div>
+      </div>
+      <div id="adminSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
+      <div class="admin-sightings-listbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <div id="adminSightingsCount" style="font-size:12px;color:var(--text-dim);"></div>
         <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
           <button type="button" class="chip active" data-view="individual" onclick="setAdminSightingsView('individual')">Individual</button>
           <button type="button" class="chip"        data-view="grouped"    onclick="setAdminSightingsView('grouped')">Grouped</button>
         </div>
       </div>
-      <div id="adminSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
-      <div id="adminSightingsCount" style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"></div>
       <div id="adminSightingsTable"><div class="empty">Loading…</div></div>
       <button class="btn btn-outline" type="button" onclick="showScreen('screenAdmin')" style="margin-top:14px;">Back to Operators</button>
     </div>
