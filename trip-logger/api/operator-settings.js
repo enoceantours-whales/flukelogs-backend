@@ -28,6 +28,7 @@ const OPERATOR_EDITABLE = [
   'mailchimp_audience_id',
   'mailchimp_server_prefix',
   'show_map_on_widget',
+  'widget_host_url',
 ];
 
 // Sensitive fields where an empty-string PATCH means "keep current value."
@@ -51,6 +52,7 @@ function operatorSettingsView(operator) {
     mailchimp_server_prefix:  operator.mailchimp_server_prefix,
     has_mailchimp_api_key:    !!operator.mailchimp_api_key,
     show_map_on_widget:       operator.show_map_on_widget !== false,
+    widget_host_url:          operator.widget_host_url || null,
   };
 }
 
