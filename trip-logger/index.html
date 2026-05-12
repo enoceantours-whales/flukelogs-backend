@@ -1305,8 +1305,15 @@
       </label>
 
       <div class="field" style="margin-top:18px;">
+        <label>Widget Host URL <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(where you've embedded the widget on your site)</span></label>
+        <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;line-height:1.5;">When visitors tap a trip's Share button inside the widget, the shared link points here. Leave blank to share the bare widget URL on our domain instead.</p>
+        <input type="url" id="settingsWidgetHostUrl" placeholder="https://yourcompany.com/sighting-log" oninput="updateEmbedShareHint()">
+        <div id="settingsWidgetHostHint" style="font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.5;"></div>
+      </div>
+
+      <div class="field" style="margin-top:18px;">
         <label>Embed Code</label>
-        <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;line-height:1.5;">Copy the HTML snippet and paste it into your website where you want the sightings log to appear. Auto-resizes as new trips land.</p>
+        <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;line-height:1.5;">Copy the HTML snippet and paste it into your website where you want the sightings log to appear. Auto-resizes as new trips land and forwards shared trip links to the right day.</p>
         <textarea id="settingsEmbedCode" readonly tabindex="-1" aria-hidden="true" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"></textarea>
         <div style="display:flex; gap:8px;">
           <button type="button" class="btn btn-outline" style="margin:0; flex:1;" onclick="copyEmbedCode()">Copy embed code</button>
@@ -3037,8 +3044,28 @@
     showLogoPreview('settingsLogoUrlPreview',      cfg.logo_url);
     showLogoPreview('settingsLogoUrlEmailPreview', cfg.logo_url_email);
     document.getElementById('settingsShowMapOnWidget').checked = cfg.show_map_on_widget !== false;
+    document.getElementById('settingsWidgetHostUrl').value = cfg.widget_host_url || '';
     populateEmbedCode(cfg.slug);
+    updateEmbedShareHint();
     setSettingsStatusIndicators(cfg);
+  }
+
+  // Live preview text under the Widget Host URL input — tells the captain
+  // what URL their visitors will see in the share sheet. Reads the current
+  // input value (so the hint updates as they type) and falls back to the
+  // bare /api/sightings URL on our domain when blank, matching the
+  // shareUrlForTrip() logic inside the widget itself.
+  function updateEmbedShareHint() {
+    const hint = document.getElementById('settingsWidgetHostHint');
+    if (!hint) return;
+    const raw = (document.getElementById('settingsWidgetHostUrl').value || '').trim();
+    const slug = (operatorConfig && operatorConfig.slug) || 'enocean';
+    if (raw) {
+      const sep = raw.indexOf('?') === -1 ? '?' : '&';
+      hint.textContent = 'Visitors will share: ' + raw + sep + 'trip=YYYY-MM-DD';
+    } else {
+      hint.textContent = 'Visitors will share: ' + window.location.origin + '/api/sightings?op=' + slug + '&trip=YYYY-MM-DD';
+    }
   }
 
   // Status text shown to the right of each collapsed section header so the
@@ -3264,6 +3291,7 @@
       mailchimp_server_prefix: document.getElementById('settingsMailchimpServer').value.trim() || null,
       species_list:            serializeSpeciesGroups(),
       show_map_on_widget:      document.getElementById('settingsShowMapOnWidget').checked,
+      widget_host_url:         document.getElementById('settingsWidgetHostUrl').value.trim() || null,
     };
 
     try {
