@@ -781,6 +781,8 @@
       border-top: 1px solid rgba(255,255,255,0.04);
     }
     #screenAdminSightings .grouped-species-row:first-child { border-top: none; }
+    #screenAdminSightings .grouped-trip-card:hover { background: rgba(255,255,255,0.03); }
+    #screenAdminSightings .grouped-species-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
     #screenAdminSightings .grouped-species-name {
       flex: 1;
       font: 500 13px/1.3 "Open Sans", sans-serif;
@@ -3293,6 +3295,16 @@ window.addEventListener('message', function(e) {
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // JS-escape then HTML-escape so a value can be safely embedded inside a
+  // single-quoted JS string inside an HTML attribute, e.g.:
+  //   <div onclick="fn('${jsAttrStr(species)}')">
+  // Needed because species like "Risso's Dolphin" contain apostrophes which
+  // would otherwise terminate the JS string literal after HTML decoding.
+  function jsAttrStr(s) {
+    return escapeHtml(String(s == null ? '' : s)
+      .replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+  }
+
   // ── Admin: All Sightings ─────────────────────────────────────────
   // Super-admin cross-operator sightings view. Shares the public widget's
   // species palette so a pin means the same thing on either surface, but
@@ -3467,6 +3479,10 @@ window.addEventListener('message', function(e) {
         Count: <strong>${r.count ?? '—'}</strong> ${depth ? `· Depth: <strong>${depth}</strong>` : ''}<br>
         ${escapeHtml(r.trip_date || '')}
       </div>`);
+      // Tag the marker so list-row clicks can look it up without rebuilding.
+      marker._sightingId = r.id;
+      marker._tripKey = `${r.operator_id}|${r.trip_date}`;
+      marker._species = r.species;
       marker.addTo(map);
       adminSightingsState.markers.push(marker);
       latlngs.push([+r.lat, +r.lng]);
@@ -3474,6 +3490,34 @@ window.addEventListener('message', function(e) {
     if (latlngs.length) {
       map.fitBounds(latlngs, { padding: [30, 30], maxZoom: 12 });
     }
+  }
+
+  // Scroll the map back into view (lists can push it off-screen on mobile)
+  // and pan/zoom Leaflet to the marker(s) the user just clicked.
+  function focusAdminSightingsMarkers(matches) {
+    if (!matches.length || !adminSightingsState.map) return;
+    const map = adminSightingsState.map;
+    document.getElementById('adminSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (matches.length === 1) {
+      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 12), { duration: 0.6 });
+      matches[0].openPopup();
+    } else {
+      const bounds = L.latLngBounds(matches.map(m => m.getLatLng()));
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 0.6 });
+      matches[0].openPopup();
+    }
+  }
+
+  function focusAdminSighting(id) {
+    const m = adminSightingsState.markers.find(x => x._sightingId === id);
+    focusAdminSightingsMarkers(m ? [m] : []);
+  }
+
+  function focusAdminTripSpecies(tripKey, species) {
+    const matches = adminSightingsState.markers.filter(
+      x => x._tripKey === tripKey && (!species || x._species === species),
+    );
+    focusAdminSightingsMarkers(matches);
   }
 
   function renderAdminSightingsTable(rows) {
@@ -3497,7 +3541,12 @@ window.addEventListener('message', function(e) {
         ? `<div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${escapeHtml(r.behavior_notes)}</div>`
         : '';
       const dot = `<span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>`;
-      return `<div class="sighting-row">
+      const clickable = (r.lat != null && r.lng != null);
+      // Click → pan/zoom map to this sighting's pin and open its popup.
+      // Rows without GPS aren't clickable since there's no pin to focus.
+      const onClick = clickable ? ` onclick="focusAdminSighting('${jsAttrStr(r.id)}')"` : '';
+      const cursor  = clickable ? ' cursor:pointer;' : '';
+      return `<div class="sighting-row" style="${cursor}"${onClick}>
         <div>
           <div class="sighting-species">${dot}${escapeHtml(r.species || 'Unknown')} <span style="color:var(--text-dim);font-weight:500;">×${r.count ?? '—'}</span></div>
           <div class="sighting-meta">${escapeHtml(r.operator_name || r.operator_slug || '')} · ${escapeHtml(r.trip_date || '')}${depth} · ${coords}</div>
@@ -3541,18 +3590,22 @@ window.addEventListener('message', function(e) {
         });
       } catch { return key || ''; }
     };
-    tbl.innerHTML = Array.from(trips.values()).map(trip => {
+    tbl.innerHTML = Array.from(trips.entries()).map(([tripKey, trip]) => {
       const tally = Array.from(trip.species.entries())
         .sort((a, b) => b[1] - a[1]) // most-spotted species first
         .map(([species, count]) => {
           const meta = ADMIN_SIGHTINGS_SPECIES_META[species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
-          return `<div class="grouped-species-row">
+          // Clicking a species row focuses the map on just that species's
+          // pins for this trip — usually 1-3 pins, sometimes more.
+          return `<div class="grouped-species-row" style="cursor:pointer;" onclick="event.stopPropagation(); focusAdminTripSpecies('${jsAttrStr(tripKey)}', '${jsAttrStr(species)}')">
             <span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>
             <span class="grouped-species-name">${escapeHtml(species || 'Unknown')}</span>
             <span class="grouped-species-count">×${count}</span>
           </div>`;
         }).join('');
-      return `<div class="grouped-trip-card">
+      // Clicking the card header (anywhere outside a species row) focuses
+      // the map on every pin from that trip.
+      return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusAdminTripSpecies('${jsAttrStr(tripKey)}', null)">
         <div class="grouped-trip-header">
           <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}</div>
           <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
