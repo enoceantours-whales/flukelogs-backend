@@ -711,6 +711,88 @@
     .sighting-species { font: 600 15px/1.2 "Open Sans", sans-serif; color: var(--text); letter-spacing: 0.005em; }
     .sighting-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.02em; }
     .sighting-actions { display: flex; align-items: center; gap: 6px; }
+
+    /* Admin sightings date-range chips */
+    #screenAdminSightings .chip {
+      font: 500 12px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.04em;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    }
+    #screenAdminSightings .chip:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    #screenAdminSightings .chip.active {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+
+    /* Small colored dot next to species names (replaces emojis in admin
+       sightings views — same color palette as the public widget pins). */
+    #screenAdminSightings .species-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* Grouped-view trip card: header (operator + date + summary) above
+       a list of species tallies, mirroring the public widget's design. */
+    #screenAdminSightings .grouped-trip-card {
+      border: 1px solid var(--hair);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: rgba(255,255,255,0.015);
+    }
+    #screenAdminSightings .grouped-trip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    #screenAdminSightings .grouped-trip-title {
+      font: 600 14px/1.3 "Open Sans", sans-serif;
+      color: var(--text);
+    }
+    #screenAdminSightings .grouped-trip-summary {
+      font: 500 11px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    #screenAdminSightings .grouped-species-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #screenAdminSightings .grouped-species-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    #screenAdminSightings .grouped-species-row:first-child { border-top: none; }
+    #screenAdminSightings .grouped-trip-card:hover { background: rgba(255,255,255,0.03); }
+    #screenAdminSightings .grouped-species-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
+    #screenAdminSightings .grouped-species-name {
+      flex: 1;
+      font: 500 13px/1.3 "Open Sans", sans-serif;
+      color: var(--text);
+    }
+    #screenAdminSightings .grouped-species-count {
+      font: 500 13px/1 "Open Sans", sans-serif;
+      color: var(--text-dim);
+      margin-left: 12px;
+    }
     .sighting-iconbtn {
       appearance: none;
       background: transparent;
@@ -1274,7 +1356,35 @@
       <div class="section-label">Operators</div>
       <div id="adminOperatorsList"><div class="empty">Loading…</div></div>
       <button class="btn btn-primary" type="button" onclick="openAdminOnboard()" style="margin-top:14px;">+ New Operator</button>
+      <button class="btn btn-outline" type="button" onclick="openAdminSightings()">View All Sightings</button>
       <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
+    </div>
+  </div>
+
+  <!-- All sightings across every operator (super admin only) -->
+  <div class="screen" id="screenAdminSightings">
+    <div class="section">
+      <div class="section-label">All Sightings</div>
+      <div class="admin-sightings-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
+        <select id="adminSightingsOp" onchange="clearAdminSightingsFocus(); renderAdminSightings();" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+          <option value="">All operators</option>
+        </select>
+        <div class="admin-sightings-chips" role="tablist" style="display:flex;gap:6px;">
+          <button type="button" class="chip" data-range="7"   onclick="setAdminSightingsRange(7)">7d</button>
+          <button type="button" class="chip" data-range="30"  onclick="setAdminSightingsRange(30)">30d</button>
+          <button type="button" class="chip active" data-range="all" onclick="setAdminSightingsRange('all')">All</button>
+        </div>
+      </div>
+      <div id="adminSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
+      <div class="admin-sightings-listbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <div id="adminSightingsCount" style="font-size:12px;color:var(--text-dim);"></div>
+        <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
+          <button type="button" class="chip active" data-view="individual" onclick="setAdminSightingsView('individual')">Individual</button>
+          <button type="button" class="chip"        data-view="grouped"    onclick="setAdminSightingsView('grouped')">Grouped</button>
+        </div>
+      </div>
+      <div id="adminSightingsTable"><div class="empty">Loading…</div></div>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenAdmin')" style="margin-top:14px;">Back to Operators</button>
     </div>
   </div>
 
@@ -3183,6 +3293,356 @@ window.addEventListener('message', function(e) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // JS-escape then HTML-escape so a value can be safely embedded inside a
+  // single-quoted JS string inside an HTML attribute, e.g.:
+  //   <div onclick="fn('${jsAttrStr(species)}')">
+  // Needed because species like "Risso's Dolphin" contain apostrophes which
+  // would otherwise terminate the JS string literal after HTML decoding.
+  function jsAttrStr(s) {
+    return escapeHtml(String(s == null ? '' : s)
+      .replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+  }
+
+  // ── Admin: All Sightings ─────────────────────────────────────────
+  // Super-admin cross-operator sightings view. Shares the public widget's
+  // species palette so a pin means the same thing on either surface, but
+  // pulls from a service-role-gated endpoint that joins the operator row.
+  //
+  // Leaflet is loaded lazily on first open so captains (who never reach
+  // this screen) don't pay the bundle cost.
+
+  // Subset of the public widget's SPECIES_META — only what we need for
+  // pin color / icon. Kept short on purpose; falls through to default for
+  // any species the widget supports but we haven't styled here.
+  const ADMIN_SIGHTINGS_SPECIES_META = {
+    'Orca':                          { icon: '🐋', color: '#000000', borderColor: '#000000' },
+    'Transient Orcas':               { icon: '🐋', color: '#000000', borderColor: '#000000' },
+    'Offshore Orcas':                { icon: '🐋', color: '#000000', borderColor: '#000000' },
+    'Resident Orcas':                { icon: '🐋', color: '#000000', borderColor: '#000000' },
+    'Humpback Whale':                { icon: '🐳', color: '#111111', borderColor: '#555' },
+    'Blue Whale':                    { icon: '🐋', color: '#2b6cb0', borderColor: '#1a4a8a' },
+    'Fin Whale':                     { icon: '🐋', color: '#744210', borderColor: '#4a2800' },
+    'Gray Whale':                    { icon: '🐋', color: '#718096', borderColor: '#4a5568' },
+    'Minke Whale':                   { icon: '🐋', color: '#2c7a7b', borderColor: '#1a5a5b' },
+    'Sperm Whale':                   { icon: '🐋', color: '#4a1942', borderColor: '#2d0f29' },
+    'Pacific White-sided Dolphin':   { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+    'Common Dolphin':                { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+    "Risso's Dolphin":               { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+    'Bottlenose Dolphin':            { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
+    'Sea Otter':                     { icon: '🦦', color: '#c05621', borderColor: '#7b341e' },
+    'Mola Mola':                     { icon: '🐟', color: '#6b46c1', borderColor: '#44337a' },
+    'White Shark':                   { icon: '🦈', color: '#4a5568', borderColor: '#2d3748' },
+    'default':                       { icon: '🌊', color: '#4a5568', borderColor: '#2d3748' },
+  };
+
+  const adminSightingsState = {
+    rows: [],          // raw rows from /api/admin/sightings
+    rangeDays: 'all',  // '7' | '30' | 'all'
+    viewMode: 'individual', // 'individual' | 'grouped'
+    showAll: false,    // expand the 5-row cap in individual view
+    focusedTripKey: null, // operator_id|trip_date — when set, the map only
+                          // shows that trip's pins (set by grouped-view
+                          // clicks, cleared on view/filter change)
+    map: null,         // lazy Leaflet map instance
+    markers: [],       // current marker layer
+  };
+  const ADMIN_SIGHTINGS_INDIVIDUAL_CAP = 5;
+  let leafletLoading = null; // cached promise so concurrent opens don't double-load
+
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (leafletLoading) return leafletLoading;
+    leafletLoading = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Leaflet'));
+      document.head.appendChild(script);
+    });
+    return leafletLoading;
+  }
+
+  async function openAdminSightings() {
+    showScreen('screenAdminSightings');
+    const tbl = document.getElementById('adminSightingsTable');
+    tbl.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const [_, opsRes, sightingsRes] = await Promise.all([
+        loadLeaflet(),
+        fetch('/api/admin/operators', { headers: await adminAuthHeader() }),
+        fetch('/api/admin/sightings', { headers: await adminAuthHeader() }),
+      ]);
+      if (!opsRes.ok)       throw new Error('Operators HTTP ' + opsRes.status);
+      if (!sightingsRes.ok) throw new Error('Sightings HTTP ' + sightingsRes.status);
+      const operators = await opsRes.json();
+      adminSightingsState.rows = await sightingsRes.json();
+      populateAdminSightingsOpDropdown(operators);
+      initAdminSightingsMap();
+      renderAdminSightings();
+    } catch (err) {
+      tbl.innerHTML = `<div class="empty">Could not load: ${escapeHtml(err.message || String(err))}</div>`;
+    }
+  }
+
+  function populateAdminSightingsOpDropdown(operators) {
+    const sel = document.getElementById('adminSightingsOp');
+    // Preserve "All operators" placeholder, append one option per operator.
+    sel.innerHTML = '<option value="">All operators</option>' +
+      operators.map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)}</option>`).join('');
+  }
+
+  function initAdminSightingsMap() {
+    if (adminSightingsState.map) return; // already built
+    // Center on Monterey Bay like the public widget; bounds fit-to-markers
+    // takes over once we have data so other regions auto-frame correctly.
+    const map = L.map('adminSightingsMap', {
+      center: [36.803, -121.787], zoom: 10,
+      zoomControl: true, scrollWheelZoom: true, attributionControl: false,
+    });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.7 }).addTo(map);
+    adminSightingsState.map = map;
+  }
+
+  function setAdminSightingsRange(range) {
+    adminSightingsState.rangeDays = range;
+    adminSightingsState.showAll = false; // reset expand state on filter change
+    clearAdminSightingsFocus();
+    document.querySelectorAll('#screenAdminSightings .chip[data-range]').forEach(c => {
+      c.classList.toggle('active', String(c.dataset.range) === String(range));
+    });
+    renderAdminSightings();
+  }
+
+  function setAdminSightingsView(mode) {
+    adminSightingsState.viewMode = mode;
+    adminSightingsState.showAll = false;
+    // Switching to Individual restores every pin on the map — the user
+    // asked for the per-trip filter to apply only inside grouped mode.
+    if (mode === 'individual') clearAdminSightingsFocus();
+    document.querySelectorAll('#screenAdminSightings .chip[data-view]').forEach(c => {
+      c.classList.toggle('active', c.dataset.view === mode);
+    });
+    renderAdminSightings();
+  }
+
+  function filteredAdminSightings() {
+    const opId = document.getElementById('adminSightingsOp').value || '';
+    const range = adminSightingsState.rangeDays;
+    let rows = adminSightingsState.rows;
+    if (opId) rows = rows.filter(r => r.operator_id === opId);
+    if (range !== 'all') {
+      const cutoff = new Date(Date.now() - parseInt(range, 10) * 86400000);
+      const cutoffKey = cutoff.toISOString().slice(0, 10);
+      rows = rows.filter(r => (r.trip_date || '') >= cutoffKey);
+    }
+    return rows;
+  }
+
+  function renderAdminSightings() {
+    const rows = filteredAdminSightings();
+    // Trip count = distinct (operator_id, trip_date) — useful context even
+    // in individual view since "12 sightings across 3 trips" reads better
+    // than "12 sightings" alone.
+    const tripKeys = new Set(rows.map(r => `${r.operator_id}|${r.trip_date}`));
+    const tripCount = tripKeys.size;
+    document.getElementById('adminSightingsCount').textContent =
+      `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
+    // Map is narrowed when a trip is focused (set by clicking a grouped
+    // card); list stays full so the admin can hop to another trip.
+    const focused = adminSightingsState.focusedTripKey;
+    const mapRows = focused
+      ? rows.filter(r => `${r.operator_id}|${r.trip_date}` === focused)
+      : rows;
+    renderAdminSightingsMarkers(mapRows);
+    if (adminSightingsState.viewMode === 'grouped') {
+      renderAdminSightingsGrouped(rows);
+    } else {
+      renderAdminSightingsTable(rows);
+    }
+  }
+
+  // Reset the single-trip map focus. Called when the user changes any
+  // top-level filter or switches back to Individual view — the focused
+  // trip might not even be in the new filtered set, so don't carry it.
+  function clearAdminSightingsFocus() {
+    adminSightingsState.focusedTripKey = null;
+  }
+
+  function renderAdminSightingsMarkers(rows) {
+    const map = adminSightingsState.map;
+    if (!map) return;
+    adminSightingsState.markers.forEach(m => map.removeLayer(m));
+    adminSightingsState.markers = [];
+    const latlngs = [];
+    rows.forEach(r => {
+      if (r.lat == null || r.lng == null) return;
+      const meta = ADMIN_SIGHTINGS_SPECIES_META[r.species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+      const marker = L.circleMarker([+r.lat, +r.lng], {
+        radius: 7,
+        fillColor: meta.color,
+        color: meta.borderColor || '#000',
+        weight: 1.5,
+        fillOpacity: 0.9,
+        opacity: 1,
+      });
+      const depth = (r.depth_meters != null) ? `${Math.round(r.depth_meters)}m` : '';
+      marker.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;">
+        <strong style="font-size:13px;">${meta.icon} ${escapeHtml(r.species || 'Unknown')}</strong><br>
+        ${escapeHtml(r.operator_name || r.operator_slug || '')}<br>
+        Count: <strong>${r.count ?? '—'}</strong> ${depth ? `· Depth: <strong>${depth}</strong>` : ''}<br>
+        ${escapeHtml(r.trip_date || '')}
+      </div>`);
+      // Tag the marker so list-row clicks can look it up without rebuilding.
+      marker._sightingId = r.id;
+      marker._tripKey = `${r.operator_id}|${r.trip_date}`;
+      marker._species = r.species;
+      marker.addTo(map);
+      adminSightingsState.markers.push(marker);
+      latlngs.push([+r.lat, +r.lng]);
+    });
+    if (latlngs.length) {
+      map.fitBounds(latlngs, { padding: [30, 30], maxZoom: 12 });
+    }
+  }
+
+  // Scroll the map back into view (lists can push it off-screen on mobile)
+  // and pan/zoom Leaflet to the marker(s) the user just clicked.
+  function focusAdminSightingsMarkers(matches) {
+    if (!matches.length || !adminSightingsState.map) return;
+    const map = adminSightingsState.map;
+    document.getElementById('adminSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (matches.length === 1) {
+      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 12), { duration: 0.6 });
+      matches[0].openPopup();
+    } else {
+      const bounds = L.latLngBounds(matches.map(m => m.getLatLng()));
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 0.6 });
+      matches[0].openPopup();
+    }
+  }
+
+  function focusAdminSighting(id) {
+    const m = adminSightingsState.markers.find(x => x._sightingId === id);
+    focusAdminSightingsMarkers(m ? [m] : []);
+  }
+
+  function focusAdminTripSpecies(tripKey, species) {
+    // Filter the map down to just this trip's pins. Re-render markers
+    // first so other days vanish; then zoom further to the species's
+    // pins if one was clicked, otherwise the fitBounds inside the
+    // marker rebuild already framed the whole trip.
+    adminSightingsState.focusedTripKey = tripKey;
+    renderAdminSightings();
+    if (species) {
+      const matches = adminSightingsState.markers.filter(x => x._species === species);
+      focusAdminSightingsMarkers(matches);
+    } else {
+      // Still scroll the map into view (the fitBounds inside the marker
+      // rebuild handles framing) so the admin sees the result of the click.
+      document.getElementById('adminSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function renderAdminSightingsTable(rows) {
+    const tbl = document.getElementById('adminSightingsTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
+    // Cap at N rows by default so the admin sees a glanceable feed rather
+    // than a wall of every sighting ever. Expand button reveals the rest.
+    const cap = ADMIN_SIGHTINGS_INDIVIDUAL_CAP;
+    const showAll = adminSightingsState.showAll || rows.length <= cap;
+    const shown = showAll ? rows : rows.slice(0, cap);
+    const rowsHtml = shown.map(r => {
+      const meta = ADMIN_SIGHTINGS_SPECIES_META[r.species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+      const depth = (r.depth_meters != null) ? ` · ${Math.round(r.depth_meters)}m` : '';
+      const mapHref = (r.lat != null && r.lng != null)
+        ? `https://www.google.com/maps?q=${r.lat},${r.lng}`
+        : null;
+      const coords = mapHref
+        ? `<a href="${mapHref}" target="_blank" rel="noopener" style="color:var(--text-dim);">${(+r.lat).toFixed(3)}, ${(+r.lng).toFixed(3)}</a>`
+        : '<span style="color:var(--text-dim);">no GPS</span>';
+      const notes = r.behavior_notes
+        ? `<div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${escapeHtml(r.behavior_notes)}</div>`
+        : '';
+      const dot = `<span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>`;
+      const clickable = (r.lat != null && r.lng != null);
+      // Click → pan/zoom map to this sighting's pin and open its popup.
+      // Rows without GPS aren't clickable since there's no pin to focus.
+      const onClick = clickable ? ` onclick="focusAdminSighting('${jsAttrStr(r.id)}')"` : '';
+      const cursor  = clickable ? ' cursor:pointer;' : '';
+      return `<div class="sighting-row" style="${cursor}"${onClick}>
+        <div>
+          <div class="sighting-species">${dot}${escapeHtml(r.species || 'Unknown')} <span style="color:var(--text-dim);font-weight:500;">×${r.count ?? '—'}</span></div>
+          <div class="sighting-meta">${escapeHtml(r.operator_name || r.operator_slug || '')} · ${escapeHtml(r.trip_date || '')}${depth} · ${coords}</div>
+          ${notes}
+        </div>
+      </div>`;
+    }).join('');
+    const expand = showAll ? '' :
+      `<button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="adminSightingsState.showAll = true; renderAdminSightings();">Show all ${rows.length}</button>`;
+    tbl.innerHTML = rowsHtml + expand;
+  }
+
+  // Groups rows by (operator_id, trip_date) and renders one card per trip
+  // with a species-level tally — mirrors the public widget's "trip card"
+  // pattern but without species emojis. Trips are ordered newest first.
+  function renderAdminSightingsGrouped(rows) {
+    const tbl = document.getElementById('adminSightingsTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
+    // Build trip map preserving sort order (rows come back trip_date.desc).
+    const trips = new Map();
+    rows.forEach(r => {
+      const key = `${r.operator_id}|${r.trip_date}`;
+      if (!trips.has(key)) {
+        trips.set(key, {
+          operator_name: r.operator_name || r.operator_slug || '',
+          trip_date: r.trip_date,
+          species: new Map(), // species -> running count total
+          animals: 0,
+        });
+      }
+      const trip = trips.get(key);
+      const n = Number(r.count) || 0;
+      trip.species.set(r.species, (trip.species.get(r.species) || 0) + n);
+      trip.animals += n;
+    });
+    const dateLabel = (key) => {
+      // key is YYYY-MM-DD; render as "Wednesday, May 6, 2026"
+      try {
+        return new Date(key + 'T00:00:00').toLocaleDateString('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+        });
+      } catch { return key || ''; }
+    };
+    tbl.innerHTML = Array.from(trips.entries()).map(([tripKey, trip]) => {
+      const tally = Array.from(trip.species.entries())
+        .sort((a, b) => b[1] - a[1]) // most-spotted species first
+        .map(([species, count]) => {
+          const meta = ADMIN_SIGHTINGS_SPECIES_META[species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+          // Clicking a species row focuses the map on just that species's
+          // pins for this trip — usually 1-3 pins, sometimes more.
+          return `<div class="grouped-species-row" style="cursor:pointer;" onclick="event.stopPropagation(); focusAdminTripSpecies('${jsAttrStr(tripKey)}', '${jsAttrStr(species)}')">
+            <span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>
+            <span class="grouped-species-name">${escapeHtml(species || 'Unknown')}</span>
+            <span class="grouped-species-count">×${count}</span>
+          </div>`;
+        }).join('');
+      // Clicking the card header (anywhere outside a species row) focuses
+      // the map on every pin from that trip.
+      return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusAdminTripSpecies('${jsAttrStr(tripKey)}', null)">
+        <div class="grouped-trip-header">
+          <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}</div>
+          <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
+        </div>
+        <div class="grouped-species-list">${tally}</div>
+      </div>`;
+    }).join('');
   }
 
   // Suggest a slug from the operator name as the user types. Standard
