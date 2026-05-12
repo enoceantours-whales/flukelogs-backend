@@ -3710,11 +3710,21 @@ window.addEventListener('message', function(e) {
 
   function initCaptainSightingsMap() {
     if (captainSightingsState.map) return;
-    // Center on the operator's configured default if available, else
-    // Monterey Bay (the public widget's default). fitBounds takes over
-    // once we have data.
-    const center = (operatorConfig && operatorConfig.default_map_center) || [36.803, -121.787];
-    const zoom   = (operatorConfig && operatorConfig.default_map_zoom)   || 10;
+    // operators.default_map_center is stored as a "lat,lng" text string
+    // (per 0001_init_multi_tenant.sql) — parse before handing to Leaflet,
+    // which expects [lat,lng] and throws an obscure "Cannot read properties
+    // of null (reading 'lat')" on the raw string. Fall back to Monterey Bay
+    // (the public widget's default) on any parse failure.
+    const fallback = [36.803, -121.787];
+    let center = fallback;
+    const raw = operatorConfig && operatorConfig.default_map_center;
+    if (typeof raw === 'string') {
+      const [lat, lng] = raw.split(',').map(s => parseFloat(s.trim()));
+      if (Number.isFinite(lat) && Number.isFinite(lng)) center = [lat, lng];
+    } else if (Array.isArray(raw) && raw.length === 2 && Number.isFinite(+raw[0]) && Number.isFinite(+raw[1])) {
+      center = [+raw[0], +raw[1]];
+    }
+    const zoom = (operatorConfig && operatorConfig.default_map_zoom) || 10;
     const map = L.map('captainSightingsMap', {
       center, zoom,
       zoomControl: true, scrollWheelZoom: true, attributionControl: false,
