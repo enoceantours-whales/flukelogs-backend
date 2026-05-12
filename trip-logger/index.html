@@ -730,6 +730,67 @@
       color: var(--bg);
       border-color: var(--text);
     }
+
+    /* Small colored dot next to species names (replaces emojis in admin
+       sightings views — same color palette as the public widget pins). */
+    #screenAdminSightings .species-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* Grouped-view trip card: header (operator + date + summary) above
+       a list of species tallies, mirroring the public widget's design. */
+    #screenAdminSightings .grouped-trip-card {
+      border: 1px solid var(--hair);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: rgba(255,255,255,0.015);
+    }
+    #screenAdminSightings .grouped-trip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    #screenAdminSightings .grouped-trip-title {
+      font: 600 14px/1.3 "Open Sans", sans-serif;
+      color: var(--text);
+    }
+    #screenAdminSightings .grouped-trip-summary {
+      font: 500 11px/1 "Open Sans", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    #screenAdminSightings .grouped-species-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #screenAdminSightings .grouped-species-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    #screenAdminSightings .grouped-species-row:first-child { border-top: none; }
+    #screenAdminSightings .grouped-species-name {
+      flex: 1;
+      font: 500 13px/1.3 "Open Sans", sans-serif;
+      color: var(--text);
+    }
+    #screenAdminSightings .grouped-species-count {
+      font: 500 13px/1 "Open Sans", sans-serif;
+      color: var(--text-dim);
+      margin-left: 12px;
+    }
     .sighting-iconbtn {
       appearance: none;
       background: transparent;
@@ -1310,6 +1371,10 @@
           <button type="button" class="chip" data-range="7"   onclick="setAdminSightingsRange(7)">7d</button>
           <button type="button" class="chip" data-range="30"  onclick="setAdminSightingsRange(30)">30d</button>
           <button type="button" class="chip active" data-range="all" onclick="setAdminSightingsRange('all')">All</button>
+        </div>
+        <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
+          <button type="button" class="chip active" data-view="individual" onclick="setAdminSightingsView('individual')">Individual</button>
+          <button type="button" class="chip"        data-view="grouped"    onclick="setAdminSightingsView('grouped')">Grouped</button>
         </div>
       </div>
       <div id="adminSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
@@ -3259,11 +3324,14 @@ window.addEventListener('message', function(e) {
   };
 
   const adminSightingsState = {
-    rows: [],         // raw rows from /api/admin/sightings
-    rangeDays: 'all', // '7' | '30' | 'all'
-    map: null,        // lazy Leaflet map instance
-    markers: [],      // current marker layer
+    rows: [],          // raw rows from /api/admin/sightings
+    rangeDays: 'all',  // '7' | '30' | 'all'
+    viewMode: 'individual', // 'individual' | 'grouped'
+    showAll: false,    // expand the 5-row cap in individual view
+    map: null,         // lazy Leaflet map instance
+    markers: [],       // current marker layer
   };
+  const ADMIN_SIGHTINGS_INDIVIDUAL_CAP = 5;
   let leafletLoading = null; // cached promise so concurrent opens don't double-load
 
   function loadLeaflet() {
@@ -3327,8 +3395,18 @@ window.addEventListener('message', function(e) {
 
   function setAdminSightingsRange(range) {
     adminSightingsState.rangeDays = range;
-    document.querySelectorAll('#screenAdminSightings .chip').forEach(c => {
+    adminSightingsState.showAll = false; // reset expand state on filter change
+    document.querySelectorAll('#screenAdminSightings .chip[data-range]').forEach(c => {
       c.classList.toggle('active', String(c.dataset.range) === String(range));
+    });
+    renderAdminSightings();
+  }
+
+  function setAdminSightingsView(mode) {
+    adminSightingsState.viewMode = mode;
+    adminSightingsState.showAll = false;
+    document.querySelectorAll('#screenAdminSightings .chip[data-view]').forEach(c => {
+      c.classList.toggle('active', c.dataset.view === mode);
     });
     renderAdminSightings();
   }
@@ -3348,10 +3426,19 @@ window.addEventListener('message', function(e) {
 
   function renderAdminSightings() {
     const rows = filteredAdminSightings();
+    // Trip count = distinct (operator_id, trip_date) — useful context even
+    // in individual view since "12 sightings across 3 trips" reads better
+    // than "12 sightings" alone.
+    const tripKeys = new Set(rows.map(r => `${r.operator_id}|${r.trip_date}`));
+    const tripCount = tripKeys.size;
     document.getElementById('adminSightingsCount').textContent =
-      `${rows.length} sighting${rows.length === 1 ? '' : 's'}`;
+      `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
     renderAdminSightingsMarkers(rows);
-    renderAdminSightingsTable(rows);
+    if (adminSightingsState.viewMode === 'grouped') {
+      renderAdminSightingsGrouped(rows);
+    } else {
+      renderAdminSightingsTable(rows);
+    }
   }
 
   function renderAdminSightingsMarkers(rows) {
@@ -3390,7 +3477,12 @@ window.addEventListener('message', function(e) {
   function renderAdminSightingsTable(rows) {
     const tbl = document.getElementById('adminSightingsTable');
     if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
-    tbl.innerHTML = rows.map(r => {
+    // Cap at N rows by default so the admin sees a glanceable feed rather
+    // than a wall of every sighting ever. Expand button reveals the rest.
+    const cap = ADMIN_SIGHTINGS_INDIVIDUAL_CAP;
+    const showAll = adminSightingsState.showAll || rows.length <= cap;
+    const shown = showAll ? rows : rows.slice(0, cap);
+    const rowsHtml = shown.map(r => {
       const meta = ADMIN_SIGHTINGS_SPECIES_META[r.species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
       const depth = (r.depth_meters != null) ? ` · ${Math.round(r.depth_meters)}m` : '';
       const mapHref = (r.lat != null && r.lng != null)
@@ -3402,12 +3494,68 @@ window.addEventListener('message', function(e) {
       const notes = r.behavior_notes
         ? `<div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${escapeHtml(r.behavior_notes)}</div>`
         : '';
+      const dot = `<span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>`;
       return `<div class="sighting-row">
         <div>
-          <div class="sighting-species">${meta.icon} ${escapeHtml(r.species || 'Unknown')} <span style="color:var(--text-dim);font-weight:500;">×${r.count ?? '—'}</span></div>
+          <div class="sighting-species">${dot}${escapeHtml(r.species || 'Unknown')} <span style="color:var(--text-dim);font-weight:500;">×${r.count ?? '—'}</span></div>
           <div class="sighting-meta">${escapeHtml(r.operator_name || r.operator_slug || '')} · ${escapeHtml(r.trip_date || '')}${depth} · ${coords}</div>
           ${notes}
         </div>
+      </div>`;
+    }).join('');
+    const expand = showAll ? '' :
+      `<button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="adminSightingsState.showAll = true; renderAdminSightings();">Show all ${rows.length}</button>`;
+    tbl.innerHTML = rowsHtml + expand;
+  }
+
+  // Groups rows by (operator_id, trip_date) and renders one card per trip
+  // with a species-level tally — mirrors the public widget's "trip card"
+  // pattern but without species emojis. Trips are ordered newest first.
+  function renderAdminSightingsGrouped(rows) {
+    const tbl = document.getElementById('adminSightingsTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
+    // Build trip map preserving sort order (rows come back trip_date.desc).
+    const trips = new Map();
+    rows.forEach(r => {
+      const key = `${r.operator_id}|${r.trip_date}`;
+      if (!trips.has(key)) {
+        trips.set(key, {
+          operator_name: r.operator_name || r.operator_slug || '',
+          trip_date: r.trip_date,
+          species: new Map(), // species -> running count total
+          animals: 0,
+        });
+      }
+      const trip = trips.get(key);
+      const n = Number(r.count) || 0;
+      trip.species.set(r.species, (trip.species.get(r.species) || 0) + n);
+      trip.animals += n;
+    });
+    const dateLabel = (key) => {
+      // key is YYYY-MM-DD; render as "Wednesday, May 6, 2026"
+      try {
+        return new Date(key + 'T00:00:00').toLocaleDateString('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+        });
+      } catch { return key || ''; }
+    };
+    tbl.innerHTML = Array.from(trips.values()).map(trip => {
+      const tally = Array.from(trip.species.entries())
+        .sort((a, b) => b[1] - a[1]) // most-spotted species first
+        .map(([species, count]) => {
+          const meta = ADMIN_SIGHTINGS_SPECIES_META[species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+          return `<div class="grouped-species-row">
+            <span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>
+            <span class="grouped-species-name">${escapeHtml(species || 'Unknown')}</span>
+            <span class="grouped-species-count">×${count}</span>
+          </div>`;
+        }).join('');
+      return `<div class="grouped-trip-card">
+        <div class="grouped-trip-header">
+          <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}</div>
+          <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
+        </div>
+        <div class="grouped-species-list">${tally}</div>
       </div>`;
     }).join('');
   }
