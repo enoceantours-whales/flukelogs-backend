@@ -713,7 +713,7 @@
     .sighting-actions { display: flex; align-items: center; gap: 6px; }
 
     /* Admin sightings date-range chips */
-    #screenAdminSightings .chip {
+    :where(#screenAdminSightings, #screenCaptainSightings) .chip {
       font: 500 12px/1 "Open Sans", sans-serif;
       letter-spacing: 0.04em;
       padding: 7px 12px;
@@ -724,8 +724,8 @@
       cursor: pointer;
       transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
     }
-    #screenAdminSightings .chip:hover { background: rgba(255,255,255,.04); color: var(--text); }
-    #screenAdminSightings .chip.active {
+    :where(#screenAdminSightings, #screenCaptainSightings) .chip:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    :where(#screenAdminSightings, #screenCaptainSightings) .chip.active {
       background: var(--text);
       color: var(--bg);
       border-color: var(--text);
@@ -733,7 +733,7 @@
 
     /* Small colored dot next to species names (replaces emojis in admin
        sightings views — same color palette as the public widget pins). */
-    #screenAdminSightings .species-dot {
+    :where(#screenAdminSightings, #screenCaptainSightings) .species-dot {
       display: inline-block;
       width: 10px; height: 10px;
       border-radius: 50%;
@@ -744,14 +744,14 @@
 
     /* Grouped-view trip card: header (operator + date + summary) above
        a list of species tallies, mirroring the public widget's design. */
-    #screenAdminSightings .grouped-trip-card {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-trip-card {
       border: 1px solid var(--hair);
       border-radius: 8px;
       padding: 14px 16px;
       margin-bottom: 10px;
       background: rgba(255,255,255,0.015);
     }
-    #screenAdminSightings .grouped-trip-header {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-trip-header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
@@ -759,36 +759,36 @@
       margin-bottom: 10px;
       flex-wrap: wrap;
     }
-    #screenAdminSightings .grouped-trip-title {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-trip-title {
       font: 600 14px/1.3 "Open Sans", sans-serif;
       color: var(--text);
     }
-    #screenAdminSightings .grouped-trip-summary {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-trip-summary {
       font: 500 11px/1 "Open Sans", sans-serif;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text-dim);
     }
-    #screenAdminSightings .grouped-species-list {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-list {
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
-    #screenAdminSightings .grouped-species-row {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-row {
       display: flex;
       align-items: center;
       padding: 6px 0;
       border-top: 1px solid rgba(255,255,255,0.04);
     }
-    #screenAdminSightings .grouped-species-row:first-child { border-top: none; }
-    #screenAdminSightings .grouped-trip-card:hover { background: rgba(255,255,255,0.03); }
-    #screenAdminSightings .grouped-species-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
-    #screenAdminSightings .grouped-species-name {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-row:first-child { border-top: none; }
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-trip-card:hover { background: rgba(255,255,255,0.03); }
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-name {
       flex: 1;
       font: 500 13px/1.3 "Open Sans", sans-serif;
       color: var(--text);
     }
-    #screenAdminSightings .grouped-species-count {
+    :where(#screenAdminSightings, #screenCaptainSightings) .grouped-species-count {
       font: 500 13px/1 "Open Sans", sans-serif;
       color: var(--text-dim);
       margin-left: 12px;
@@ -1035,6 +1035,10 @@
       <a class="menu-item" id="footerPastTrips" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openPastTrips();">
         <svg class="glyph" viewBox="0 0 24 24"><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Past Trips</span>
+      </a>
+      <a class="menu-item" id="footerSightings" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openCaptainSightings();">
+        <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Sightings</span>
       </a>
       <a class="menu-item" id="footerSettings" href="#" role="menuitem" onclick="event.preventDefault(); closeHeaderMenu(); openSettings();">
         <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5A7 7 0 0 0 19 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1385,6 +1389,31 @@
       </div>
       <div id="adminSightingsTable"><div class="empty">Loading…</div></div>
       <button class="btn btn-outline" type="button" onclick="showScreen('screenAdmin')" style="margin-top:14px;">Back to Operators</button>
+    </div>
+  </div>
+
+  <!-- Captain-facing sightings widget — same shape as the admin view but
+       scoped to the caller's operator (no operator dropdown). -->
+  <div class="screen" id="screenCaptainSightings">
+    <div class="section">
+      <div class="section-label">Sightings</div>
+      <div class="admin-sightings-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
+        <div class="admin-sightings-chips" role="tablist" style="display:flex;gap:6px;">
+          <button type="button" class="chip" data-cap-range="7"   onclick="setCaptainSightingsRange(7)">7d</button>
+          <button type="button" class="chip" data-cap-range="30"  onclick="setCaptainSightingsRange(30)">30d</button>
+          <button type="button" class="chip active" data-cap-range="all" onclick="setCaptainSightingsRange('all')">All</button>
+        </div>
+      </div>
+      <div id="captainSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
+      <div class="admin-sightings-listbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <div id="captainSightingsCount" style="font-size:12px;color:var(--text-dim);"></div>
+        <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
+          <button type="button" class="chip active" data-cap-view="individual" onclick="setCaptainSightingsView('individual')">Individual</button>
+          <button type="button" class="chip"        data-cap-view="grouped"    onclick="setCaptainSightingsView('grouped')">Grouped</button>
+        </div>
+      </div>
+      <div id="captainSightingsTable"><div class="empty">Loading…</div></div>
+      <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')" style="margin-top:14px;">Back</button>
     </div>
   </div>
 
@@ -2682,14 +2711,14 @@
   function setRibbonForLoggedOut() {
     document.body.classList.add('is-login');
     closeHeaderMenu();
-    ['footerLogout','footerSettings','footerAdmin','footerPastTrips'].forEach(id => {
+    ['footerLogout','footerSettings','footerAdmin','footerPastTrips','footerSightings'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
   }
   function setRibbonForLoggedIn() {
     document.body.classList.remove('is-login');
-    ['footerLogout','footerSettings','footerPastTrips'].forEach(id => {
+    ['footerLogout','footerSettings','footerPastTrips','footerSightings'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden');
     });
@@ -2815,7 +2844,7 @@
       // Trips / Settings) and just show Admin + Log Out.
       const adminLink = document.getElementById('footerAdmin');
       if (adminLink) adminLink.classList.toggle('hidden', !isSuperAdmin);
-      ['footerGetStarted', 'footerPastTrips', 'footerSettings'].forEach(id => {
+      ['footerGetStarted', 'footerPastTrips', 'footerSightings', 'footerSettings'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden', isSuperAdmin);
       });
@@ -3638,6 +3667,261 @@ window.addEventListener('message', function(e) {
       return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusAdminTripSpecies('${jsAttrStr(tripKey)}', null)">
         <div class="grouped-trip-header">
           <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}</div>
+          <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
+        </div>
+        <div class="grouped-species-list">${tally}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Captain: My Sightings (operator-scoped widget) ───────────────
+  // Mirror of the admin All Sightings screen — same map + Individual /
+  // Grouped list + trip-focus filter — but scoped server-side to the
+  // caller's operator via the JWT (no operator dropdown). Reuses the
+  // module-level SPECIES_META, loadLeaflet, jsAttrStr, escapeHtml.
+
+  const captainSightingsState = {
+    rows: [],
+    rangeDays: 'all',
+    viewMode: 'individual',
+    showAll: false,
+    focusedTripKey: null,
+    map: null,
+    markers: [],
+  };
+
+  async function openCaptainSightings() {
+    showScreen('screenCaptainSightings');
+    const tbl = document.getElementById('captainSightingsTable');
+    tbl.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const [, res] = await Promise.all([
+        loadLeaflet(),
+        fetch('/api/operator/sightings', { headers: await adminAuthHeader() }),
+      ]);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      captainSightingsState.rows = await res.json();
+      initCaptainSightingsMap();
+      renderCaptainSightings();
+    } catch (err) {
+      tbl.innerHTML = `<div class="empty">Could not load: ${escapeHtml(err.message || String(err))}</div>`;
+    }
+  }
+
+  function initCaptainSightingsMap() {
+    if (captainSightingsState.map) return;
+    // operators.default_map_center is stored as a "lat,lng" text string
+    // (per 0001_init_multi_tenant.sql) — parse before handing to Leaflet,
+    // which expects [lat,lng] and throws an obscure "Cannot read properties
+    // of null (reading 'lat')" on the raw string. Fall back to Monterey Bay
+    // (the public widget's default) on any parse failure.
+    const fallback = [36.803, -121.787];
+    let center = fallback;
+    const raw = operatorConfig && operatorConfig.default_map_center;
+    if (typeof raw === 'string') {
+      const [lat, lng] = raw.split(',').map(s => parseFloat(s.trim()));
+      if (Number.isFinite(lat) && Number.isFinite(lng)) center = [lat, lng];
+    } else if (Array.isArray(raw) && raw.length === 2 && Number.isFinite(+raw[0]) && Number.isFinite(+raw[1])) {
+      center = [+raw[0], +raw[1]];
+    }
+    const zoom = (operatorConfig && operatorConfig.default_map_zoom) || 10;
+    const map = L.map('captainSightingsMap', {
+      center, zoom,
+      zoomControl: true, scrollWheelZoom: true, attributionControl: false,
+    });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, opacity: 0.7 }).addTo(map);
+    captainSightingsState.map = map;
+  }
+
+  function setCaptainSightingsRange(range) {
+    captainSightingsState.rangeDays = range;
+    captainSightingsState.showAll = false;
+    clearCaptainSightingsFocus();
+    document.querySelectorAll('#screenCaptainSightings .chip[data-cap-range]').forEach(c => {
+      c.classList.toggle('active', String(c.dataset.capRange) === String(range));
+    });
+    renderCaptainSightings();
+  }
+
+  function setCaptainSightingsView(mode) {
+    captainSightingsState.viewMode = mode;
+    captainSightingsState.showAll = false;
+    if (mode === 'individual') clearCaptainSightingsFocus();
+    document.querySelectorAll('#screenCaptainSightings .chip[data-cap-view]').forEach(c => {
+      c.classList.toggle('active', c.dataset.capView === mode);
+    });
+    renderCaptainSightings();
+  }
+
+  function filteredCaptainSightings() {
+    const range = captainSightingsState.rangeDays;
+    let rows = captainSightingsState.rows;
+    if (range !== 'all') {
+      const cutoff = new Date(Date.now() - parseInt(range, 10) * 86400000);
+      const cutoffKey = cutoff.toISOString().slice(0, 10);
+      rows = rows.filter(r => (r.trip_date || '') >= cutoffKey);
+    }
+    return rows;
+  }
+
+  function renderCaptainSightings() {
+    const rows = filteredCaptainSightings();
+    const tripKeys = new Set(rows.map(r => r.trip_date)); // captain = one operator, so date alone is unique
+    const tripCount = tripKeys.size;
+    document.getElementById('captainSightingsCount').textContent =
+      `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
+    const focused = captainSightingsState.focusedTripKey;
+    const mapRows = focused
+      ? rows.filter(r => r.trip_date === focused)
+      : rows;
+    renderCaptainSightingsMarkers(mapRows);
+    if (captainSightingsState.viewMode === 'grouped') {
+      renderCaptainSightingsGrouped(rows);
+    } else {
+      renderCaptainSightingsTable(rows);
+    }
+  }
+
+  function clearCaptainSightingsFocus() {
+    captainSightingsState.focusedTripKey = null;
+  }
+
+  function renderCaptainSightingsMarkers(rows) {
+    const map = captainSightingsState.map;
+    if (!map) return;
+    captainSightingsState.markers.forEach(m => map.removeLayer(m));
+    captainSightingsState.markers = [];
+    const latlngs = [];
+    rows.forEach(r => {
+      if (r.lat == null || r.lng == null) return;
+      const meta = ADMIN_SIGHTINGS_SPECIES_META[r.species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+      const marker = L.circleMarker([+r.lat, +r.lng], {
+        radius: 7,
+        fillColor: meta.color,
+        color: meta.borderColor || '#000',
+        weight: 1.5,
+        fillOpacity: 0.9,
+        opacity: 1,
+      });
+      const depth = (r.depth_meters != null) ? `${Math.round(r.depth_meters)}m` : '';
+      marker.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6;">
+        <strong style="font-size:13px;">${meta.icon} ${escapeHtml(r.species || 'Unknown')}</strong><br>
+        Count: <strong>${r.count ?? '—'}</strong> ${depth ? `· Depth: <strong>${depth}</strong>` : ''}<br>
+        ${escapeHtml(r.trip_date || '')}
+      </div>`);
+      marker._sightingId = r.id;
+      marker._tripKey = r.trip_date;
+      marker._species = r.species;
+      marker.addTo(map);
+      captainSightingsState.markers.push(marker);
+      latlngs.push([+r.lat, +r.lng]);
+    });
+    if (latlngs.length) {
+      map.fitBounds(latlngs, { padding: [30, 30], maxZoom: 12 });
+    }
+  }
+
+  function focusCaptainSightingsMarkers(matches) {
+    if (!matches.length || !captainSightingsState.map) return;
+    const map = captainSightingsState.map;
+    document.getElementById('captainSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (matches.length === 1) {
+      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 12), { duration: 0.6 });
+      matches[0].openPopup();
+    } else {
+      const bounds = L.latLngBounds(matches.map(m => m.getLatLng()));
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 0.6 });
+      matches[0].openPopup();
+    }
+  }
+
+  function focusCaptainSighting(id) {
+    const m = captainSightingsState.markers.find(x => x._sightingId === id);
+    focusCaptainSightingsMarkers(m ? [m] : []);
+  }
+
+  function focusCaptainTripSpecies(tripKey, species) {
+    captainSightingsState.focusedTripKey = tripKey;
+    renderCaptainSightings();
+    if (species) {
+      const matches = captainSightingsState.markers.filter(x => x._species === species);
+      focusCaptainSightingsMarkers(matches);
+    } else {
+      document.getElementById('captainSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function renderCaptainSightingsTable(rows) {
+    const tbl = document.getElementById('captainSightingsTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
+    const cap = ADMIN_SIGHTINGS_INDIVIDUAL_CAP;
+    const showAll = captainSightingsState.showAll || rows.length <= cap;
+    const shown = showAll ? rows : rows.slice(0, cap);
+    const rowsHtml = shown.map(r => {
+      const meta = ADMIN_SIGHTINGS_SPECIES_META[r.species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+      const depth = (r.depth_meters != null) ? ` · ${Math.round(r.depth_meters)}m` : '';
+      const mapHref = (r.lat != null && r.lng != null)
+        ? `https://www.google.com/maps?q=${r.lat},${r.lng}`
+        : null;
+      const coords = mapHref
+        ? `<a href="${mapHref}" target="_blank" rel="noopener" style="color:var(--text-dim);">${(+r.lat).toFixed(3)}, ${(+r.lng).toFixed(3)}</a>`
+        : '<span style="color:var(--text-dim);">no GPS</span>';
+      const notes = r.behavior_notes
+        ? `<div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${escapeHtml(r.behavior_notes)}</div>`
+        : '';
+      const dot = `<span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>`;
+      const clickable = (r.lat != null && r.lng != null);
+      const onClick = clickable ? ` onclick="focusCaptainSighting('${jsAttrStr(r.id)}')"` : '';
+      const cursor  = clickable ? ' cursor:pointer;' : '';
+      return `<div class="sighting-row" style="${cursor}"${onClick}>
+        <div>
+          <div class="sighting-species">${dot}${escapeHtml(r.species || 'Unknown')} <span style="color:var(--text-dim);font-weight:500;">×${r.count ?? '—'}</span></div>
+          <div class="sighting-meta">${escapeHtml(r.trip_date || '')}${depth} · ${coords}</div>
+          ${notes}
+        </div>
+      </div>`;
+    }).join('');
+    const expand = showAll ? '' :
+      `<button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="captainSightingsState.showAll = true; renderCaptainSightings();">Show all ${rows.length}</button>`;
+    tbl.innerHTML = rowsHtml + expand;
+  }
+
+  function renderCaptainSightingsGrouped(rows) {
+    const tbl = document.getElementById('captainSightingsTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
+    const trips = new Map();
+    rows.forEach(r => {
+      const key = r.trip_date;
+      if (!trips.has(key)) {
+        trips.set(key, { trip_date: r.trip_date, species: new Map(), animals: 0 });
+      }
+      const trip = trips.get(key);
+      const n = Number(r.count) || 0;
+      trip.species.set(r.species, (trip.species.get(r.species) || 0) + n);
+      trip.animals += n;
+    });
+    const dateLabel = (key) => {
+      try {
+        return new Date(key + 'T00:00:00').toLocaleDateString('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+        });
+      } catch { return key || ''; }
+    };
+    tbl.innerHTML = Array.from(trips.entries()).map(([tripKey, trip]) => {
+      const tally = Array.from(trip.species.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([species, count]) => {
+          const meta = ADMIN_SIGHTINGS_SPECIES_META[species] || ADMIN_SIGHTINGS_SPECIES_META['default'];
+          return `<div class="grouped-species-row" style="cursor:pointer;" onclick="event.stopPropagation(); focusCaptainTripSpecies('${jsAttrStr(tripKey)}', '${jsAttrStr(species)}')">
+            <span class="species-dot" style="background:${meta.color};border:1px solid ${meta.borderColor || '#000'};"></span>
+            <span class="grouped-species-name">${escapeHtml(species || 'Unknown')}</span>
+            <span class="grouped-species-count">×${count}</span>
+          </div>`;
+        }).join('');
+      return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusCaptainTripSpecies('${jsAttrStr(tripKey)}', null)">
+        <div class="grouped-trip-header">
+          <div class="grouped-trip-title">${escapeHtml(dateLabel(trip.trip_date))}</div>
           <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
         </div>
         <div class="grouped-species-list">${tally}</div>
