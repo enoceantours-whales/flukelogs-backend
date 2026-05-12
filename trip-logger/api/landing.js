@@ -16,7 +16,6 @@ module.exports = async function handler(req, res) {
   // Live widget on the page so visitors see real Enocean data, not a mockup.
   const widgetSrc = `${origin}/api/sightings?op=enocean`;
   const contactEmail = 'enoceantours@gmail.com';
-  const mailtoHref = `mailto:${contactEmail}?subject=Whale-watch%20operator%20platform%20%E2%80%94%20demo%20request`;
 
   res.status(200).send(`<!DOCTYPE html>
 <html lang="en">
@@ -267,6 +266,80 @@ module.exports = async function handler(req, res) {
     color: var(--text-dim); font-size: 14px; margin: 0;
   }
 
+  /* ── Contact form ─────────────────────────────────────── */
+  .form-wrap {
+    margin-top: 28px;
+    border: 1px solid var(--hair);
+    border-radius: 18px;
+    padding: 30px;
+    background: var(--ink-3);
+    box-shadow: 0 18px 36px rgba(0,0,0,0.4);
+  }
+  .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  }
+  @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+  .form-field { display: flex; flex-direction: column; gap: 6px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-field label {
+    font: 600 10px/1 "Open Sans", sans-serif;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .form-field input,
+  .form-field textarea {
+    width: 100%;
+    background: var(--ink);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font: 400 14px/1.5 "Open Sans", sans-serif;
+    transition: border-color .15s, background .15s;
+  }
+  .form-field input:focus,
+  .form-field textarea:focus {
+    outline: none;
+    border-color: var(--teal);
+    background: var(--ink-2);
+  }
+  .form-field textarea { resize: vertical; min-height: 90px; font-family: inherit; }
+  .form-submit-row {
+    margin-top: 22px;
+    display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap;
+  }
+  .form-error {
+    color: #f59e96; font-size: 13px;
+    display: none;
+  }
+  .form-error.show { display: block; }
+  .form-success {
+    display: none;
+    text-align: center;
+    padding: 40px 28px;
+  }
+  .form-success.show { display: block; }
+  .form-success-mark {
+    width: 48px; height: 48px; border-radius: 50%;
+    margin: 0 auto 16px;
+    background: rgba(111,177,172,.18);
+    border: 1px solid rgba(111,177,172,.5);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--teal);
+  }
+  .form-success h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400; font-size: 22px;
+    color: var(--text); margin: 0 0 8px;
+  }
+  .form-success p {
+    color: var(--text-dim); font-size: 14px; max-width: 36ch; margin: 0 auto;
+  }
+  .form-wrap.is-submitted .form-grid,
+  .form-wrap.is-submitted .form-submit-row { display: none; }
+  .form-wrap.is-submitted .form-success { display: block; }
+
   /* ── Footer ───────────────────────────────────────────── */
   footer {
     border-top: 1px solid var(--hair);
@@ -284,7 +357,7 @@ module.exports = async function handler(req, res) {
 
 <nav class="nav">
   <div class="brand"><span class="brand-mark"></span>Trip Logger</div>
-  <a class="nav-cta" href="${mailtoHref}">Book a demo</a>
+  <a class="nav-cta" href="#contact">Request a demo</a>
 </nav>
 
 <header class="hero">
@@ -294,7 +367,7 @@ module.exports = async function handler(req, res) {
     Captain logs sightings on the boat. Trip Logger turns each one into a branded PDF for the company, a personalized email for every guest, and a live sightings widget for your website — automatically, the moment the trip ends.
   </p>
   <div class="hero-ctas">
-    <a class="btn-primary" href="${mailtoHref}">Book a demo</a>
+    <a class="btn-primary" href="#contact">Request a demo</a>
     <a class="btn-secondary" href="#demo">See it live</a>
   </div>
 </header>
@@ -338,7 +411,7 @@ module.exports = async function handler(req, res) {
     </div>
     <div>
       <div class="feature-h"><span class="feature-dot"></span>SEO-friendly sightings widget</div>
-      <p class="feature-p">Fresh species data on your website indexed by Google. Ranks for the high-intent queries your competitors don't ("humpback Monterey Bay this week"). Bookings adjacent.</p>
+      <p class="feature-p">Fresh species data on your website indexed by Google — ranks for the high-intent queries your competitors don't ("humpback Monterey Bay this week"). Visitors can also tap Share on any trip to send the audio recap straight to a friend, turning every guest into a referrer.</p>
     </div>
     <div>
       <div class="feature-h"><span class="feature-dot"></span>FareHarbor integration</div>
@@ -387,12 +460,98 @@ module.exports = async function handler(req, res) {
     <h3>Want this for your operation?</h3>
     <p>A 30-minute call walks through your boat, your bookings, and what your branded version would look like.</p>
   </div>
-  <a class="btn-primary" href="${mailtoHref}">Book a demo</a>
+  <a class="btn-primary" href="#contact">Request a demo</a>
 </div>
 
+<section id="contact">
+  <div class="section-label">Request a demo</div>
+  <h2 class="section-h2">Tell me about your operation.</h2>
+  <p class="section-lede">
+    Slater reads every submission personally. Most replies come back within a day with a time to talk.
+  </p>
+  <form class="form-wrap" id="demoForm" autocomplete="on" novalidate>
+    <div class="form-grid">
+      <div class="form-field">
+        <label for="demoName">Your name</label>
+        <input id="demoName" name="name" type="text" autocomplete="name" required>
+      </div>
+      <div class="form-field">
+        <label for="demoEmail">Email</label>
+        <input id="demoEmail" name="email" type="email" autocomplete="email" required>
+      </div>
+      <div class="form-field">
+        <label for="demoCompany">Company</label>
+        <input id="demoCompany" name="company" type="text" autocomplete="organization" required>
+      </div>
+      <div class="form-field">
+        <label for="demoWebsite">Website (optional)</label>
+        <input id="demoWebsite" name="website" type="url" placeholder="https://" autocomplete="url">
+      </div>
+      <div class="form-field full">
+        <label for="demoMessage">Tell me about your operation (optional)</label>
+        <textarea id="demoMessage" name="message" rows="4" placeholder="Boats, guests per year, current workflow, what made you look at this..."></textarea>
+      </div>
+    </div>
+    <div class="form-submit-row">
+      <button class="btn-primary" id="demoSubmit" type="submit">Send request</button>
+      <div class="form-error" id="demoError" role="alert"></div>
+    </div>
+    <div class="form-success" id="demoSuccess">
+      <div class="form-success-mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h3>Thanks — got it.</h3>
+      <p>Slater will be in touch within a day or so. If something's urgent, reply to the confirmation email.</p>
+    </div>
+  </form>
+</section>
+
+<script>
+(function() {
+  var form = document.getElementById('demoForm');
+  var btn = document.getElementById('demoSubmit');
+  var err = document.getElementById('demoError');
+  var wrap = form;
+  function setError(msg) { err.textContent = msg || ''; err.classList.toggle('show', !!msg); }
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    setError('');
+    var payload = {
+      name:    document.getElementById('demoName').value.trim(),
+      email:   document.getElementById('demoEmail').value.trim(),
+      company: document.getElementById('demoCompany').value.trim(),
+      website: document.getElementById('demoWebsite').value.trim() || null,
+      message: document.getElementById('demoMessage').value.trim() || null,
+      source:  'landing-page',
+    };
+    if (!payload.name)    return setError('Your name is required.');
+    if (!payload.email)   return setError('Email is required.');
+    if (!payload.company) return setError('Company is required.');
+    btn.disabled = true;
+    var originalLabel = btn.textContent;
+    btn.textContent = 'Sending…';
+    try {
+      var res = await fetch('/api/demo-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      wrap.classList.add('is-submitted');
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e2) {
+      setError(e2.message || 'Something went wrong. Please try again or email ' + ${JSON.stringify(contactEmail)} + '.');
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+})();
+</script>
+
 <footer>
-  <div>© Trip Logger · Built by <a href="https://enoceantours.com" target="_blank" rel="noopener">Enocean Tours</a></div>
-  <div><a href="${mailtoHref}">${contactEmail}</a></div>
+  <div>© Trip Logger · Built by Slater Moore</div>
+  <div><a href="mailto:${contactEmail}">${contactEmail}</a></div>
 </footer>
 
 </div>
