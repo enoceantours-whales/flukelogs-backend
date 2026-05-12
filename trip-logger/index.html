@@ -961,7 +961,10 @@
       position: absolute;
       top: calc(100% + 8px);
       right: 14px;
-      z-index: 20;
+      /* Leaflet's overlayPane sits at z-index 400 and popups at 700 —
+         the dropdown has to clear both or it gets buried by the map on
+         the Sightings screens. */
+      z-index: 1000;
       min-width: 220px;
       background: linear-gradient(180deg, rgba(16,22,26,0.96) 0%, rgba(12,16,20,0.96) 100%);
       border: 1px solid var(--hair);
