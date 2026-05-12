@@ -1264,9 +1264,17 @@ function sendHeight() {
 // referral for the operator.
 
 function shareUrlForTrip(dateKey) {
-  // Point at the canonical /api/sightings route (works in production
-  // regardless of any vercel.json rewrite changes) and include both ?op
-  // and ?trip so the recipient lands on the right operator + day.
+  // Prefer the operator's own widget page (configured per-operator as
+  // widget_host_url) so the share recipient lands on their branded site
+  // with their nav + Book Now + SEO, not the bare vercel widget URL.
+  // Falls back to /api/sightings on our domain when widget_host_url is
+  // unset (any new operator pre-config or an operator with no public
+  // page yet).
+  var hostUrl = OP && OP.widget_host_url;
+  if (hostUrl) {
+    var sep = hostUrl.indexOf('?') === -1 ? '?' : '&';
+    return hostUrl + sep + 'trip=' + encodeURIComponent(dateKey);
+  }
   var slug = (OP && OP.slug) || 'enocean';
   return location.origin + '/api/sightings?op=' + encodeURIComponent(slug) +
                            '&trip=' + encodeURIComponent(dateKey);
