@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/landing", "destination": "/api/landing" },
+    { "source": "/sightings", "destination": "/api/sightings" },
+    { "source": "/sw.js", "destination": "/Public/sw.js" },
+    { "source": "/manifest.json", "destination": "/Public/manifest.json" }
+  ]
+}
