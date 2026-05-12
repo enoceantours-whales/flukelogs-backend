@@ -343,7 +343,42 @@
   .trip-date-label { font: 600 13px/1 "Open Sans", sans-serif; color: var(--text); display: flex; align-items: center; gap: 8px; letter-spacing: 0.005em; }
   .active-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); display: none; }
   .trip-date-header.active-trip .active-indicator { display: inline-block; }
+  .trip-date-right { display: flex; align-items: center; gap: 12px; }
   .trip-summary { font-size: 10px; color: var(--text-faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
+  .trip-share-btn {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--hair);
+    color: var(--text-dim);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: color .15s, border-color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+  .trip-share-btn:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255,255,255,.05); }
+  .trip-share-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Toast for the desktop-Firefox clipboard fallback (and any future
+     non-Share-API browser). Fades in/out via the .show class. */
+  .share-toast {
+    position: fixed;
+    bottom: 24px; left: 50%; transform: translateX(-50%) translateY(8px);
+    background: var(--ink-3);
+    border: 1px solid var(--hair-2);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 10px;
+    font: 500 12px/1 "Open Sans", sans-serif;
+    letter-spacing: 0.04em;
+    box-shadow: 0 12px 32px rgba(0,0,0,.5);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 9999;
+  }
+  .share-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .trip-sightings { padding: 4px 0; }
 
   .sighting-row {
@@ -1139,12 +1174,29 @@ function renderFeed(data) {
           <span class="active-indicator"></span>
           ${fmtDate(dateKey)}
         </div>
-        <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
+        <div class="trip-date-right">
+          <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
+          <button class="trip-share-btn" type="button" aria-label="Share this trip" data-share-date="${dateKey}">
+            <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          </button>
+        </div>
       </div>
       ${audioBlock}
       <div class="trip-sightings">${rows}</div>
     </div>`;
   }).join('');
+
+  // Share button on each trip card — opens the iOS / Android / desktop
+  // native share sheet via Web Share API (Safari, Chrome, Edge). Firefox
+  // falls back to clipboard + a small toast. stopPropagation so the
+  // share click doesn't also toggle the trip-header selection.
+  list.querySelectorAll('.trip-share-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dateKey = btn.dataset.shareDate;
+      shareTrip(dateKey);
+    });
+  });
 
   // Trip header click — show only that day's pins
   list.querySelectorAll('.trip-date-header').forEach(header => {
@@ -1204,6 +1256,125 @@ function sendHeight() {
   window.parent.postMessage({ iframeHeight: document.body.scrollHeight }, '*');
 }
 
+// ── Share ─────────────────────────────────────────────────────────────
+// Visitor on the embed taps the share icon on a trip card → iOS / Android
+// native share sheet opens with a deep-link to the same widget filtered
+// to that trip. Recipient opens the link, lands on the widget already
+// pointed at that trip with the audio one tap away. Each share is a free
+// referral for the operator.
+
+function shareUrlForTrip(dateKey) {
+  // Prefer the operator's own widget page (configured per-operator as
+  // widget_host_url) so the share recipient lands on their branded site
+  // with their nav + Book Now + SEO, not the bare vercel widget URL.
+  // Falls back to /api/sightings on our domain when widget_host_url is
+  // unset (any new operator pre-config or an operator with no public
+  // page yet).
+  var hostUrl = OP && OP.widget_host_url;
+  if (hostUrl) {
+    var sep = hostUrl.indexOf('?') === -1 ? '?' : '&';
+    return hostUrl + sep + 'trip=' + encodeURIComponent(dateKey);
+  }
+  var slug = (OP && OP.slug) || 'enocean';
+  return location.origin + '/api/sightings?op=' + encodeURIComponent(slug) +
+                           '&trip=' + encodeURIComponent(dateKey);
+}
+
+function buildShareText(dateKey) {
+  var tally = tallyBySpecies(allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey));
+  if (!tally.length) return '';
+  var topSpecies = tally.slice(0, 3).map(t => t[0]).join(', ');
+  var extra = tally.length > 3 ? ' and more' : '';
+  return tally.length + ' species seen — ' + topSpecies + extra +
+         '. Listen to the captain\\u2019s notes from this trip.';
+}
+
+async function shareTrip(dateKey) {
+  var url = shareUrlForTrip(dateKey);
+  var title = 'Sightings · ' + fmtDate(dateKey);
+  var text  = buildShareText(dateKey);
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: title, text: text, url: url });
+    } catch (err) {
+      // User cancelled the share sheet — silent. Other errors fall
+      // through to the clipboard path so the link isn't lost.
+      if (err && err.name === 'AbortError') return;
+      copyShareUrl(url);
+    }
+    return;
+  }
+  copyShareUrl(url);
+}
+
+function copyShareUrl(url) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(
+      () => showShareToast('Link copied'),
+      () => showShareToast('Press ⌘/Ctrl + C to copy: ' + url),
+    );
+  } else {
+    showShareToast(url);
+  }
+}
+
+var _shareToastTimer = null;
+function showShareToast(message) {
+  var existing = document.getElementById('share-toast');
+  if (existing) existing.remove();
+  var t = document.createElement('div');
+  t.id = 'share-toast';
+  t.className = 'share-toast';
+  t.textContent = message;
+  document.body.appendChild(t);
+  // Force a reflow so the .show transition actually fires
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(_shareToastTimer);
+  _shareToastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 220);
+  }, 2200);
+}
+
+// ── Deep-link ─────────────────────────────────────────────────────────
+// When the widget is opened with ?trip=YYYY-MM-DD (shared link), we seed
+// activeDateKey from the URL on init so the right trip is pre-selected
+// and its pins are the only ones on the map. Called after renderFeed
+// paints the trip cards (the click-handlers exist by then).
+function applyInitialTripFromUrl() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var trip = params.get('trip');
+    if (!trip) return;
+    // Only honor it if we actually have data for that date — otherwise
+    // a stale link from before a re-sync would orphan the user on an
+    // empty view.
+    var hasIt = allData.some(s => (s.trip_date || '').slice(0, 10) === trip);
+    if (!hasIt) return;
+    activeDateKey = trip;
+    var header = document.querySelector('.trip-date-header[data-date="' + trip + '"]');
+    if (header) {
+      document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+      header.classList.add('active-trip');
+      header.closest('.trip-card').classList.add('selected');
+      // Scroll the shared trip into view so the visitor sees it without
+      // hunting. block:'start' keeps the trip header just below the map.
+      header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    refreshMarkers();
+    // Pan map to this trip's center (only when the map is rendered)
+    if (map) {
+      var pins = allData.filter(s => (s.trip_date || '').slice(0, 10) === trip && s.lat && s.lng);
+      if (pins.length) {
+        var lats = pins.map(s => +s.lat), lngs = pins.map(s => +s.lng);
+        map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
+      }
+    }
+  } catch (e) { /* malformed URL params — ignore */ }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   // Guard against unresolved operators (typo in the ?op= slug, or no operators
@@ -1226,6 +1397,11 @@ function sendHeight() {
     renderFeed(allData);
     document.getElementById('status-text').textContent =
       allData.length ? fmtDottedDate(allData[0].trip_date) : 'No data yet';
+    // If the URL has ?trip=YYYY-MM-DD (shared link), seed the selection
+    // AFTER renderFeed has painted the trip cards — its click handlers
+    // are wired by then, the .trip-date-header element exists, and we
+    // can scroll to it cleanly.
+    applyInitialTripFromUrl();
     sendHeight();
   } catch (err) {
     document.getElementById('feed-list').innerHTML = `<div class="state-msg">Could not load sightings.<br><small style="color:#555">${err.message}</small></div>`;
