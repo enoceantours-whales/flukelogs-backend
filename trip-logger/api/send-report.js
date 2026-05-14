@@ -563,45 +563,83 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
   // getGuestStats returns the first-timer fallback so the email still sends.
   const stats = await getGuestStats(operatorId, guestEmail);
   const greetingHTML = stats.trips <= 1
-    ? `<p style="color:#ffffff;font-size:15px;margin:0 0 12px;">Hi there,</p>
-       <p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">Welcome aboard your first ${b.name} trip — your wildlife log starts here. Your trip report and story card are attached.</p>`
-    : `<p style="color:#ffffff;font-size:15px;margin:0 0 12px;">Welcome back,</p>
-       <p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">This is your <strong style="color:#fff;">${ordinal(stats.trips)} trip</strong> with us.${stats.species >= 2 ? ` You've now spotted <strong style="color:#fff;">${stats.species} species</strong> across all your trips.` : ''} Your trip report and story card are attached.</p>`;
+    ? `<p style="color:#f4f6f7;font-size:15px;line-height:1.45;margin:0 0 10px;font-weight:500;">Hi there,</p>
+       <p style="color:rgba(244,246,247,0.62);font-size:14px;line-height:1.65;margin:0;">Welcome aboard your first ${b.name} trip — your wildlife log starts here. Your trip report and story card are attached.</p>`
+    : `<p style="color:#f4f6f7;font-size:15px;line-height:1.45;margin:0 0 10px;font-weight:500;">Welcome back,</p>
+       <p style="color:rgba(244,246,247,0.62);font-size:14px;line-height:1.65;margin:0;">This is your <strong style="color:#f4f6f7;font-weight:600;">${ordinal(stats.trips)} trip</strong> with us.${stats.species >= 2 ? ` You've now spotted <strong style="color:#f4f6f7;font-weight:600;">${stats.species} species</strong> across all your trips.` : ''} Your trip report and story card are attached.</p>`;
+
+  // Mirrors the app's "ocean-deep" surface palette (see index.html :root):
+  //   --ink #0a0c0e (page) / --ink-3 #161b1f (card) / --ink-4 #1d2429 (tile)
+  //   hairline #242a30 ≈ rgba(255,255,255,0.08) on --ink-3
+  //   --gold #c8a86b kicker, --teal #6fb1ac accents, #e6f0f0 primary CTA
+  // Inline-styled because Gmail strips <style>; table layout for client compat.
+  const tileStyle  = 'background:#1d2429;border:1px solid #242a30;border-left:3px solid #6fb1ac;border-radius:10px;padding:14px 16px;';
+  const labelStyle = 'font:600 10px/1 \'Open Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;letter-spacing:0.22em;text-transform:uppercase;color:rgba(244,246,247,0.42);';
+  const valueStyle = 'font:500 17px/1.2 \'Open Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;color:#f4f6f7;margin-top:8px;';
 
   const result = await transporter.sendMail({
     from: `"${b.name}" <${b.fromEmail}>`,
     to: guestEmail,
     subject: `Your ${b.name} Trip Report — ${date}`,
-    html: `<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-<table width="600" style="margin:0 auto;background:#1a1a1a;overflow:hidden;">
-  <tr><td style="background:#000000;padding:32px;text-align:center;border-bottom:1px solid #222;">
-    <img src="${b.logoEmail}" alt="${b.name}" width="180" style="display:block;margin:0 auto 12px;">
-    <p style="color:rgba(255,255,255,0.5);margin:0;font-size:10px;letter-spacing:3px;text-transform:uppercase;">TRIP REPORT</p>
-  </td></tr>
-  <tr><td style="padding:32px;">
-    ${greetingHTML}
-    <table width="100%" style="margin-bottom:24px;">
-      <tr>
-        <td width="48%" style="background:#000;padding:14px;border-left:4px solid #ffffff;"><p style="margin:0;color:#888;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Date</p><p style="margin:4px 0 0;color:#fff;font-weight:bold;">${date}</p></td>
-        <td width="4%"></td>
-        <td width="48%" style="background:#000;padding:14px;border-left:4px solid #ffffff;"><p style="margin:0;color:#888;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Duration</p><p style="margin:4px 0 0;color:#fff;font-weight:bold;">${duration}</p></td>
-      </tr>
-      <tr><td colspan="3" style="height:10px;"></td></tr>
-      <tr>
-        <td width="48%" style="background:#000;padding:14px;border-left:4px solid #ffffff;"><p style="margin:0;color:#888;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Passengers</p><p style="margin:4px 0 0;color:#fff;font-weight:bold;">${tripData.passengers}</p></td>
-        <td width="4%"></td>
-        <td width="48%" style="background:#000;padding:14px;border-left:4px solid #ffffff;"><p style="margin:0;color:#888;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Sightings</p><p style="margin:4px 0 0;color:#fff;font-weight:bold;">${tripData.sightings.length}</p></td>
-      </tr>
+    html: `<body style="margin:0;padding:0;background:#0a0c0e;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#f4f6f7;-webkit-font-smoothing:antialiased;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0a0c0e;">
+  <tr><td align="center" style="padding:28px 14px;">
+    <table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#161b1f;border:1px solid #242a30;border-radius:16px;overflow:hidden;">
+
+      <tr><td style="background:#0a0c0e;padding:34px 24px 26px;text-align:center;border-bottom:1px solid #242a30;">
+        <img src="${b.logoEmail}" alt="${b.name}" width="180" style="display:block;margin:0 auto 14px;border:0;outline:none;text-decoration:none;">
+        <div style="font:600 9px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.34em;text-transform:uppercase;color:#c8a86b;">Trip Report</div>
+        <div style="margin-top:10px;font:400 11px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.18em;text-transform:uppercase;color:rgba(244,246,247,0.42);">${date}</div>
+      </td></tr>
+
+      <tr><td style="padding:26px 24px 6px;">${greetingHTML}</td></tr>
+
+      <tr><td style="padding:18px 24px 6px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td width="48%" valign="top" style="${tileStyle}">
+              <div style="${labelStyle}">Date</div>
+              <div style="${valueStyle}font-size:14px;">${date}</div>
+            </td>
+            <td width="4%" style="font-size:0;line-height:0;">&nbsp;</td>
+            <td width="48%" valign="top" style="${tileStyle}">
+              <div style="${labelStyle}">Duration</div>
+              <div style="${valueStyle}">${duration}</div>
+            </td>
+          </tr>
+          <tr><td colspan="3" style="height:10px;line-height:10px;font-size:0;">&nbsp;</td></tr>
+          <tr>
+            <td width="48%" valign="top" style="${tileStyle}">
+              <div style="${labelStyle}">Passengers</div>
+              <div style="${valueStyle}">${tripData.passengers}</div>
+            </td>
+            <td width="4%" style="font-size:0;line-height:0;">&nbsp;</td>
+            <td width="48%" valign="top" style="${tileStyle}">
+              <div style="${labelStyle}">Sightings</div>
+              <div style="${valueStyle}">${tripData.sightings.length}</div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:18px 24px 6px;">
+        <div style="background:#1d2429;border:1px solid #242a30;border-radius:12px;padding:16px 18px;">
+          <div style="font:700 10px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.26em;text-transform:uppercase;color:#c8a86b;margin-bottom:10px;">What We Saw</div>
+          <div style="color:#f4f6f7;font-size:14px;line-height:1.6;">${speciesList}</div>
+        </div>
+      </td></tr>
+
+      <tr><td align="center" style="padding:26px 24px 10px;">
+        <a href="${b.reviewUrl}" style="background:#e6f0f0;color:#0a0c0e;padding:14px 34px;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;display:inline-block;border-radius:999px;">Leave Us a Review</a>
+        <div style="margin-top:12px;color:rgba(244,246,247,0.42);font-size:12px;line-height:1.5;">It takes 2 minutes and means the world to us.</div>
+      </td></tr>
+
+      <tr><td style="border-top:1px solid #242a30;padding:22px 24px 26px;text-align:center;">
+        <div style="font:600 10px/1.4 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.26em;text-transform:uppercase;color:rgba(244,246,247,0.62);">${b.tagline}</div>
+        <a href="${b.websiteUrl}" style="display:inline-block;margin-top:8px;font-size:11px;color:#6fb1ac;text-decoration:none;letter-spacing:0.05em;">${b.websiteHost.toLowerCase()}</a>
+      </td></tr>
+
     </table>
-    <div style="background:#000;padding:14px;margin-bottom:28px;border-left:4px solid #ffffff;">
-      <p style="margin:0 0 6px;color:#888;font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:1px;">What We Saw</p>
-      <p style="margin:0;color:#ffffff;font-size:14px;">${speciesList}</p>
-    </div>
-    <div style="text-align:center;margin-bottom:24px;">
-      <a href="${b.reviewUrl}" style="background:#ffffff;color:#000000;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;letter-spacing:0.5px;">LEAVE US A REVIEW</a>
-      <p style="margin:10px 0 0;color:#555;font-size:12px;">It takes 2 minutes and means the world to us.</p>
-    </div>
-    <p style="color:#444;font-size:12px;text-align:center;margin:0;border-top:1px solid #222;padding-top:20px;">${b.tagline}<br><a href="${b.websiteUrl}" style="color:#888;">${b.websiteHost.toLowerCase()}</a></p>
   </td></tr>
 </table>
 </body>`,
