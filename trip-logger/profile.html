@@ -111,15 +111,20 @@
 
     <section id="viewSignin" class="card hidden">
       <div class="card-title">Sign in to view your trips</div>
-      <div class="card-sub">We'll email you a one-time sign-in link. No password to remember.</div>
+      <div class="card-sub">Use your password if you've set one. New here? Skip the password and we'll email you a one-time link.</div>
       <div id="signinMsg"></div>
       <form id="signinForm">
         <div class="field">
           <label for="signinEmail">Email</label>
           <input id="signinEmail" type="email" autocomplete="email" required>
         </div>
-        <button class="btn btn-block" type="submit" id="signinBtn">Send sign-in link</button>
+        <div class="field">
+          <label for="signinPassword">Password</label>
+          <input id="signinPassword" type="password" autocomplete="current-password">
+        </div>
+        <button class="btn btn-block" type="submit" id="signinBtn">Sign in</button>
       </form>
+      <button class="btn btn-ghost btn-block" type="button" id="magicLinkBtn" style="margin-top:12px;">Email me a sign-in link instead</button>
     </section>
 
     <section id="viewProfile" class="card hidden">
@@ -140,6 +145,19 @@
         <div class="field">
           <label for="bio">About you (optional)</label>
           <textarea id="bio" maxlength="2000" placeholder="Where you're visiting from, favorite species, why you're out on the water…"></textarea>
+        </div>
+        <div id="passwordFields">
+          <div class="row">
+            <div class="field">
+              <label for="newPassword">Choose a password</label>
+              <input id="newPassword" type="password" autocomplete="new-password" minlength="8">
+            </div>
+            <div class="field">
+              <label for="confirmPassword">Confirm password</label>
+              <input id="confirmPassword" type="password" autocomplete="new-password" minlength="8">
+            </div>
+          </div>
+          <div class="card-sub" style="margin: -4px 0 14px; font-size: 12px;">At least 8 characters. You'll use this to sign back in.</div>
         </div>
         <button class="btn btn-block" type="submit" id="profileBtn">Save profile</button>
       </form>
@@ -311,7 +329,12 @@
       $('firstName').value = (p && p.first_name) || '';
       $('lastName').value  = (p && p.last_name)  || '';
       $('bio').value       = (p && p.bio)        || '';
+      $('newPassword').value = '';
+      $('confirmPassword').value = '';
       $('profileTitle').textContent = p ? 'Edit your profile' : 'Create your profile';
+      // Password fields only on first-time signup. Existing users change
+      // their password through the magic-link reset flow.
+      $('passwordFields').classList.toggle('hidden', !!p);
     }
 
     async function bootstrap() {
@@ -363,12 +386,9 @@
       }
     }
 
-    $('signinForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = $('signinEmail').value.trim();
-      if (!email) return;
-      $('signinBtn').disabled = true;
+    async function sendMagicLink(email, sourceBtn) {
       setMsg($('signinMsg'), null);
+      sourceBtn.disabled = true;
       try {
         const { error } = await sb.auth.signInWithOtp({
           email,
@@ -376,11 +396,41 @@
         });
         if (error) throw error;
         setMsg($('signinMsg'), 'ok', 'Check ' + email + ' for a sign-in link. It expires in 1 hour.');
-        $('signinBtn').textContent = 'Sent — check your inbox';
+        sourceBtn.textContent = 'Sent — check your inbox';
+      } catch (err) {
+        setMsg($('signinMsg'), 'err', err.message);
+        sourceBtn.disabled = false;
+      }
+    }
+
+    $('signinForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('signinEmail').value.trim();
+      const password = $('signinPassword').value;
+      if (!email) return;
+      // No password = treat the primary button as "send me a link". Keeps
+      // brand-new guests (who don't have a password yet) on a single button.
+      if (!password) return sendMagicLink(email, $('signinBtn'));
+      $('signinBtn').disabled = true;
+      setMsg($('signinMsg'), null);
+      try {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await bootstrap();
       } catch (err) {
         setMsg($('signinMsg'), 'err', err.message);
         $('signinBtn').disabled = false;
       }
+    });
+
+    $('magicLinkBtn').addEventListener('click', () => {
+      const email = $('signinEmail').value.trim();
+      if (!email) {
+        setMsg($('signinMsg'), 'err', 'Enter your email above first.');
+        $('signinEmail').focus();
+        return;
+      }
+      sendMagicLink(email, $('magicLinkBtn'));
     });
 
     $('profileForm').addEventListener('submit', async (e) => {
@@ -388,13 +438,27 @@
       const first_name = $('firstName').value.trim();
       const last_name  = $('lastName').value.trim();
       const bio        = $('bio').value.trim();
+      const settingPassword = !$('passwordFields').classList.contains('hidden');
+      const pw  = $('newPassword').value;
+      const pw2 = $('confirmPassword').value;
       if (!first_name) {
         setMsg($('profileMsg'), 'err', 'First name is required.');
         return;
       }
+      if (settingPassword) {
+        if (pw.length < 8)    return setMsg($('profileMsg'), 'err', 'Password must be at least 8 characters.');
+        if (pw !== pw2)       return setMsg($('profileMsg'), 'err', 'Passwords do not match.');
+      }
       $('profileBtn').disabled = true;
       setMsg($('profileMsg'), null);
       try {
+        // Set the password first. If it fails (weak password, network), we
+        // bail before writing the profile so the user is prompted to retry
+        // the whole step rather than ending up with a profile but no password.
+        if (settingPassword) {
+          const { error } = await sb.auth.updateUser({ password: pw });
+          if (error) throw error;
+        }
         await authedFetch('/api/guest/profile', {
           method: 'POST',
           body: JSON.stringify({ first_name, last_name, bio }),
