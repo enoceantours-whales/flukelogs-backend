@@ -558,6 +558,12 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
   const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings logged';
   const duration = getFormattedDuration(tripData.startTime, tripData.endTime);
 
+  // Profile signup CTA. PUBLIC_APP_URL is set on every Vercel deploy
+  // (prod + previews), so the only time we skip the CTA is local dev
+  // with no env var configured — there's no working link to point at.
+  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const profileUrl = appUrl ? `${appUrl}/profile?email=${encodeURIComponent(guestEmail)}` : null;
+
   // Pull this guest's prior-trip stats (post-insert of today's row, so trips
   // includes today). Pick first-timer vs returning copy. If the lookup fails,
   // getGuestStats returns the first-timer fallback so the email still sends.
@@ -633,7 +639,14 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
         <a href="${b.reviewUrl}" style="background:#e6f0f0;color:#0a0c0e;padding:14px 34px;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;display:inline-block;border-radius:999px;">Leave Us a Review</a>
         <div style="margin-top:12px;color:rgba(244,246,247,0.42);font-size:12px;line-height:1.5;">It takes 2 minutes and means the world to us.</div>
       </td></tr>
-
+${profileUrl ? `
+      <tr><td style="padding:8px 24px 22px;">
+        <div style="background:#1d2429;border:1px solid #242a30;border-radius:12px;padding:18px 20px;text-align:center;">
+          <div style="font:700 10px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.26em;text-transform:uppercase;color:#c8a86b;margin-bottom:8px;">Your Wildlife Log</div>
+          <div style="color:rgba(244,246,247,0.62);font-size:13px;line-height:1.6;margin-bottom:14px;">Create a free profile to see every trip and every species you've spotted with us — past and future.</div>
+          <a href="${profileUrl}" style="display:inline-block;background:transparent;color:#e6f0f0;border:1px solid #e6f0f0;padding:11px 26px;text-decoration:none;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;border-radius:999px;">Create Profile</a>
+        </div>
+      </td></tr>` : ''}
       <tr><td style="border-top:1px solid #242a30;padding:22px 24px 26px;text-align:center;">
         <div style="font:600 10px/1.4 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.26em;text-transform:uppercase;color:rgba(244,246,247,0.62);">${b.tagline}</div>
         <a href="${b.websiteUrl}" style="display:inline-block;margin-top:8px;font-size:11px;color:#6fb1ac;text-decoration:none;letter-spacing:0.05em;">${b.websiteHost.toLowerCase()}</a>
