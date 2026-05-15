@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0a0c0e">
+  <title>My Profile — Enocean Tours</title>
+  <link rel="apple-touch-icon" href="/Public/Enocean_Tours_logo-03.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      /* Ocean-deep palette — mirrors index.html and the trip-report email. */
+      --ink: #0a0c0e; --ink-2: #0f1316; --ink-3: #161b1f; --ink-4: #1d2429;
+      --hair: rgba(255,255,255,0.08); --hair-2: rgba(255,255,255,0.14);
+      --text: #f4f6f7; --text-2: rgba(244,246,247,0.62); --text-3: rgba(244,246,247,0.42);
+      --gold: #c8a86b; --teal: #6fb1ac;
+      --primary: #e6f0f0; --primary-ink: #0a0c0e;
+      --danger: #c87268;
+    }
+    html, body {
+      background: var(--ink); color: var(--text);
+      font-family: 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+    body { padding: 24px 14px 80px; }
+    a { color: var(--teal); }
+
+    .wrap { max-width: 620px; margin: 0 auto; }
+    .header { text-align: center; padding: 8px 0 22px; }
+    .header img { display: block; margin: 0 auto 12px; width: 160px; height: auto; }
+    .header .kicker { font-size: 9px; font-weight: 600; letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold); }
+    .header .session { margin-top: 10px; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; }
+    .header .session a { text-decoration: none; margin-left: 10px; }
+
+    .card { background: var(--ink-3); border: 1px solid var(--hair); border-radius: 16px; padding: 24px; margin-bottom: 14px; }
+    .card-title { font-weight: 600; font-size: 18px; margin-bottom: 6px; }
+    .card-sub { color: var(--text-2); font-size: 13px; line-height: 1.55; margin-bottom: 18px; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 10px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
+    .field input, .field textarea {
+      width: 100%; background: var(--ink-4); border: 1px solid var(--hair); border-radius: 10px;
+      padding: 12px 14px; color: var(--text); font-family: inherit; font-size: 14px; line-height: 1.5;
+    }
+    .field input:focus, .field textarea:focus { outline: none; border-color: var(--teal); }
+    .field textarea { min-height: 110px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 420px) { .row { grid-template-columns: 1fr; } }
+
+    .btn {
+      display: inline-block; background: var(--primary); color: var(--primary-ink);
+      padding: 14px 28px; border: 0; border-radius: 999px;
+      font-weight: 700; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+      cursor: pointer; font-family: inherit;
+    }
+    .btn[disabled] { opacity: 0.6; cursor: progress; }
+    .btn-block { display: block; width: 100%; }
+    .btn-ghost {
+      background: transparent; color: var(--text); border: 1px solid var(--hair-2);
+      padding: 11px 22px; font-size: 11px;
+    }
+
+    .msg { padding: 11px 13px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+    .msg-ok { background: rgba(111,177,172,0.10); border: 1px solid rgba(111,177,172,0.35); color: var(--teal); }
+    .msg-err { background: rgba(200,114,104,0.10); border: 1px solid rgba(200,114,104,0.35); color: var(--danger); }
+
+    .trip { background: var(--ink-3); border: 1px solid var(--hair); border-radius: 14px; padding: 18px 20px; margin-bottom: 12px; }
+    .trip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+    .trip-date { font-weight: 600; font-size: 15px; line-height: 1.3; }
+    .trip-op { font-size: 10px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; margin-top: 6px; }
+    .trip-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--text-2); }
+    .trip-stats span strong { color: var(--text); font-weight: 600; }
+    .trip-toggle {
+      background: none; border: 0; color: var(--teal); font-size: 12px; letter-spacing: 0.06em;
+      cursor: pointer; padding: 0; font-family: inherit; margin-top: 12px;
+    }
+    .trip-sightings { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hair); display: none; }
+    .trip-sightings.show { display: block; }
+    .trip-sightings-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; gap: 12px; }
+    .trip-sightings-row .species { font-weight: 500; }
+    .trip-sightings-row .count { color: var(--text-2); white-space: nowrap; }
+    .trip-sightings-empty { color: var(--text-3); font-size: 12px; font-style: italic; }
+
+    .empty { text-align: center; color: var(--text-2); padding: 36px 24px; }
+    .empty-title { font-size: 16px; color: var(--text); margin-bottom: 6px; font-weight: 600; }
+
+    .hidden { display: none !important; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 8px;
+      border: 2px solid var(--text-3); border-top-color: var(--text); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="header">
+      <img id="brandLogo" src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
+      <div class="kicker">Guest Profile</div>
+      <div id="sessionLine" class="session hidden"></div>
+    </header>
+
+    <section id="viewBoot" class="card">
+      <div class="card-title"><span class="spinner"></span>Loading…</div>
+    </section>
+
+    <section id="viewSignin" class="card hidden">
+      <div class="card-title">Sign in to view your trips</div>
+      <div class="card-sub">We'll email you a one-time sign-in link. No password to remember.</div>
+      <div id="signinMsg"></div>
+      <form id="signinForm">
+        <div class="field">
+          <label for="signinEmail">Email</label>
+          <input id="signinEmail" type="email" autocomplete="email" required>
+        </div>
+        <button class="btn btn-block" type="submit" id="signinBtn">Send sign-in link</button>
+      </form>
+    </section>
+
+    <section id="viewProfile" class="card hidden">
+      <div class="card-title" id="profileTitle">Create your profile</div>
+      <div class="card-sub" id="profileSub">A couple quick details so we can greet you properly. Your bio is optional and visible only to you.</div>
+      <div id="profileMsg"></div>
+      <form id="profileForm">
+        <div class="row">
+          <div class="field">
+            <label for="firstName">First name</label>
+            <input id="firstName" type="text" autocomplete="given-name" maxlength="80" required>
+          </div>
+          <div class="field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" type="text" autocomplete="family-name" maxlength="80">
+          </div>
+        </div>
+        <div class="field">
+          <label for="bio">About you (optional)</label>
+          <textarea id="bio" maxlength="2000" placeholder="Where you're visiting from, favorite species, why you're out on the water…"></textarea>
+        </div>
+        <button class="btn btn-block" type="submit" id="profileBtn">Save profile</button>
+      </form>
+    </section>
+
+    <section id="viewTrips" class="hidden">
+      <div class="card">
+        <div class="card-title" id="tripsHello">My Trips</div>
+        <div class="card-sub">Every trip we've logged with you, plus the sightings the captain recorded that day.</div>
+        <button class="btn btn-ghost" id="editProfileBtn" type="button">Edit profile</button>
+      </div>
+      <div id="tripsList"></div>
+    </section>
+  </div>
+
+  <script>
+    // Same project + anon key the operator app and public sightings widget
+    // already use. Anon key is safe to ship client-side — RLS + the bearer-
+    // token gate on /api/guest/* keep data scoped per signed-in guest.
+    const SUPABASE_URL = 'https://czotpzjtnuukoxscjduj.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage },
+    });
+
+    const $ = (id) => document.getElementById(id);
+
+    function show(view) {
+      ['viewBoot','viewSignin','viewProfile','viewTrips'].forEach(v => $(v).classList.toggle('hidden', v !== view));
+    }
+
+    function setMsg(el, kind, text) {
+      el.innerHTML = '';
+      if (!text) return;
+      const div = document.createElement('div');
+      div.className = 'msg ' + (kind === 'ok' ? 'msg-ok' : 'msg-err');
+      div.textContent = text;
+      el.appendChild(div);
+    }
+
+    async function authedFetch(path, opts = {}) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error('Your session has expired. Please sign in again.');
+      const headers = Object.assign({}, opts.headers || {}, {
+        'Authorization': 'Bearer ' + session.access_token,
+        'Content-Type': 'application/json',
+      });
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body && body.error) || ('Request failed (' + res.status + ')'));
+      return body;
+    }
+
+    function formatTripDate(iso) {
+      // YYYY-MM-DD — anchor to noon local to avoid the off-by-one a midnight
+      // UTC parse causes in California / east-of-UTC time zones.
+      const d = new Date(iso + 'T12:00:00');
+      return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    function durationLabel(mins) {
+      if (!Number.isFinite(+mins) || +mins <= 0) return null;
+      const m = +mins;
+      const h = Math.floor(m / 60);
+      const r = m % 60;
+      return h > 0 ? (h + 'h ' + r + 'm') : (r + 'm');
+    }
+
+    function renderTrips(trips) {
+      const wrap = $('tripsList');
+      wrap.innerHTML = '';
+      if (!trips.length) {
+        const empty = document.createElement('div');
+        empty.className = 'card empty';
+        empty.innerHTML = '<div class="empty-title">No trips yet</div><div>As soon as your next trip is logged, it\'ll show up here.</div>';
+        wrap.appendChild(empty);
+        return;
+      }
+      trips.forEach((t, i) => {
+        const card = document.createElement('div');
+        card.className = 'trip';
+
+        const dur = durationLabel(t.duration_minutes);
+        const stats = [];
+        if (dur) stats.push('<span><strong>' + dur + '</strong> on the water</span>');
+        if (t.distance_nm) stats.push('<span><strong>' + Number(t.distance_nm).toFixed(1) + ' NM</strong> traveled</span>');
+        const sCount = (t.sightings || []).length;
+        if (sCount) stats.push('<span><strong>' + sCount + '</strong> sighting' + (sCount === 1 ? '' : 's') + '</span>');
+
+        const head = document.createElement('div');
+        head.className = 'trip-head';
+        const headLeft = document.createElement('div');
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'trip-date';
+        dateDiv.textContent = formatTripDate(t.trip_date);
+        const opDiv = document.createElement('div');
+        opDiv.className = 'trip-op';
+        opDiv.textContent = t.operator_name || '';
+        headLeft.appendChild(dateDiv);
+        headLeft.appendChild(opDiv);
+        head.appendChild(headLeft);
+        card.appendChild(head);
+
+        if (stats.length) {
+          const statsDiv = document.createElement('div');
+          statsDiv.className = 'trip-stats';
+          statsDiv.innerHTML = stats.join('');
+          card.appendChild(statsDiv);
+        }
+
+        const toggle = document.createElement('button');
+        toggle.className = 'trip-toggle';
+        toggle.type = 'button';
+        toggle.textContent = '▾ Show sightings (' + sCount + ')';
+        card.appendChild(toggle);
+
+        const list = document.createElement('div');
+        list.className = 'trip-sightings';
+        if (!sCount) {
+          list.innerHTML = '<div class="trip-sightings-empty">No sightings recorded for this trip.</div>';
+        } else {
+          t.sightings.forEach(s => {
+            const row = document.createElement('div');
+            row.className = 'trip-sightings-row';
+            const sp = document.createElement('span');
+            sp.className = 'species';
+            sp.textContent = s.species;
+            const ct = document.createElement('span');
+            ct.className = 'count';
+            ct.textContent = '×' + s.count;
+            row.appendChild(sp);
+            row.appendChild(ct);
+            list.appendChild(row);
+          });
+        }
+        card.appendChild(list);
+
+        toggle.addEventListener('click', () => {
+          const showing = list.classList.toggle('show');
+          toggle.textContent = (showing ? '▴ Hide sightings' : '▾ Show sightings (' + sCount + ')');
+        });
+
+        wrap.appendChild(card);
+      });
+    }
+
+    async function loadTrips() {
+      const wrap = $('tripsList');
+      wrap.innerHTML = '<div class="card empty"><span class="spinner"></span>Loading your trips…</div>';
+      try {
+        const { trips } = await authedFetch('/api/guest/trips');
+        renderTrips(trips);
+      } catch (err) {
+        wrap.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'card empty';
+        const t = document.createElement('div');
+        t.className = 'empty-title';
+        t.textContent = 'Couldn\'t load trips';
+        const m = document.createElement('div');
+        m.textContent = err.message;
+        div.appendChild(t);
+        div.appendChild(m);
+        wrap.appendChild(div);
+      }
+    }
+
+    function fillProfileForm(p) {
+      $('firstName').value = (p && p.first_name) || '';
+      $('lastName').value  = (p && p.last_name)  || '';
+      $('bio').value       = (p && p.bio)        || '';
+      $('profileTitle').textContent = p ? 'Edit your profile' : 'Create your profile';
+    }
+
+    async function bootstrap() {
+      const url = new URL(window.location.href);
+      const prefillEmail = url.searchParams.get('email');
+      if (prefillEmail) $('signinEmail').value = prefillEmail;
+
+      // supabase-js consumes magic-link tokens from the URL during createClient
+      // (detectSessionInUrl: true). Clean the URL afterwards so a reload
+      // doesn't try to re-consume a token that's already been spent.
+      const sessionResult = await sb.auth.getSession();
+      const session = sessionResult.data && sessionResult.data.session;
+      if (session && (window.location.hash || url.searchParams.get('code'))) {
+        history.replaceState({}, '', url.pathname);
+      }
+
+      if (!session) {
+        show('viewSignin');
+        return;
+      }
+
+      $('sessionLine').classList.remove('hidden');
+      $('sessionLine').textContent = 'Signed in as ' + session.user.email;
+      const signoutLink = document.createElement('a');
+      signoutLink.href = '#';
+      signoutLink.textContent = 'Sign out';
+      signoutLink.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await sb.auth.signOut();
+        window.location.replace(window.location.pathname);
+      });
+      $('sessionLine').appendChild(signoutLink);
+
+      try {
+        const { profile } = await authedFetch('/api/guest/me');
+        if (!profile) {
+          fillProfileForm(null);
+          show('viewProfile');
+        } else {
+          $('tripsHello').textContent = profile.first_name
+            ? ('Welcome back, ' + profile.first_name)
+            : 'My Trips';
+          show('viewTrips');
+          loadTrips();
+        }
+      } catch (err) {
+        setMsg($('signinMsg'), 'err', err.message);
+        show('viewSignin');
+      }
+    }
+
+    $('signinForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('signinEmail').value.trim();
+      if (!email) return;
+      $('signinBtn').disabled = true;
+      setMsg($('signinMsg'), null);
+      try {
+        const { error } = await sb.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: window.location.origin + '/profile' },
+        });
+        if (error) throw error;
+        setMsg($('signinMsg'), 'ok', 'Check ' + email + ' for a sign-in link. It expires in 1 hour.');
+        $('signinBtn').textContent = 'Sent — check your inbox';
+      } catch (err) {
+        setMsg($('signinMsg'), 'err', err.message);
+        $('signinBtn').disabled = false;
+      }
+    });
+
+    $('profileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const first_name = $('firstName').value.trim();
+      const last_name  = $('lastName').value.trim();
+      const bio        = $('bio').value.trim();
+      if (!first_name) {
+        setMsg($('profileMsg'), 'err', 'First name is required.');
+        return;
+      }
+      $('profileBtn').disabled = true;
+      setMsg($('profileMsg'), null);
+      try {
+        await authedFetch('/api/guest/profile', {
+          method: 'POST',
+          body: JSON.stringify({ first_name, last_name, bio }),
+        });
+        await bootstrap();
+      } catch (err) {
+        setMsg($('profileMsg'), 'err', err.message);
+        $('profileBtn').disabled = false;
+      }
+    });
+
+    $('editProfileBtn').addEventListener('click', async () => {
+      try {
+        const { profile } = await authedFetch('/api/guest/me');
+        fillProfileForm(profile);
+        show('viewProfile');
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    bootstrap();
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/landing", "destination": "/api/landing" },
     { "source": "/sightings", "destination": "/api/sightings" },
+    { "source": "/profile", "destination": "/profile.html" },
     { "source": "/sw.js", "destination": "/Public/sw.js" },
     { "source": "/manifest.json", "destination": "/Public/manifest.json" }
   ]
