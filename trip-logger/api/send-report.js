@@ -159,6 +159,16 @@ function getFormattedDuration(startTime, endTime) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+// Resolve the trip's calendar date. Prefers the client-supplied local
+// `tripData.tripDate` so operators in non-UTC timezones don't get a row
+// stamped with the previous/next UTC day. Falls back to UTC for older
+// clients that don't send tripDate yet.
+function resolveTripDate(tripData) {
+  const t = tripData && tripData.tripDate;
+  if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  return new Date(tripData.startTime).toISOString().split('T')[0];
+}
+
 // ─── Fetch Google Maps Static Image ──────────────────────────────────────────
 
 function fetchMapImage(sightings) {
@@ -485,7 +495,7 @@ async function saveToSupabase(tripData, operatorId) {
     return;
   }
 
-  const tripDate = new Date(tripData.startTime).toISOString().split('T')[0];
+  const tripDate = resolveTripDate(tripData);
   const durationMs = new Date(tripData.endTime) - new Date(tripData.startTime);
   const durationMinutes = Math.floor(durationMs / 60000);
 
@@ -658,12 +668,12 @@ ${profileUrl ? `
 </body>`,
     attachments: [
       {
-        filename: `${b.slug}-trip-${new Date(tripData.startTime).toISOString().split('T')[0]}.pdf`,
+        filename: `${b.slug}-trip-${resolveTripDate(tripData)}.pdf`,
         content: pdfBuffer,
         contentType: 'application/pdf',
       },
       ...(socialCardData ? [{
-        filename: `${b.slug}-story-${new Date(tripData.startTime).toISOString().split('T')[0]}.jpg`,
+        filename: `${b.slug}-story-${resolveTripDate(tripData)}.jpg`,
         content: Buffer.from(socialCardData.replace(/^data:image\/\w+;base64,/, ''), 'base64'),
         contentType: 'image/jpeg',
       }] : []),
@@ -689,7 +699,7 @@ async function sendCaptainCopy(captainCardData, tripData, b, transporter) {
     const date = new Date(tripData.startTime).toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     });
-    const dateSlug = new Date(tripData.startTime).toISOString().split('T')[0];
+    const dateSlug = resolveTripDate(tripData);
     const speciesList = tripData.sightings.map(s => `${s.species} (×${s.count})`).join(', ') || 'No sightings';
 
     await transporter.sendMail({
@@ -731,8 +741,15 @@ module.exports = async function handler(req, res) {
   const transporter = buildTransporter(operator);
   configureMailchimp(operator);
 
-  const { tripData, guestEmails, socialCardData, captainCardData } = req.body;
+  const { tripData, tripDate, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
+  // Carry the client-supplied local date through on tripData so every
+  // downstream helper (saveToSupabase, recordGuestsForTrip, filename slugs)
+  // sees the operator's local YYYY-MM-DD instead of re-deriving it from
+  // startTime in UTC.
+  if (typeof tripDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tripDate)) {
+    tripData.tripDate = tripDate;
+  }
 
   // Accept either a single email string or an array
   const emails = Array.isArray(guestEmails) ? guestEmails : [guestEmails];
@@ -759,7 +776,7 @@ module.exports = async function handler(req, res) {
     // Record this trip's guests BEFORE the emails fire so getGuestStats()
     // (called inside sendEmail) sees today's row in its count. A first-timer
     // gets trips=1, a 2nd-trip guest gets trips=2.
-    const tripDateISO = new Date(tripData.startTime).toISOString().split('T')[0];
+    const tripDateISO = resolveTripDate(tripData);
     await recordGuestsForTrip(operatorId, tripDateISO, validEmails);
 
     // Send email + Mailchimp to each guest, plus the captain copy back to
