@@ -2569,6 +2569,13 @@
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { handleLogout(); throw new Error('Session expired — sign in again'); }
 
+      // Compute the trip's local calendar date here on the device — the
+      // server otherwise derives it from startTime.toISOString() in UTC,
+      // which rolls a morning trip in any positive-UTC offset back to the
+      // previous day in the DB (and then the widget reads "yesterday").
+      const _ts = trip.startTime instanceof Date ? trip.startTime : new Date(trip.startTime);
+      const tripDate = `${_ts.getFullYear()}-${String(_ts.getMonth() + 1).padStart(2, '0')}-${String(_ts.getDate()).padStart(2, '0')}`;
+
       // Single API call with all emails — Supabase saves once
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -2576,7 +2583,7 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ tripData: trip, guestEmails, socialCardData, captainCardData }),
+        body: JSON.stringify({ tripData: trip, tripDate, guestEmails, socialCardData, captainCardData }),
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to send');
