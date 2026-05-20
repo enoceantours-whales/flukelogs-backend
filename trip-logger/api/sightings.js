@@ -10,7 +10,7 @@
 // the only active operator if a single one exists, or `enocean` as a final
 // default.
 //
-// When the URL also carries `?trip=YYYY-MM-DD` (set by the in-widget
+// When the URL also carries `?trip=<trip id>` (set by the in-widget
 // share button), we fetch that trip's sightings server-side and inject
 // per-trip OG / Twitter meta tags so iMessage / WhatsApp / Twitter link
 // previews render a proper card (operator + date + species summary)
@@ -41,16 +41,16 @@ async function loadOperatorRow(slug) {
   }
 }
 
-async function loadTripSummary(operatorId, tripDate) {
+async function loadTripSummary(operatorId, tripId) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key || !operatorId || !tripDate) return null;
-  // YYYY-MM-DD only; reject anything else to avoid building a malformed
-  // PostgREST query (and to silently fall through to generic OG).
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(tripDate)) return null;
+  if (!url || !key || !operatorId || !tripId) return null;
+  // trip_id is a uuid; reject anything else so a malformed ?trip= just
+  // falls through to the generic operator-level OG card.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tripId)) return null;
   try {
     const res = await fetch(
-      `${url}/rest/v1/sightings?operator_id=eq.${operatorId}&trip_date=eq.${encodeURIComponent(tripDate)}&select=species,count`,
+      `${url}/rest/v1/sightings?operator_id=eq.${operatorId}&trip_id=eq.${encodeURIComponent(tripId)}&select=species,count,trip_date,trip_part`,
       { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
     );
     if (!res.ok) return null;
@@ -63,7 +63,8 @@ async function loadTripSummary(operatorId, tripDate) {
       animals += parseInt(r.count, 10) || 0;
     });
     return {
-      trip_date: tripDate,
+      trip_date: rows[0].trip_date,
+      trip_part: rows[0].trip_part || null,
       species: Array.from(speciesSet),
       animals,
     };
@@ -100,7 +101,7 @@ function buildOgTags({ operator, trip, requestUrl }) {
   if (trip) {
     const speciesList = trip.species.slice(0, 4).join(', ') +
       (trip.species.length > 4 ? '…' : '');
-    title = `Sightings on ${prettyTripDate(trip.trip_date)} — ${operatorName}`;
+    title = `Sightings on ${prettyTripDate(trip.trip_date)}${trip.trip_part ? ' · ' + trip.trip_part : ''} — ${operatorName}`;
     description = `${trip.species.length} species, ${trip.animals} animals seen: ${speciesList}. Listen to the captain's notes from this trip.`;
   } else {
     title = `Recent sightings — ${operatorName}`;

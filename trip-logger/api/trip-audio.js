@@ -1,19 +1,23 @@
-// POST   /api/trip-audio   — upload a recording for {trip_date} and upsert
+// POST   /api/trip-audio   — upload a recording for {trip_id} and upsert
 //                            the trip_audio row pointing at it
-// DELETE /api/trip-audio?date=YYYY-MM-DD
-//                          — remove the trip_audio row for that date
+// DELETE /api/trip-audio?trip_id=<uuid>
+//                          — remove the trip_audio row for that trip
 //                            (orphan file in the bucket is left alone — cheap
 //                            to ignore for now, can add a sweeper later)
 //
+// Audio is keyed on trip_id so two trips run the same calendar day each
+// carry their own recording. trip_date is still stored for display.
+//
 // Body for POST (JSON):
 //   {
+//     "trip_id":          "<uuid>",
 //     "trip_date":        "2026-05-09",
 //     "content_type":     "audio/mp4" | "audio/webm" | "audio/mpeg" | "audio/ogg" | "audio/m4a",
 //     "data_base64":      "<base64 audio>",
 //     "duration_seconds": <number, optional>
 //   }
 //
-// Response (200): { url, trip_date, duration_seconds, content_type }
+// Response (200): { url, trip_id, trip_date, duration_seconds, content_type }
 //
 // SETUP REQUIRED (one-time, by Slater in Supabase Dashboard):
 //   Storage → New bucket → name `trip-audio` → toggle Public ON → Create.
@@ -40,6 +44,7 @@ const ALLOWED_TYPES = {
 };
 const MAX_BYTES = 3 * 1024 * 1024; // 3MB — comfortably fits a 3-min recording
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 module.exports.config = {
   api: { bodyParser: { sizeLimit: '5mb' } },
@@ -100,9 +105,12 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST') {
     const body = req.body || {};
-    const { trip_date, content_type, data_base64 } = body;
+    const { trip_id, trip_date, content_type, data_base64 } = body;
     const duration_seconds = body.duration_seconds != null ? Math.round(Number(body.duration_seconds)) : null;
 
+    if (!UUID_RE.test(String(trip_id || ''))) {
+      return res.status(400).json({ error: 'trip_id must be a uuid' });
+    }
     if (!DATE_RE.test(String(trip_date || ''))) {
       return res.status(400).json({ error: 'trip_date must be YYYY-MM-DD' });
     }
@@ -134,12 +142,13 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Upload failed', detail: err.message });
     }
 
-    // Upsert the trip_audio row keyed on (operator_id, trip_date). Prefer
-    // header `resolution=merge-duplicates` makes PostgREST do an UPSERT
-    // against the unique constraint instead of erroring on conflict.
+    // Upsert the trip_audio row keyed on trip_id. Prefer header
+    // `resolution=merge-duplicates` makes PostgREST do an UPSERT against the
+    // unique index instead of erroring on conflict.
     try {
-      const rows = await pgRest('POST', 'trip_audio?on_conflict=operator_id,trip_date', {
+      const rows = await pgRest('POST', 'trip_audio?on_conflict=trip_id', {
         operator_id:      operatorId,
+        trip_id,
         trip_date,
         audio_url:        url,
         duration_seconds,
@@ -149,6 +158,7 @@ module.exports = async function handler(req, res) {
       const row = rows && rows[0];
       return res.status(200).json({
         url:              row ? row.audio_url : url,
+        trip_id,
         trip_date,
         duration_seconds: row ? row.duration_seconds : duration_seconds,
         content_type:     row ? row.content_type    : content_type,
@@ -160,10 +170,10 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const dateParam = String((req.query && req.query.date) || '').trim();
-    if (!DATE_RE.test(dateParam)) return res.status(400).json({ error: 'date query param must be YYYY-MM-DD' });
+    const tripIdParam = String((req.query && req.query.trip_id) || '').trim();
+    if (!UUID_RE.test(tripIdParam)) return res.status(400).json({ error: 'trip_id query param must be a uuid' });
     try {
-      await pgRest('DELETE', `trip_audio?operator_id=eq.${operatorId}&trip_date=eq.${dateParam}`);
+      await pgRest('DELETE', `trip_audio?operator_id=eq.${operatorId}&trip_id=eq.${tripIdParam}`);
       return res.status(204).end();
     } catch (err) {
       console.error('trip-audio delete failed:', err.message);

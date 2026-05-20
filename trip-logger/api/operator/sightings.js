@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
     MAX_LIMIT,
   );
 
-  const select = 'id,trip_date,species,count,lat,lng,depth_meters,behavior_notes,created_at';
+  const select = 'id,trip_id,trip_date,trip_part,species,count,lat,lng,depth_meters,behavior_notes,created_at';
   const params = [
     `select=${select}`,
     'order=trip_date.desc,created_at.desc',
