@@ -252,7 +252,7 @@
         const headLeft = document.createElement('div');
         const dateDiv = document.createElement('div');
         dateDiv.className = 'trip-date';
-        dateDiv.textContent = formatTripDate(t.trip_date);
+        dateDiv.textContent = formatTripDate(t.trip_date) + (t.trip_part ? ' · ' + t.trip_part : '');
         const opDiv = document.createElement('div');
         opDiv.className = 'trip-op';
         opDiv.textContent = t.operator_name || '';

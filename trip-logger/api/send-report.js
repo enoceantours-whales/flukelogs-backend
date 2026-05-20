@@ -2,6 +2,7 @@ const mailchimp = require('@mailchimp/mailchimp_marketing');
 const PDFDocument = require('pdfkit');
 const nodemailer = require('nodemailer');
 const https = require('https');
+const crypto = require('crypto');
 
 const { authenticate } = require('../lib/auth');
 const { getOperator, pick } = require('../lib/operators');
@@ -58,19 +59,22 @@ function ordinal(n) {
   }
 }
 
-// Insert one row per guest into trip_guests for today's trip. Uses
-// resolution=merge-duplicates so re-sending the same trip is idempotent.
-async function recordGuestsForTrip(operatorId, tripDate, emails) {
+// Insert one row per guest into trip_guests for this trip. Keyed on trip_id
+// so two trips the same day record their guests separately. Uses
+// resolution=merge-duplicates so a duplicated email in the same payload
+// collapses to one row.
+async function recordGuestsForTrip(operatorId, tripDate, tripId, emails) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key || !operatorId || !tripDate || !emails || emails.length === 0) return;
+  if (!url || !key || !operatorId || !tripDate || !tripId || !emails || emails.length === 0) return;
   const rows = emails.map(e => ({
     operator_id: operatorId,
     trip_date:   tripDate,
+    trip_id:     tripId,
     email:       String(e).toLowerCase().trim(),
   }));
   try {
-    const res = await fetch(`${url}/rest/v1/trip_guests?on_conflict=operator_id,email,trip_date`, {
+    const res = await fetch(`${url}/rest/v1/trip_guests?on_conflict=trip_id,email`, {
       method: 'POST',
       headers: {
         'apikey':        key,
@@ -159,10 +163,54 @@ function getFormattedDuration(startTime, endTime) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-// Resolve the trip's calendar date. Prefers the client-supplied local
-// `tripData.tripDate` so operators in non-UTC timezones don't get a row
-// stamped with the previous/next UTC day. Falls back to UTC for older
-// clients that don't send tripDate yet.
+// Render the YYYY-MM-DD calendar date of `when` in a given IANA timezone.
+// Used as the server-side fallback for trip_date when the client didn't
+// send its own local date. Falls back to the UTC date when the timezone is
+// missing or not a name the runtime recognises.
+function localDateInTimeZone(when, timeZone) {
+  const d = new Date(when);
+  if (isNaN(d.getTime())) return null;
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(d);
+      const get = (t) => (parts.find(p => p.type === t) || {}).value;
+      const y = get('year'), m = get('month'), day = get('day');
+      if (y && m && day) return `${y}-${m}-${day}`;
+    } catch (e) {
+      // Unrecognised timezone — fall through to the UTC date below.
+    }
+  }
+  return d.toISOString().split('T')[0];
+}
+
+// Bucket a trip's start time into Morning / Afternoon / Evening in the
+// operator's timezone. Stored on every sighting row so the widget, captain
+// app and guest profile can label a trip — especially when a day has more
+// than one — without re-deriving anything. Null when it can't be resolved.
+function tripPartInTimeZone(when, timeZone) {
+  const d = new Date(when);
+  if (isNaN(d.getTime())) return null;
+  let hour;
+  try {
+    hour = Number(new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'UTC', hour: '2-digit', hourCycle: 'h23',
+    }).format(d)) % 24;
+  } catch (e) {
+    return null;
+  }
+  if (!Number.isFinite(hour)) return null;
+  if (hour < 12) return 'Morning';
+  if (hour < 17) return 'Afternoon';
+  return 'Evening';
+}
+
+// Resolve the trip's calendar date. Prefers the local date already stashed
+// on `tripData.tripDate` — the handler puts there either the client-supplied
+// date or, for older clients that don't send one, a date derived from
+// startTime in the operator's timezone. The UTC split is a last-resort
+// guard for a payload that somehow carries neither.
 function resolveTripDate(tripData) {
   const t = tripData && tripData.tripDate;
   if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
@@ -502,6 +550,8 @@ async function saveToSupabase(tripData, operatorId) {
   const rows = tripData.sightings.map(s => ({
     operator_id: operatorId,
     trip_date: tripDate,
+    trip_id: tripData.tripId,
+    trip_part: tripData.tripPart || null,
     duration_minutes: durationMinutes,
     distance_nm: parseFloat((tripData.distanceNM || 0).toFixed(2)),
     passengers: tripData.passengers,
@@ -743,13 +793,23 @@ module.exports = async function handler(req, res) {
 
   const { tripData, tripDate, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
-  // Carry the client-supplied local date through on tripData so every
-  // downstream helper (saveToSupabase, recordGuestsForTrip, filename slugs)
-  // sees the operator's local YYYY-MM-DD instead of re-deriving it from
-  // startTime in UTC.
+  // Stash the trip's local calendar date on tripData so every downstream
+  // helper (saveToSupabase, recordGuestsForTrip, filename slugs) sees the
+  // operator's local YYYY-MM-DD instead of re-deriving it from startTime in
+  // UTC. Prefer the client-supplied date; for older cached app builds that
+  // don't send one, derive it from startTime in the operator's timezone —
+  // an evening trip in a negative-UTC offset would otherwise be stamped with
+  // tomorrow's UTC date.
   if (typeof tripDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tripDate)) {
     tripData.tripDate = tripDate;
+  } else if (tripData.startTime) {
+    tripData.tripDate = localDateInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
   }
+  // Identify this trip. trip_id groups every sighting + guest row from this
+  // report so two trips run the same day stay distinct everywhere they show;
+  // trip_part is the Morning / Afternoon / Evening label.
+  tripData.tripId = crypto.randomUUID();
+  tripData.tripPart = tripPartInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
 
   // Accept either a single email string or an array
   const emails = Array.isArray(guestEmails) ? guestEmails : [guestEmails];
@@ -777,7 +837,7 @@ module.exports = async function handler(req, res) {
     // (called inside sendEmail) sees today's row in its count. A first-timer
     // gets trips=1, a 2nd-trip guest gets trips=2.
     const tripDateISO = resolveTripDate(tripData);
-    await recordGuestsForTrip(operatorId, tripDateISO, validEmails);
+    await recordGuestsForTrip(operatorId, tripDateISO, tripData.tripId, validEmails);
 
     // Send email + Mailchimp to each guest, plus the captain copy back to
     // ourselves — all in parallel. Captain copy failure never blocks the

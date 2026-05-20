@@ -617,9 +617,9 @@ const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allData = [];
-let tripAudioByDate = new Map(); // YYYY-MM-DD -> { audio_url, duration_seconds }
+let tripAudioByTrip = new Map(); // trip_id -> { audio_url, duration_seconds }
 let activeFilter = null;   // species name or null
-let activeDateKey = null;  // selected trip date or null
+let activeTripKey = null;  // selected trip_id or null
 const markers = [];
 
 // ── Map ──────────────────────────────────────────────────────────────────────
@@ -664,8 +664,8 @@ function refreshMarkers() {
   // Trip-date selection still hard-filters, but species filtering now dims
   // non-matching pins instead of hiding them — keeps geographic context
   // intact while highlighting the species the user picked (per design D).
-  const dataToShow = activeDateKey
-    ? allData.filter(s => (s.trip_date || '').slice(0, 10) === activeDateKey)
+  const dataToShow = activeTripKey
+    ? allData.filter(s => s.trip_id === activeTripKey)
     : allData;
 
   dataToShow.forEach(s => {
@@ -695,7 +695,7 @@ function refreshMarkers() {
       Count: <strong>${s.count ?? '—'}</strong><br>
       ${depthLine}${fmtDate(s.trip_date)}
     </div>`);
-    m._dateKey = (s.trip_date || '').slice(0, 10);
+    m._tripKey = s.trip_id;
     m._species = s.species;
     m.addTo(map);
     markers.push(m);
@@ -703,8 +703,9 @@ function refreshMarkers() {
 
   // Update hint
   const hint = document.getElementById('map-hint');
-  if (activeDateKey) {
-    hint.textContent = `Showing ${fmtDateShort(activeDateKey)} — click map to deselect`;
+  if (activeTripKey) {
+    const sel = allData.find(s => s.trip_id === activeTripKey) || {};
+    hint.textContent = `Showing ${fmtDateShort(sel.trip_date)}${sel.trip_part ? ' ' + sel.trip_part.toLowerCase() : ''} — click map to deselect`;
   } else if (activeFilter) {
     hint.textContent = `Highlighting: ${activeFilter}`;
   } else {
@@ -715,8 +716,8 @@ function refreshMarkers() {
 // Click map background to deselect trip (only registered when the map exists)
 if (map) {
   map.on('click', () => {
-    if (activeDateKey) {
-      activeDateKey = null;
+    if (activeTripKey) {
+      activeTripKey = null;
       refreshMarkers();
       document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
       document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
@@ -726,22 +727,22 @@ if (map) {
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_date,species,count,lat,lng,depth_meters&order=trip_date.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_id,trip_part,trip_date,species,count,lat,lng,depth_meters,created_at&order=trip_date.desc,created_at.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
 }
 
-// Captain audio notes per trip date. Public read via the same anon key.
-// Returns { trip_date -> { audio_url, duration_seconds } } so render code
+// Captain audio notes per trip. Public read via the same anon key.
+// Returns { trip_id -> { audio_url, duration_seconds } } so render code
 // can do a synchronous lookup per trip card.
 async function fetchTripAudio() {
   try {
-    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_date,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
+    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_id,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
     if (!res.ok) return new Map();
     const rows = await res.json();
-    return new Map(rows.map(r => [r.trip_date, r]));
+    return new Map(rows.filter(r => r.trip_id).map(r => [r.trip_id, r]));
   } catch (e) { return new Map(); }
 }
 
@@ -893,14 +894,22 @@ function fmtDepth(m) {
   return v < 1000 ? `${Math.round(v)}m` : `${(v / 1000).toFixed(1)}km`;
 }
 
-function groupByDate(data) {
+// Group sightings into trips by trip_id (a row with no trip_id — pre-0013
+// data — falls back to its date as the key). Returns [tripKey, sightings]
+// pairs, newest trip first: by date, then created_at so a day's later
+// trip sorts above its earlier one.
+function groupByTrip(data) {
   const trips = {};
   data.forEach(s => {
-    const date = (s.trip_date || '').slice(0, 10);
-    if (!trips[date]) trips[date] = [];
-    trips[date].push(s);
+    const key = s.trip_id || (s.trip_date || '').slice(0, 10);
+    if (!trips[key]) trips[key] = [];
+    trips[key].push(s);
   });
-  return Object.entries(trips).sort((a, b) => b[0].localeCompare(a[0]));
+  return Object.entries(trips).sort((a, b) => {
+    const da = a[1][0].trip_date || '', db = b[1][0].trip_date || '';
+    if (da !== db) return db.localeCompare(da);
+    return String(b[1][0].created_at || '').localeCompare(String(a[1][0].created_at || ''));
+  });
 }
 
 function tallyBySpecies(sightings) {
@@ -916,8 +925,9 @@ function tallyBySpecies(sightings) {
 // ── Now banner ────────────────────────────────────────────────────────────────
 function renderNowBanner(data) {
   if (!data.length) return;
-  const trips = groupByDate(data);
-  const [latestDate, latestSightings] = trips[0];
+  const trips = groupByTrip(data);
+  const latestSightings = trips[0][1];
+  const latestDate = (latestSightings[0].trip_date || '').slice(0, 10);
   const tallied = tallyBySpecies(latestSightings);
   const speciesNames = tallied.map(([name]) => name);
   const totalAnimals = latestSightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
@@ -1116,7 +1126,7 @@ function setActiveFilter(speciesOrNull) {
   activeFilter = speciesOrNull;
   // Selecting a species also clears any active trip-date selection so the
   // user is never looking at two filters at once.
-  activeDateKey = null;
+  activeTripKey = null;
   document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
   // If a species got selected from outside the current segmented group,
   // jump to its group so the rail keeps the pill in view.
@@ -1148,35 +1158,37 @@ function applyFeedFilter() {
 // ── Feed ──────────────────────────────────────────────────────────────────────
 function renderFeed(data) {
   const list = document.getElementById('feed-list');
-  const trips = groupByDate(data);
+  const trips = groupByTrip(data);
   document.getElementById('feed-count').textContent = `${trips.length} trip${trips.length !== 1 ? 's' : ''}`;
   if (!trips.length) { list.innerHTML = '<div class="state-msg">No sightings recorded yet.</div>'; return; }
 
-  list.innerHTML = trips.map(([dateKey, sightings]) => {
+  list.innerHTML = trips.map(([tripKey, sightings]) => {
+    const tripDate = (sightings[0].trip_date || '').slice(0, 10);
+    const tripPart = sightings[0].trip_part || '';
     const totalAnimals = sightings.reduce((sum, s) => sum + (parseInt(s.count) || 1), 0);
     const tallied = tallyBySpecies(sightings);
     const rows = tallied.map(([species, d]) => {
       const meta = sm(species);
       const hasGps = !!(d.lat && d.lng);
-      return `<div class="sighting-row" data-date="${dateKey}" data-species="${species}" data-has-gps="${hasGps}">
+      return `<div class="sighting-row" data-trip="${tripKey}" data-species="${species}" data-has-gps="${hasGps}">
         <div class="species-icon">${meta.icon}</div>
         <div class="species-name">${species}</div>
         <div class="species-count">×${d.count}</div>
       </div>`;
     }).join('');
 
-    const audio = tripAudioByDate.get(dateKey);
+    const audio = tripAudioByTrip.get(tripKey);
     const audioBlock = audio ? renderAudioPlayer(audio) : '';
 
-    return `<div class="trip-card" data-date="${dateKey}">
-      <div class="trip-date-header" data-date="${dateKey}">
+    return `<div class="trip-card" data-trip="${tripKey}">
+      <div class="trip-date-header" data-trip="${tripKey}">
         <div class="trip-date-label">
           <span class="active-indicator"></span>
-          ${fmtDate(dateKey)}
+          ${fmtDate(tripDate)}${tripPart ? ' · ' + tripPart : ''}
         </div>
         <div class="trip-date-right">
           <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
-          <button class="trip-share-btn" type="button" aria-label="Share this trip" data-share-date="${dateKey}">
+          <button class="trip-share-btn" type="button" aria-label="Share this trip" data-share-trip="${tripKey}">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>
           </button>
         </div>
@@ -1193,29 +1205,28 @@ function renderFeed(data) {
   list.querySelectorAll('.trip-share-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const dateKey = btn.dataset.shareDate;
-      shareTrip(dateKey);
+      shareTrip(btn.dataset.shareTrip);
     });
   });
 
-  // Trip header click — show only that day's pins
+  // Trip header click — show only that trip's pins
   list.querySelectorAll('.trip-date-header').forEach(header => {
     header.addEventListener('click', () => {
-      const dateKey = header.dataset.date;
-      if (activeDateKey === dateKey) {
+      const tripKey = header.dataset.trip;
+      if (activeTripKey === tripKey) {
         // Deselect
-        activeDateKey = null;
+        activeTripKey = null;
         header.classList.remove('active-trip');
         document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('selected', 'hidden'));
       } else {
-        activeDateKey = dateKey;
+        activeTripKey = tripKey;
         document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
         document.querySelectorAll('.trip-card').forEach(c => { c.classList.remove('selected'); c.classList.remove('hidden'); });
         header.classList.add('active-trip');
         header.closest('.trip-card').classList.add('selected');
         // Pan map to this trip's center (only when the map is rendered)
         if (map) {
-          const dm = allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey && s.lat && s.lng);
+          const dm = allData.filter(s => s.trip_id === tripKey && s.lat && s.lng);
           if (dm.length) {
             const lats = dm.map(s => +s.lat), lngs = dm.map(s => +s.lng);
             map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
@@ -1232,15 +1243,15 @@ function renderFeed(data) {
       if (row.dataset.hasGps !== 'true') return;
       list.querySelectorAll('.sighting-row').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      // Set active date to this trip and refresh
-      activeDateKey = row.dataset.date;
+      // Set active trip and refresh
+      activeTripKey = row.dataset.trip;
       document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
-      const header = list.querySelector(`.trip-date-header[data-date="${row.dataset.date}"]`);
+      const header = list.querySelector(`.trip-date-header[data-trip="${row.dataset.trip}"]`);
       if (header) header.classList.add('active-trip');
       refreshMarkers();
       // Pan to this specific marker (no-op when the map is hidden)
       if (map) {
-        const m = markers.find(x => x._dateKey === row.dataset.date && x._species === row.dataset.species);
+        const m = markers.find(x => x._tripKey === row.dataset.trip && x._species === row.dataset.species);
         if (m) { map.panTo(m.getLatLng(), { animate: true }); setTimeout(() => m.openPopup(), 300); }
       }
     });
@@ -1263,7 +1274,7 @@ function sendHeight() {
 // pointed at that trip with the audio one tap away. Each share is a free
 // referral for the operator.
 
-function shareUrlForTrip(dateKey) {
+function shareUrlForTrip(tripKey) {
   // Prefer the operator's own widget page (configured per-operator as
   // widget_host_url) so the share recipient lands on their branded site
   // with their nav + Book Now + SEO, not the bare vercel widget URL.
@@ -1273,15 +1284,15 @@ function shareUrlForTrip(dateKey) {
   var hostUrl = OP && OP.widget_host_url;
   if (hostUrl) {
     var sep = hostUrl.indexOf('?') === -1 ? '?' : '&';
-    return hostUrl + sep + 'trip=' + encodeURIComponent(dateKey);
+    return hostUrl + sep + 'trip=' + encodeURIComponent(tripKey);
   }
   var slug = (OP && OP.slug) || 'enocean';
   return location.origin + '/api/sightings?op=' + encodeURIComponent(slug) +
-                           '&trip=' + encodeURIComponent(dateKey);
+                           '&trip=' + encodeURIComponent(tripKey);
 }
 
-function buildShareText(dateKey) {
-  var tally = tallyBySpecies(allData.filter(s => (s.trip_date || '').slice(0, 10) === dateKey));
+function buildShareText(tripKey) {
+  var tally = tallyBySpecies(allData.filter(s => s.trip_id === tripKey));
   if (!tally.length) return '';
   var topSpecies = tally.slice(0, 3).map(t => t[0]).join(', ');
   var extra = tally.length > 3 ? ' and more' : '';
@@ -1289,10 +1300,12 @@ function buildShareText(dateKey) {
          '. Listen to the captain\\u2019s notes from this trip.';
 }
 
-async function shareTrip(dateKey) {
-  var url = shareUrlForTrip(dateKey);
-  var title = 'Sightings · ' + fmtDate(dateKey);
-  var text  = buildShareText(dateKey);
+async function shareTrip(tripKey) {
+  var url = shareUrlForTrip(tripKey);
+  var sel = allData.find(s => s.trip_id === tripKey) || {};
+  var title = 'Sightings · ' + fmtDate((sel.trip_date || '').slice(0, 10)) +
+              (sel.trip_part ? ' ' + sel.trip_part : '');
+  var text  = buildShareText(tripKey);
 
   if (navigator.share) {
     try {
@@ -1339,8 +1352,8 @@ function showShareToast(message) {
 }
 
 // ── Deep-link ─────────────────────────────────────────────────────────
-// When the widget is opened with ?trip=YYYY-MM-DD (shared link), we seed
-// activeDateKey from the URL on init so the right trip is pre-selected
+// When the widget is opened with ?trip=<trip id> (shared link), we seed
+// activeTripKey from the URL on init so the right trip is pre-selected
 // and its pins are the only ones on the map. Called after renderFeed
 // paints the trip cards (the click-handlers exist by then).
 function applyInitialTripFromUrl() {
@@ -1348,13 +1361,13 @@ function applyInitialTripFromUrl() {
     var params = new URLSearchParams(window.location.search);
     var trip = params.get('trip');
     if (!trip) return;
-    // Only honor it if we actually have data for that date — otherwise
+    // Only honor it if we actually have data for that trip — otherwise
     // a stale link from before a re-sync would orphan the user on an
     // empty view.
-    var hasIt = allData.some(s => (s.trip_date || '').slice(0, 10) === trip);
+    var hasIt = allData.some(s => s.trip_id === trip);
     if (!hasIt) return;
-    activeDateKey = trip;
-    var header = document.querySelector('.trip-date-header[data-date="' + trip + '"]');
+    activeTripKey = trip;
+    var header = document.querySelector('.trip-date-header[data-trip="' + trip + '"]');
     if (header) {
       document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
       header.classList.add('active-trip');
@@ -1366,7 +1379,7 @@ function applyInitialTripFromUrl() {
     refreshMarkers();
     // Pan map to this trip's center (only when the map is rendered)
     if (map) {
-      var pins = allData.filter(s => (s.trip_date || '').slice(0, 10) === trip && s.lat && s.lng);
+      var pins = allData.filter(s => s.trip_id === trip && s.lat && s.lng);
       if (pins.length) {
         var lats = pins.map(s => +s.lat), lngs = pins.map(s => +s.lng);
         map.panTo([(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2], { animate: true });
@@ -1389,7 +1402,7 @@ function applyInitialTripFromUrl() {
     return;
   }
   try {
-    [allData, tripAudioByDate] = await Promise.all([fetchSightings(), fetchTripAudio()]);
+    [allData, tripAudioByTrip] = await Promise.all([fetchSightings(), fetchTripAudio()]);
     renderNowBanner(allData);
     renderLegend(allData);
     renderSegmentedRail(allData);

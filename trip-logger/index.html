@@ -1330,7 +1330,7 @@
   <div class="screen" id="screenPastTrips">
     <div class="section">
       <div class="section-label">Past Trips</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Record an audio note for any past trip — guests on your website can listen to it from the public sightings widget. Pick a date.</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">Record an audio note for any past trip — guests on your website can listen to it from the public sightings widget. Pick a trip.</p>
       <div id="pastTripsList"><div class="empty">Loading…</div></div>
       <button class="btn btn-outline" type="button" onclick="showScreen('screenStart')">Back</button>
     </div>
@@ -3445,7 +3445,7 @@
     rangeDays: 'all',  // '7' | '30' | 'all'
     viewMode: 'individual', // 'individual' | 'grouped'
     showAll: false,    // expand the 5-row cap in individual view
-    focusedTripKey: null, // operator_id|trip_date — when set, the map only
+    focusedTripKey: null, // operator_id|trip_id — when set, the map only
                           // shows that trip's pins (set by grouped-view
                           // clicks, cleared on view/filter change)
     map: null,         // lazy Leaflet map instance
@@ -3550,10 +3550,10 @@
 
   function renderAdminSightings() {
     const rows = filteredAdminSightings();
-    // Trip count = distinct (operator_id, trip_date) — useful context even
+    // Trip count = distinct (operator_id, trip_id) — useful context even
     // in individual view since "12 sightings across 3 trips" reads better
     // than "12 sightings" alone.
-    const tripKeys = new Set(rows.map(r => `${r.operator_id}|${r.trip_date}`));
+    const tripKeys = new Set(rows.map(r => `${r.operator_id}|${r.trip_id || r.trip_date}`));
     const tripCount = tripKeys.size;
     document.getElementById('adminSightingsCount').textContent =
       `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
@@ -3561,7 +3561,7 @@
     // card); list stays full so the admin can hop to another trip.
     const focused = adminSightingsState.focusedTripKey;
     const mapRows = focused
-      ? rows.filter(r => `${r.operator_id}|${r.trip_date}` === focused)
+      ? rows.filter(r => `${r.operator_id}|${r.trip_id || r.trip_date}` === focused)
       : rows;
     renderAdminSightingsMarkers(mapRows);
     if (adminSightingsState.viewMode === 'grouped') {
@@ -3604,7 +3604,7 @@
       </div>`);
       // Tag the marker so list-row clicks can look it up without rebuilding.
       marker._sightingId = r.id;
-      marker._tripKey = `${r.operator_id}|${r.trip_date}`;
+      marker._tripKey = `${r.operator_id}|${r.trip_id || r.trip_date}`;
       marker._species = r.species;
       marker.addTo(map);
       adminSightingsState.markers.push(marker);
@@ -3692,7 +3692,7 @@
     tbl.innerHTML = rowsHtml + expand;
   }
 
-  // Groups rows by (operator_id, trip_date) and renders one card per trip
+  // Groups rows by (operator_id, trip_id) and renders one card per trip
   // with a species-level tally — mirrors the public widget's "trip card"
   // pattern but without species emojis. Trips are ordered newest first.
   function renderAdminSightingsGrouped(rows) {
@@ -3701,11 +3701,12 @@
     // Build trip map preserving sort order (rows come back trip_date.desc).
     const trips = new Map();
     rows.forEach(r => {
-      const key = `${r.operator_id}|${r.trip_date}`;
+      const key = `${r.operator_id}|${r.trip_id || r.trip_date}`;
       if (!trips.has(key)) {
         trips.set(key, {
           operator_name: r.operator_name || r.operator_slug || '',
           trip_date: r.trip_date,
+          trip_part: r.trip_part || null,
           species: new Map(), // species -> running count total
           animals: 0,
         });
@@ -3740,7 +3741,7 @@
       // the map on every pin from that trip.
       return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusAdminTripSpecies('${jsAttrStr(tripKey)}', null)">
         <div class="grouped-trip-header">
-          <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}</div>
+          <div class="grouped-trip-title">${escapeHtml(trip.operator_name)} · ${escapeHtml(dateLabel(trip.trip_date))}${trip.trip_part ? ' · ' + escapeHtml(trip.trip_part) : ''}</div>
           <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
         </div>
         <div class="grouped-species-list">${tally}</div>
@@ -3841,13 +3842,13 @@
 
   function renderCaptainSightings() {
     const rows = filteredCaptainSightings();
-    const tripKeys = new Set(rows.map(r => r.trip_date)); // captain = one operator, so date alone is unique
+    const tripKeys = new Set(rows.map(r => r.trip_id || r.trip_date));
     const tripCount = tripKeys.size;
     document.getElementById('captainSightingsCount').textContent =
       `${rows.length} sighting${rows.length === 1 ? '' : 's'} · ${tripCount} trip${tripCount === 1 ? '' : 's'}`;
     const focused = captainSightingsState.focusedTripKey;
     const mapRows = focused
-      ? rows.filter(r => r.trip_date === focused)
+      ? rows.filter(r => (r.trip_id || r.trip_date) === focused)
       : rows;
     renderCaptainSightingsMarkers(mapRows);
     if (captainSightingsState.viewMode === 'grouped') {
@@ -3885,7 +3886,7 @@
         ${escapeHtml(r.trip_date || '')}
       </div>`);
       marker._sightingId = r.id;
-      marker._tripKey = r.trip_date;
+      marker._tripKey = r.trip_id || r.trip_date;
       marker._species = r.species;
       marker.addTo(map);
       captainSightingsState.markers.push(marker);
@@ -3966,9 +3967,9 @@
     if (!rows.length) { tbl.innerHTML = '<div class="empty">No sightings match these filters</div>'; return; }
     const trips = new Map();
     rows.forEach(r => {
-      const key = r.trip_date;
+      const key = r.trip_id || r.trip_date;
       if (!trips.has(key)) {
-        trips.set(key, { trip_date: r.trip_date, species: new Map(), animals: 0 });
+        trips.set(key, { trip_date: r.trip_date, trip_part: r.trip_part || null, species: new Map(), animals: 0 });
       }
       const trip = trips.get(key);
       const n = Number(r.count) || 0;
@@ -3995,7 +3996,7 @@
         }).join('');
       return `<div class="grouped-trip-card" style="cursor:pointer;" onclick="focusCaptainTripSpecies('${jsAttrStr(tripKey)}', null)">
         <div class="grouped-trip-header">
-          <div class="grouped-trip-title">${escapeHtml(dateLabel(trip.trip_date))}</div>
+          <div class="grouped-trip-title">${escapeHtml(dateLabel(trip.trip_date))}${trip.trip_part ? ' · ' + escapeHtml(trip.trip_part) : ''}</div>
           <div class="grouped-trip-summary">${trip.species.size} SPECIES · ${trip.animals} ANIMALS</div>
         </div>
         <div class="grouped-species-list">${tally}</div>
@@ -4241,10 +4242,12 @@
 
   // ── Past Trips + Audio Notes ─────────────────────────────────────
   // Captain records audio AFTER the trip — privately, not in front of
-  // guests. Past Trips screen lists recent trip dates; tapping one opens
-  // a focused recorder for that specific date.
+  // guests. Past Trips screen lists recent trips; tapping one opens
+  // a focused recorder for that specific trip.
 
-  let currentAudioDate = null;     // YYYY-MM-DD being edited
+  let currentAudioTripId = null;   // trip_id being edited
+  let currentAudioDate = null;     // its YYYY-MM-DD (display + storage)
+  let currentAudioPart = '';       // its Morning/Afternoon/Evening label
   let currentAudioRow  = null;     // server-returned audio row, if exists
   let audioMediaStream = null;     // active mic stream during recording
   let audioRecorder    = null;     // MediaRecorder
@@ -4287,9 +4290,9 @@
       const audioStatus = t.has_audio
         ? `<div class="sighting-meta" style="color:var(--success);">✓ Audio · ${fmtSec(t.duration_seconds || 0)}</div>`
         : '<div class="sighting-meta">🎙 Add audio</div>';
-      return `<div class="sighting-row" style="cursor:pointer;" onclick="openTripAudio('${t.trip_date}')">
+      return `<div class="sighting-row" style="cursor:pointer;" onclick="openTripAudio('${t.trip_id}', '${t.trip_date}', '${t.trip_part || ''}')">
         <div>
-          <div class="sighting-species">${fmtTripDate(t.trip_date)}</div>
+          <div class="sighting-species">${fmtTripDate(t.trip_date)}${t.trip_part ? ' · ' + t.trip_part : ''}</div>
           <div class="sighting-meta">${t.species_count} species · ${t.animal_count} animals</div>
           ${audioStatus}
         </div>
@@ -4298,14 +4301,17 @@
     }).join('');
   }
 
-  async function openTripAudio(date) {
+  async function openTripAudio(tripId, date, part) {
+    currentAudioTripId = tripId;
     currentAudioDate = date;
+    currentAudioPart = part || '';
     currentAudioRow  = null;
     audioBlob        = null;
     audioChunks      = [];
     showScreen('screenTripAudio');
 
-    document.getElementById('tripAudioTitle').textContent = 'Audio for ' + fmtTripDate(date);
+    document.getElementById('tripAudioTitle').textContent =
+      'Audio for ' + fmtTripDate(date) + (currentAudioPart ? ' · ' + currentAudioPart : '');
     document.getElementById('tripAudioPreviewWrap').style.display = 'none';
     document.getElementById('tripAudioSaveBtn').style.display = 'none';
     document.getElementById('tripAudioStatus').textContent = '';
@@ -4321,7 +4327,7 @@
       });
       if (res.ok) {
         const trips = await res.json();
-        const found = trips.find(t => t.trip_date === date);
+        const found = trips.find(t => t.trip_id === tripId);
         currentAudioRow = (found && found.has_audio) ? found : null;
       }
     } catch (e) { /* non-blocking */ }
@@ -4399,7 +4405,7 @@
   }
 
   async function saveTripAudio() {
-    if (!audioBlob || !currentAudioDate) return;
+    if (!audioBlob || !currentAudioTripId) return;
     const btn = document.getElementById('tripAudioSaveBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Uploading…';
@@ -4424,6 +4430,7 @@
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
+          trip_id:          currentAudioTripId,
           trip_date:        currentAudioDate,
           content_type:     audioBlob.type || 'audio/mp4',
           data_base64,
@@ -4435,7 +4442,7 @@
 
       toast('Audio saved · live on the widget', 'success');
       // Refresh the screen state to show the newly-saved audio as the existing one
-      openTripAudio(currentAudioDate);
+      openTripAudio(currentAudioTripId, currentAudioDate, currentAudioPart);
     } catch (err) {
       toast('Save failed: ' + (err.message || err), 'error');
     } finally {
@@ -4445,12 +4452,12 @@
   }
 
   async function deleteTripAudio() {
-    if (!currentAudioDate) return;
-    if (!confirm(`Remove audio for ${fmtTripDate(currentAudioDate)}?\n\nThe player will stop showing on the public widget. The audio file stays in storage and is unrecoverable from inside the app — you can re-record any time.`)) return;
+    if (!currentAudioTripId) return;
+    if (!confirm(`Remove audio for ${fmtTripDate(currentAudioDate)}${currentAudioPart ? ' · ' + currentAudioPart : ''}?\n\nThe player will stop showing on the public widget. The audio file stays in storage and is unrecoverable from inside the app — you can re-record any time.`)) return;
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return handleLogout();
-      const res = await fetch('/api/trip-audio?date=' + encodeURIComponent(currentAudioDate), {
+      const res = await fetch('/api/trip-audio?trip_id=' + encodeURIComponent(currentAudioTripId), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
@@ -4459,7 +4466,7 @@
         throw new Error(body.error || 'HTTP ' + res.status);
       }
       toast('Audio removed', 'success');
-      openTripAudio(currentAudioDate);
+      openTripAudio(currentAudioTripId, currentAudioDate, currentAudioPart);
     } catch (err) {
       toast('Delete failed: ' + (err.message || err), 'error');
     }

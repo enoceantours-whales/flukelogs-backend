@@ -21,7 +21,10 @@
 //     ]
 //   }
 //
-// Cancelled bookings are excluded.
+// Cancelled bookings are excluded. Slots whose trip has already ended are
+// also excluded — the trip-start screen uses this response to pre-fill the
+// trip the captain is about to run, so a slot that ended hours ago would
+// auto-select the wrong passenger count and booker emails.
 
 const { authenticate } = require('../../lib/auth');
 
@@ -81,7 +84,20 @@ module.exports = async function handler(req, res) {
       if (r.contact_email) slot.booker_emails.add(r.contact_email);
     }
 
+    // Drop slots whose trip has already ended. Captain's about to run a
+    // trip, so a slot from earlier today is one they've already finished.
+    // Fall back to start_at if end_at is missing so we still hide stale rows.
+    const nowMs = Date.now();
+    const isUpcoming = (s) => {
+      const endMs = s.end_at ? Date.parse(s.end_at) : NaN;
+      if (!isNaN(endMs)) return endMs >= nowMs;
+      const startMs = s.start_at ? Date.parse(s.start_at) : NaN;
+      if (!isNaN(startMs)) return startMs >= nowMs;
+      return true;
+    };
+
     const out = Array.from(slots.values())
+      .filter(isUpcoming)
       .sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''))
       .map(s => ({ ...s, booker_emails: Array.from(s.booker_emails) }));
 

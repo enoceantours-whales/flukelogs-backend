@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
 
   // PostgREST embedded resource pulls the operator name + slug into each row
   // in a single round trip via the sightings → operators FK.
-  const select = 'id,trip_date,species,count,lat,lng,depth_meters,behavior_notes,created_at,operator_id,operators(name,slug)';
+  const select = 'id,trip_id,trip_date,trip_part,species,count,lat,lng,depth_meters,behavior_notes,created_at,operator_id,operators(name,slug)';
   const params = [
     `select=${select}`,
     'order=trip_date.desc,created_at.desc',
@@ -73,7 +73,9 @@ module.exports = async function handler(req, res) {
     // every render.
     const flat = (rows || []).map(r => ({
       id: r.id,
+      trip_id: r.trip_id,
       trip_date: r.trip_date,
+      trip_part: r.trip_part,
       species: r.species,
       count: r.count,
       lat: r.lat,

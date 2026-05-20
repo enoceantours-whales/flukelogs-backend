@@ -1,6 +1,6 @@
 // GET /api/guest/trips — every trip the guest has been emailed, with the
-// sightings logged that day grouped under each trip. The /profile SPA
-// renders this as a reverse-chronological timeline on the "My Trips" view.
+// sightings logged on it grouped under each trip. The /profile SPA renders
+// this as a reverse-chronological timeline on the "My Trips" view.
 //
 // 403 if the guest hasn't created a profile yet — the SPA should be
 // routing them to the form anyway, but we enforce it here so a stale
@@ -9,12 +9,9 @@
 //
 // Three round-trips: trip_guests lookup, then operators + sightings in
 // parallel. Service role bypasses RLS — the guest's scope is enforced by
-// the trip_guests.guest_id = user.id filter. Sightings is fetched with
-// an IN/IN clause (operator_id IN (..) AND trip_date IN (..)), which may
-// over-fetch rows for unrelated (operator, date) pairs that happen to
-// share a date or operator with one of this guest's trips. We group by
-// the exact (operator_id, trip_date) tuple before returning so nothing
-// outside this guest's trip set ever leaves the server.
+// the trip_guests.guest_id = user.id filter. Sightings are fetched by
+// trip_id IN (...), so every row returned belongs to one of this guest's
+// own trips — no cross-operator/date over-fetch to filter back out.
 
 const { authenticateGuest, setCORS } = require('../../lib/guest-auth');
 
@@ -41,7 +38,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const tripsRes = await fetch(
-      `${url}/rest/v1/trip_guests?guest_id=eq.${user.id}&select=operator_id,trip_date&order=trip_date.desc`,
+      `${url}/rest/v1/trip_guests?guest_id=eq.${user.id}&select=operator_id,trip_id,trip_date&order=trip_date.desc`,
       { headers }
     );
     if (!tripsRes.ok) {
@@ -49,21 +46,21 @@ module.exports = async function handler(req, res) {
       return res.status(502).json({ error: 'Failed to load trips' });
     }
     const tripRows = await tripsRes.json();
-    if (tripRows.length === 0) {
+
+    // Dedupe to one entry per trip_id. Rows are guaranteed a trip_id from
+    // migration 0013 on; any older un-backfilled row is skipped (it isn't
+    // individually addressable).
+    const tripMap = new Map();
+    for (const r of tripRows) {
+      if (r.trip_id && !tripMap.has(r.trip_id)) tripMap.set(r.trip_id, r);
+    }
+    const uniqueTrips = Array.from(tripMap.values());
+    if (uniqueTrips.length === 0) {
       return res.status(200).json({ trips: [] });
     }
 
-    // Dedupe to one entry per (operator_id, trip_date). The merge-duplicates
-    // upsert in send-report.js should prevent duplicates at write time, but
-    // a defensive collapse here keeps the rendered list clean.
-    const tripKey = (r) => `${r.operator_id}|${r.trip_date}`;
-    const tripMap = new Map();
-    for (const r of tripRows) tripMap.set(tripKey(r), r);
-    const uniqueTrips = Array.from(tripMap.values());
-    const ownKeys = new Set(uniqueTrips.map(tripKey));
-
     const operatorIds = [...new Set(uniqueTrips.map(t => t.operator_id))];
-    const tripDates   = [...new Set(uniqueTrips.map(t => t.trip_date))];
+    const tripIds     = uniqueTrips.map(t => t.trip_id);
 
     const [opsRes, sightsRes] = await Promise.all([
       fetch(
@@ -72,9 +69,8 @@ module.exports = async function handler(req, res) {
       ),
       fetch(
         `${url}/rest/v1/sightings`
-          + `?operator_id=in.(${operatorIds.join(',')})`
-          + `&trip_date=in.(${tripDates.join(',')})`
-          + `&select=id,operator_id,trip_date,species,count,behavior_notes,lat,lng,water_temp,visibility,conditions,duration_minutes,distance_nm,passengers`
+          + `?trip_id=in.(${tripIds.join(',')})`
+          + `&select=id,trip_id,trip_date,trip_part,species,count,behavior_notes,lat,lng,water_temp,visibility,conditions,duration_minutes,distance_nm,passengers`
           + `&order=trip_date.desc`,
         { headers }
       ),
@@ -88,14 +84,12 @@ module.exports = async function handler(req, res) {
 
     const opById = new Map(operators.map(o => [o.id, o]));
 
-    // Bucket sightings into the (op, date) trips the guest actually attended.
-    // Rows for cross-product (op, date) pairs the guest WAS NOT on are
-    // dropped here.
+    // Bucket sightings by trip_id. Fetching by trip_id means every row
+    // returned already belongs to one of this guest's trips.
     const sightingsByTrip = new Map();
-    const tripMetaByKey = new Map();
+    const tripMetaByTrip  = new Map();
     for (const s of sightings) {
-      const k = `${s.operator_id}|${s.trip_date}`;
-      if (!ownKeys.has(k)) continue;
+      const k = s.trip_id;
       if (!sightingsByTrip.has(k)) sightingsByTrip.set(k, []);
       sightingsByTrip.get(k).push({
         id:             s.id,
@@ -108,8 +102,10 @@ module.exports = async function handler(req, res) {
       // Trip-level conditions are denormalized onto every sighting row in
       // this schema, so any one of them is fine as a source for the trip
       // header. First write wins.
-      if (!tripMetaByKey.has(k)) {
-        tripMetaByKey.set(k, {
+      if (!tripMetaByTrip.has(k)) {
+        tripMetaByTrip.set(k, {
+          trip_date:        s.trip_date,
+          trip_part:        s.trip_part,
           duration_minutes: s.duration_minutes,
           distance_nm:      s.distance_nm,
           passengers:       s.passengers,
@@ -122,21 +118,22 @@ module.exports = async function handler(req, res) {
 
     const trips = uniqueTrips.map(t => {
       const op = opById.get(t.operator_id);
-      const k = tripKey(t);
-      const meta = tripMetaByKey.get(k) || {};
+      const meta = tripMetaByTrip.get(t.trip_id) || {};
       return {
+        trip_id:       t.trip_id,
         operator_id:   t.operator_id,
         operator_name: op ? op.name : null,
         operator_slug: op ? op.slug : null,
         operator_logo: op ? op.logo_url_email : null,
-        trip_date:     t.trip_date,
+        trip_date:     meta.trip_date || t.trip_date,
+        trip_part:     meta.trip_part || null,
         duration_minutes: meta.duration_minutes || null,
         distance_nm:      meta.distance_nm || null,
         passengers:       meta.passengers || null,
         water_temp:       meta.water_temp || null,
         visibility:       meta.visibility || null,
         conditions:       meta.conditions || null,
-        sightings: sightingsByTrip.get(k) || [],
+        sightings: sightingsByTrip.get(t.trip_id) || [],
       };
     });
 
