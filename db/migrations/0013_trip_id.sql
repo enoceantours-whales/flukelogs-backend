@@ -83,6 +83,22 @@ update public.trip_guests g
    )
  where g.trip_id is null;
 
+-- Some trips are logged with guests but no sightings (a quiet trip where
+-- nothing was recorded). Those guest rows have no sightings trip to match,
+-- so mint one trip_id per remaining (operator, date).
+with orphan_trips as materialized (
+  select operator_id, trip_date, gen_random_uuid() as new_trip_id
+    from public.trip_guests
+   where trip_id is null
+   group by operator_id, trip_date
+)
+update public.trip_guests g
+   set trip_id = o.new_trip_id
+  from orphan_trips o
+ where g.trip_id is null
+   and g.operator_id = o.operator_id
+   and g.trip_date   = o.trip_date;
+
 -- Audio is uploaded separately so its timestamp doesn't track the trip —
 -- match it to the earliest sightings trip on that (operator, date). Before
 -- this migration only one trip per date was addressable, so the earliest
