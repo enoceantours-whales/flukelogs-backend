@@ -159,10 +159,33 @@ function getFormattedDuration(startTime, endTime) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-// Resolve the trip's calendar date. Prefers the client-supplied local
-// `tripData.tripDate` so operators in non-UTC timezones don't get a row
-// stamped with the previous/next UTC day. Falls back to UTC for older
-// clients that don't send tripDate yet.
+// Render the YYYY-MM-DD calendar date of `when` in a given IANA timezone.
+// Used as the server-side fallback for trip_date when the client didn't
+// send its own local date. Falls back to the UTC date when the timezone is
+// missing or not a name the runtime recognises.
+function localDateInTimeZone(when, timeZone) {
+  const d = new Date(when);
+  if (isNaN(d.getTime())) return null;
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(d);
+      const get = (t) => (parts.find(p => p.type === t) || {}).value;
+      const y = get('year'), m = get('month'), day = get('day');
+      if (y && m && day) return `${y}-${m}-${day}`;
+    } catch (e) {
+      // Unrecognised timezone — fall through to the UTC date below.
+    }
+  }
+  return d.toISOString().split('T')[0];
+}
+
+// Resolve the trip's calendar date. Prefers the local date already stashed
+// on `tripData.tripDate` — the handler puts there either the client-supplied
+// date or, for older clients that don't send one, a date derived from
+// startTime in the operator's timezone. The UTC split is a last-resort
+// guard for a payload that somehow carries neither.
 function resolveTripDate(tripData) {
   const t = tripData && tripData.tripDate;
   if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
@@ -743,12 +766,17 @@ module.exports = async function handler(req, res) {
 
   const { tripData, tripDate, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
-  // Carry the client-supplied local date through on tripData so every
-  // downstream helper (saveToSupabase, recordGuestsForTrip, filename slugs)
-  // sees the operator's local YYYY-MM-DD instead of re-deriving it from
-  // startTime in UTC.
+  // Stash the trip's local calendar date on tripData so every downstream
+  // helper (saveToSupabase, recordGuestsForTrip, filename slugs) sees the
+  // operator's local YYYY-MM-DD instead of re-deriving it from startTime in
+  // UTC. Prefer the client-supplied date; for older cached app builds that
+  // don't send one, derive it from startTime in the operator's timezone —
+  // an evening trip in a negative-UTC offset would otherwise be stamped with
+  // tomorrow's UTC date.
   if (typeof tripDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tripDate)) {
     tripData.tripDate = tripDate;
+  } else if (tripData.startTime) {
+    tripData.tripDate = localDateInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
   }
 
   // Accept either a single email string or an array
