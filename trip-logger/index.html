@@ -1914,6 +1914,19 @@
     if (!field || !wrap) return;
     wrap.innerHTML = '';
 
+    // Drop slots whose trip is already over. The captain is starting a new
+    // trip, so a slot that ended hours ago is not what they're about to run —
+    // auto-selecting it would prefill the wrong passenger count and emails.
+    // Fall back to start_at if end_at is missing so we still hide stale rows.
+    const nowMs = Date.now();
+    slots = slots.filter(s => {
+      const endMs = s.end_at ? Date.parse(s.end_at) : NaN;
+      if (!isNaN(endMs)) return endMs >= nowMs;
+      const startMs = s.start_at ? Date.parse(s.start_at) : NaN;
+      if (!isNaN(startMs)) return startMs >= nowMs;
+      return true;
+    });
+
     if (!slots.length) {
       field.style.display = 'none';
       return;
@@ -2610,6 +2623,12 @@
     document.getElementById('btnSend').disabled = false;
     document.getElementById('btnSend').style.background = '';
     showScreen('screenStart');
+    // Re-pull today's bookings so the next slot of the day (if any) drives
+    // the prefill — without this, the picker stays pinned to whichever slot
+    // we auto-selected at login, even after that trip is done.
+    sb.auth.getSession().then(({ data }) => {
+      if (data && data.session) fetchTodayBookings(data.session.access_token);
+    });
   }
 
   function discardTrip() {
