@@ -793,6 +793,9 @@ module.exports = async function handler(req, res) {
 
   const { tripData, tripDate, guestEmails, socialCardData, captainCardData } = req.body;
   if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
+  // "Add a guest" resend: deliver the recap to a guest the captain forgot,
+  // without re-logging the trip. The client passes the original trip's id.
+  const isAddGuests = req.body.mode === 'add-guests';
   // Stash the trip's local calendar date on tripData so every downstream
   // helper (saveToSupabase, recordGuestsForTrip, filename slugs) sees the
   // operator's local YYYY-MM-DD instead of re-deriving it from startTime in
@@ -805,10 +808,18 @@ module.exports = async function handler(req, res) {
   } else if (tripData.startTime) {
     tripData.tripDate = localDateInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
   }
-  // Identify this trip. trip_id groups every sighting + guest row from this
-  // report so two trips run the same day stay distinct everywhere they show;
-  // trip_part is the Morning / Afternoon / Evening label.
-  tripData.tripId = crypto.randomUUID();
+  // Identify this trip. A normal send mints a fresh trip_id that groups every
+  // sighting + guest row from this report. An add-guests resend reuses the
+  // original trip's id so the late guest is filed under the same trip.
+  if (isAddGuests) {
+    const tripIdRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!tripIdRe.test(String(req.body.tripId || ''))) {
+      return res.status(400).json({ error: 'add-guests mode requires a valid tripId' });
+    }
+    tripData.tripId = req.body.tripId;
+  } else {
+    tripData.tripId = crypto.randomUUID();
+  }
   tripData.tripPart = tripPartInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
 
   // Accept either a single email string or an array
@@ -831,7 +842,10 @@ module.exports = async function handler(req, res) {
     // Save to Supabase ONCE regardless of how many guests. Every row is
     // tagged with the operator_id derived from the verified JWT, so a
     // request from one operator can never write into another's data.
-    await saveToSupabase(tripData, operatorId);
+    // Skipped on an add-guests resend — the trip is already logged.
+    if (!isAddGuests) {
+      await saveToSupabase(tripData, operatorId);
+    }
 
     // Record this trip's guests BEFORE the emails fire so getGuestStats()
     // (called inside sendEmail) sees today's row in its count. A first-timer
@@ -847,10 +861,12 @@ module.exports = async function handler(req, res) {
         sendEmail(email, pdfBuffer, socialCardData, tripData, b, transporter, operatorId),
         addToMailchimp(email, b),
       ])),
-      sendCaptainCopy(captainCardData, tripData, b, transporter),
+      // The captain already got their copy on the original send — don't
+      // re-send it on an add-guests resend.
+      ...(isAddGuests ? [] : [sendCaptainCopy(captainCardData, tripData, b, transporter)]),
     ]);
 
-    return res.status(200).json({ success: true, message: `Trip report sent to ${validEmails.join(', ')}` });
+    return res.status(200).json({ success: true, trip_id: tripData.tripId, message: `Trip report sent to ${validEmails.join(', ')}` });
   } catch (err) {
     console.error('Error:', err.message);
     return res.status(500).json({ error: 'Failed to send trip report', detail: err.message });
