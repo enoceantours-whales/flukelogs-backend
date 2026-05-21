@@ -1629,6 +1629,18 @@
       <button class="btn btn-primary" id="btnSend" onclick="sendReport()">Send Trip Report</button>
     </div>
 
+    <!-- Revealed after a successful send: email a forgotten guest without
+         re-logging the trip. -->
+    <div class="section" id="addGuestBlock" style="display:none;">
+      <div class="section-label">Add a Guest</div>
+      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Forgot someone? Send them the trip recap — this won't log the trip again.</p>
+      <div class="field">
+        <label>Guest email</label>
+        <input type="email" id="addGuestInput" placeholder="guest@email.com" inputmode="email" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addGuestSend();}">
+      </div>
+      <button class="btn btn-primary" type="button" id="btnAddGuest" onclick="addGuestSend()">Email this guest</button>
+    </div>
+
     <details class="section">
       <summary>Trip Summary</summary>
       <div class="collapse-body">
@@ -1682,6 +1694,9 @@
 
   let trip = newTripState();
   let guestEmails = [];
+  // trip_id returned by the server after a successful send. Lets the captain
+  // email a forgotten guest afterward without re-logging the trip.
+  let sentTripId = null;
   // Per-operator config loaded from /api/me after a successful session check.
   // Stays null until then so callers fall back to hardcoded defaults.
   let operatorConfig = null;
@@ -2563,6 +2578,48 @@
     return canvas.toDataURL('image/jpeg', 0.92);
   }
 
+  // Shared POST to /api/send-report. With mode 'add-guests' (+ tripId) the
+  // server delivers the recap to a forgotten guest without re-logging the
+  // trip. Returns the parsed result; throws on failure.
+  async function postTripReport({ emails, mode, tripId }) {
+    const socialCardData = await generateSocialCard();
+    // The captain copy only goes out on the original send, so skip the
+    // (slow) captain-card render on an add-guests resend.
+    let captainCardData = null;
+    if (mode !== 'add-guests') {
+      try { captainCardData = await generateCaptainCard(); }
+      catch (e) { console.warn('Captain card failed, continuing:', e); }
+    }
+    // Grab the current session token so the server can verify which
+    // operator this trip belongs to. If the session has expired between
+    // login and trip end (rare — sessions auto-refresh), bail to login.
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { handleLogout(); throw new Error('Session expired — sign in again'); }
+
+    // Compute the trip's local calendar date here on the device — the
+    // server otherwise derives it from startTime.toISOString() in UTC,
+    // which rolls a morning trip in any positive-UTC offset back to the
+    // previous day in the DB (and then the widget reads "yesterday").
+    const _ts = trip.startTime instanceof Date ? trip.startTime : new Date(trip.startTime);
+    const tripDate = `${_ts.getFullYear()}-${String(_ts.getMonth() + 1).padStart(2, '0')}-${String(_ts.getDate()).padStart(2, '0')}`;
+
+    const body = { tripData: trip, tripDate, guestEmails: emails, socialCardData, captainCardData };
+    if (mode)   body.mode   = mode;
+    if (tripId) body.tripId = tripId;
+
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error || 'Failed to send');
+    return result;
+  }
+
   async function sendReport() {
     // Commit any email still in the input box
     addEmailFromInput();
@@ -2571,43 +2628,43 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Sending...';
     try {
-      const socialCardData = await generateSocialCard();
-      // Captain copy is best-effort — if rendering fails, still send guest emails
-      let captainCardData = null;
-      try { captainCardData = await generateCaptainCard(); }
-      catch (e) { console.warn('Captain card failed, continuing:', e); }
-      // Grab the current session token so the server can verify which
-      // operator this trip belongs to. If the session has expired between
-      // login and trip end (rare — sessions auto-refresh), bail to login.
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) { handleLogout(); throw new Error('Session expired — sign in again'); }
-
-      // Compute the trip's local calendar date here on the device — the
-      // server otherwise derives it from startTime.toISOString() in UTC,
-      // which rolls a morning trip in any positive-UTC offset back to the
-      // previous day in the DB (and then the widget reads "yesterday").
-      const _ts = trip.startTime instanceof Date ? trip.startTime : new Date(trip.startTime);
-      const tripDate = `${_ts.getFullYear()}-${String(_ts.getMonth() + 1).padStart(2, '0')}-${String(_ts.getDate()).padStart(2, '0')}`;
-
-      // Single API call with all emails — Supabase saves once
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ tripData: trip, tripDate, guestEmails, socialCardData, captainCardData }),
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || 'Failed to send');
+      const result = await postTripReport({ emails: guestEmails });
+      sentTripId = result.trip_id || null;
       toast(`Sent to ${guestEmails.length} guest${guestEmails.length > 1 ? 's' : ''}!`, 'success');
       btn.innerHTML = '✓ Report Sent';
       btn.style.background = 'var(--success)';
+      // Reveal the add-a-guest path so a forgotten email can still go out
+      // without restarting the app (which would re-log the trip).
+      if (sentTripId) document.getElementById('addGuestBlock').style.display = 'block';
     } catch (err) {
       console.error(err);
       toast(err.message || 'Failed to send', 'error');
       btn.disabled = false;
       btn.innerHTML = 'Send Trip Report';
+    }
+  }
+
+  // Email the recap to one guest the captain forgot. Reuses the original
+  // trip's id so the server files the guest under the same trip and skips
+  // re-logging the sightings.
+  async function addGuestSend() {
+    const input = document.getElementById('addGuestInput');
+    const email = input.value.trim().replace(/,+$/, '');
+    if (!emailRegex.test(email)) return toast('Enter a valid email', 'error');
+    if (!sentTripId) return toast('Send the report first', 'error');
+    const btn = document.getElementById('btnAddGuest');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending...';
+    try {
+      await postTripReport({ emails: [email], mode: 'add-guests', tripId: sentTripId });
+      toast(`Recap sent to ${email}`, 'success');
+      input.value = '';
+    } catch (err) {
+      console.error(err);
+      toast(err.message || 'Failed to send', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Email this guest';
     }
   }
 
@@ -2622,6 +2679,9 @@
     document.getElementById('btnSend').innerHTML = 'Send Trip Report';
     document.getElementById('btnSend').disabled = false;
     document.getElementById('btnSend').style.background = '';
+    sentTripId = null;
+    document.getElementById('addGuestBlock').style.display = 'none';
+    document.getElementById('addGuestInput').value = '';
     showScreen('screenStart');
     // Re-pull today's bookings so the next slot of the day (if any) drives
     // the prefill — without this, the picker stays pinned to whichever slot
@@ -2740,6 +2800,8 @@
     clearSavedTrip();
     trip = newTripState();
     guestEmails = [];
+    sentTripId = null;
+    document.getElementById('addGuestBlock').style.display = 'none';
     document.getElementById('loginPassword').value = '';
     setRibbonForLoggedOut();
     showScreen('screenLogin');
