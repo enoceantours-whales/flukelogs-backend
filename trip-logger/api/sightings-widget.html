@@ -738,7 +738,7 @@ async function fetchSightings() {
 // can do a synchronous lookup per trip card.
 async function fetchTripAudio() {
   try {
-    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_id,audio_url,duration_seconds&order=trip_date.desc&limit=${FEED_LIMIT}`;
+    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_id,audio_url,duration_seconds,play_count&order=trip_date.desc&limit=${FEED_LIMIT}`;
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
     if (!res.ok) return new Map();
     const rows = await res.json();
@@ -790,15 +790,41 @@ function renderAudioPlayer(audio) {
     const h = Math.round((rng() * 0.6 + rng() * 0.4) * 60 * env + 22);
     bars.push(`<span class="bar" style="height:${h}%"></span>`);
   }
+  const plays = parseInt(audio.play_count, 10) || 0;
+  const playsText = plays > 0 ? ' · ' + plays + ' play' + (plays === 1 ? '' : 's') : '';
   return `
     <div class="trip-audio">
-      <div class="audio-meta"><span class="audio-meta-icon">●</span>Captain's notes from this trip${dur ? ' · ' + fmtAudioTime(dur) : ''}</div>
-      <div class="audio-player" data-src="${audio.audio_url}" data-dur="${dur}">
+      <div class="audio-meta"><span class="audio-meta-icon">●</span>Captain's notes from this trip${dur ? ' · ' + fmtAudioTime(dur) : ''}<span class="audio-plays">${playsText}</span></div>
+      <div class="audio-player" data-src="${audio.audio_url}" data-dur="${dur}" data-trip="${audio.trip_id || ''}" data-plays="${plays}">
         <button class="audio-play" type="button" aria-label="Play">${SVG_PLAY}</button>
         <div class="audio-waveform">${bars.join('')}</div>
         <span class="audio-time">${dur ? '0:00 / ' + fmtAudioTime(dur) : '0:00'}</span>
       </div>
     </div>`;
+}
+
+// Count one listen the first time a visitor plays a given note this page
+// load. Optimistically bumps the visible count, then fires the atomic
+// increment RPC — failures are silent, it's a vanity counter.
+function recordAudioPlay(player) {
+  if (!player || player.dataset.counted) return;
+  const tripId = player.dataset.trip;
+  if (!tripId) return;
+  player.dataset.counted = '1';
+  const next = (parseInt(player.dataset.plays, 10) || 0) + 1;
+  player.dataset.plays = String(next);
+  const wrap = player.closest('.trip-audio');
+  const label = wrap && wrap.querySelector('.audio-plays');
+  if (label) label.textContent = ' · ' + next + ' play' + (next === 1 ? '' : 's');
+  fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_audio_play`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON,
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tid: tripId }),
+  }).catch(() => { /* vanity counter — ignore network errors */ });
 }
 
 // Wires up every .audio-player on the page. Call after renderFeed paints the
@@ -854,6 +880,7 @@ function bindAudioPlayers(root) {
         audio.play().then(() => {
           playBtn.innerHTML = SVG_PAUSE;
           playBtn.setAttribute('aria-label', 'Pause');
+          recordAudioPlay(player);
         }).catch(() => { /* autoplay block / decode failure — ignore */ });
       } else {
         audio.pause();

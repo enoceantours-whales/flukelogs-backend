@@ -4349,8 +4349,11 @@
     const list = document.getElementById('pastTripsList');
     if (!trips.length) { list.innerHTML = '<div class="empty">No trips logged yet</div>'; return; }
     list.innerHTML = trips.map(t => {
+      const playsLabel = t.play_count
+        ? ` · ${t.play_count} play${t.play_count === 1 ? '' : 's'}`
+        : '';
       const audioStatus = t.has_audio
-        ? `<div class="sighting-meta" style="color:var(--success);">✓ Audio · ${fmtSec(t.duration_seconds || 0)}</div>`
+        ? `<div class="sighting-meta" style="color:var(--success);">✓ Audio · ${fmtSec(t.duration_seconds || 0)}${playsLabel}</div>`
         : '<div class="sighting-meta">🎙 Add audio</div>';
       return `<div class="sighting-row" style="cursor:pointer;" onclick="openTripAudio('${t.trip_id}', '${t.trip_date}', '${t.trip_part || ''}')">
         <div>

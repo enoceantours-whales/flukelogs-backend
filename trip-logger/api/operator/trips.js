@@ -78,7 +78,7 @@ module.exports = async function handler(req, res) {
     // trip_id (pre-0013 trips with no trip_id can't carry trip_id audio).
     const idList = trips.map(t => t.trip_id).filter(Boolean).map(id => `"${id}"`).join(',');
     const audioRows = idList
-      ? await pgGet(`trip_audio?operator_id=eq.${operatorId}&trip_id=in.(${idList})&select=trip_id,audio_url,duration_seconds`)
+      ? await pgGet(`trip_audio?operator_id=eq.${operatorId}&trip_id=in.(${idList})&select=trip_id,audio_url,duration_seconds,play_count`)
       : [];
     const audioByTrip = new Map(audioRows.map(r => [r.trip_id, r]));
 
@@ -94,6 +94,7 @@ module.exports = async function handler(req, res) {
         has_audio:        !!audio,
         audio_url:        audio ? audio.audio_url : null,
         duration_seconds: audio ? audio.duration_seconds : null,
+        play_count:       audio ? audio.play_count : null,
       };
     });
 
