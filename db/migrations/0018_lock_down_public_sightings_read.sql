@@ -1,0 +1,57 @@
+-- ============================================================================
+-- Migration 0018 — remove anon (public) read of sightings + trip_audio
+-- ============================================================================
+-- THE multi-tenant isolation fix. Until now the public sightings widget read
+-- the `sightings` and `trip_audio` tables DIRECTLY from the browser with the
+-- anon key, governed by RLS policies of USING (true) — i.e. "return every row
+-- to anyone holding the anon key." The per-operator `operator_id=eq.<id>`
+-- filter lived in the widget's JavaScript, so it was cosmetic, not a security
+-- boundary: anyone with the (public) anon key could read EVERY operator's
+-- sightings, including GPS coordinates, regardless of the ?op= slug. It also
+-- meant the `operators.show_map_on_widget = false` opt-out was unenforceable —
+-- lat/lng were still readable via a direct REST call.
+--
+-- The widget now fetches its data from the server endpoint /api/widget-data,
+-- which runs with the service role, scopes to a single operator resolved from
+-- the slug, and strips lat/lng when the operator hides their map. With that in
+-- place, anon no longer needs (or should have) any read on these tables.
+--
+-- This migration drops the two anon SELECT policies. RLS stays ENABLED on both
+-- tables. After this:
+--   • anon (browser) can read NOTHING from sightings / trip_audio directly
+--   • the service role (all /api/* server endpoints) still reads everything
+--     (service role bypasses RLS)
+--   • guests keep their scoped policy `sightings_select_own_trips_guest`
+--   • the anon `increment_audio_play` RPC still works (SECURITY DEFINER fn,
+--     not a table SELECT — unaffected by this change)
+--
+-- ┌────────────────────────────────────────────────────────────────────────┐
+-- │ ORDERING — READ BEFORE APPLYING                                          │
+-- │ Apply this ONLY AFTER the new widget code (api/widget-data.js + the      │
+-- │ sightings-widget.html that fetches from it) is DEPLOYED and verified     │
+-- │ live. If you run this before that code ships, the currently-deployed     │
+-- │ widget (still doing direct anon reads) will show an empty feed until     │
+-- │ the deploy completes.                                                    │
+-- │ Test on a Supabase dev branch first.                                     │
+-- └────────────────────────────────────────────────────────────────────────┘
+--
+-- ROLLBACK (if the widget misbehaves after applying): re-create the policies
+--   CREATE POLICY "Public read" ON public.sightings FOR SELECT USING (true);
+--   CREATE POLICY "trip_audio_public_read" ON public.trip_audio FOR SELECT USING (true);
+--
+-- Idempotent.
+
+DROP POLICY IF EXISTS "Public read"            ON public.sightings;
+DROP POLICY IF EXISTS "trip_audio_public_read" ON public.trip_audio;
+
+-- ── Verify ───────────────────────────────────────────────────────────────
+--   -- Expect: relrowsecurity = true for both (RLS still on)
+--   SELECT relname, relrowsecurity FROM pg_class
+--    WHERE relname IN ('sightings','trip_audio');
+--
+--   -- Expect: no policy with qual 'true' remains on either table; sightings
+--   -- should still list sightings_select_own_trips_guest.
+--   SELECT tablename, policyname, cmd, qual
+--     FROM pg_policies
+--    WHERE schemaname='public' AND tablename IN ('sightings','trip_audio')
+--    ORDER BY tablename, policyname;
