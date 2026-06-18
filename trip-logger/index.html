@@ -3234,8 +3234,15 @@
     });
   }
   window.addEventListener('message', function(e) {
-    if (e.data && e.data.iframeHeight) {
+    if (!e.data) return;
+    if (e.data.iframeHeight) {
       frames.forEach(function(f) { f.style.height = e.data.iframeHeight + 'px'; });
+    }
+    // The widget asks the page to scroll it into view when a visitor starts a
+    // trip replay (the map is at the top of the widget). Scroll only the frame
+    // that sent the message.
+    if (e.data.widgetScrollIntoView) {
+      frames.forEach(function(f) { if (f.contentWindow === e.source) f.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     }
   });
 })();

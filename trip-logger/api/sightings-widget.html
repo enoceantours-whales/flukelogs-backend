@@ -1327,6 +1327,18 @@ function sendHeight() {
   window.parent.postMessage({ iframeHeight: document.body.scrollHeight }, '*');
 }
 
+// Bring the map to the top of the viewport when a replay starts. The embed is
+// an auto-sized iframe, so the HOST page scrolls, not us — ask the parent to
+// scroll the iframe into view (the embed snippet listens for this message).
+// When opened standalone (not embedded), scroll our own document instead.
+function scrollMapIntoView() {
+  try { window.parent.postMessage({ widgetScrollIntoView: true }, '*'); } catch (e) {}
+  if (window.parent === window) {
+    const el = document.querySelector('.map-wrap') || document.getElementById('sightings-map');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 // ── Share ─────────────────────────────────────────────────────────────
 // Visitor on the embed taps the share icon on a trip card → iOS / Android
 // native share sheet opens with a deep-link to the same widget filtered
@@ -1448,6 +1460,10 @@ async function replayTrip(tripKey, opts) {
   // this and bail) and clear whatever it left on the map, then start fresh.
   const token = ++_replayToken;
   clearReplay();
+  // On a real tap (not the silent auto-play), bring the map into view — on a
+  // phone the trip list scrolls far below the map, so otherwise you'd watch
+  // the replay off-screen. Embedded, this asks the host page to scroll up.
+  if (!silent) scrollMapIntoView();
 
   try {
     // Focus this trip and sync the card UI to the new selection (same
