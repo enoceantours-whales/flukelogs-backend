@@ -345,7 +345,8 @@
   .trip-date-header.active-trip .active-indicator { display: inline-block; }
   .trip-date-right { display: flex; align-items: center; gap: 12px; }
   .trip-summary { font-size: 10px; color: var(--text-faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; }
-  .trip-share-btn {
+  .trip-share-btn,
+  .trip-replay-btn {
     appearance: none;
     background: transparent;
     border: 1px solid var(--hair);
@@ -358,8 +359,10 @@
     -webkit-tap-highlight-color: transparent;
     flex-shrink: 0;
   }
-  .trip-share-btn:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255,255,255,.05); }
+  .trip-share-btn:hover,
+  .trip-replay-btn:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255,255,255,.05); }
   .trip-share-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .trip-replay-btn svg { width: 11px; height: 11px; fill: currentColor; }
 
   /* Toast for the desktop-Firefox clipboard fallback (and any future
      non-Share-API browser). Fades in/out via the .show class. */
@@ -727,7 +730,7 @@ if (map) {
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_id,trip_part,trip_date,species,count,lat,lng,depth_meters,created_at&order=trip_date.desc,created_at.desc&limit=${FEED_LIMIT}`;
+  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_id,trip_part,trip_date,sighting_time,species,count,lat,lng,depth_meters,created_at&order=trip_date.desc,created_at.desc&limit=${FEED_LIMIT}`;
   const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
   if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
@@ -1207,6 +1210,16 @@ function renderFeed(data) {
     const audio = tripAudioByTrip.get(tripKey);
     const audioBlock = audio ? renderAudioPlayer(audio) : '';
 
+    // Replay needs at least two sightings with both a GPS pin and a logged
+    // time. Backfill from migration 0016 gives older trips a synthetic
+    // spread; new trips get the captain's real per-sighting times.
+    const replayable = sightings.filter(s => s.lat && s.lng && s.sighting_time).length;
+    const replayBtn = replayable >= 2
+      ? `<button class="trip-replay-btn" type="button" aria-label="Replay this trip" data-replay-trip="${tripKey}">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>`
+      : '';
+
     return `<div class="trip-card" data-trip="${tripKey}">
       <div class="trip-date-header" data-trip="${tripKey}">
         <div class="trip-date-label">
@@ -1215,6 +1228,7 @@ function renderFeed(data) {
         </div>
         <div class="trip-date-right">
           <div class="trip-summary">${tallied.length} species &middot; ${totalAnimals} animals</div>
+          ${replayBtn}
           <button class="trip-share-btn" type="button" aria-label="Share this trip" data-share-trip="${tripKey}">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>
           </button>
@@ -1233,6 +1247,15 @@ function renderFeed(data) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       shareTrip(btn.dataset.shareTrip);
+    });
+  });
+
+  // Replay button on each trip card — animates a polyline pin-by-pin in the
+  // order the captain logged the sightings.
+  list.querySelectorAll('.trip-replay-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      replayTrip(btn.dataset.replayTrip);
     });
   });
 
@@ -1376,6 +1399,108 @@ function showShareToast(message) {
     t.classList.remove('show');
     setTimeout(() => t.remove(), 220);
   }, 2200);
+}
+
+// ── Replay ─────────────────────────────────────────────────────────────
+// Visitor taps ▶ on a trip card → the map zooms to that trip and a teal
+// polyline draws pin-to-pin in the order the captain logged the sightings
+// (sighting_time). Existing pins start hidden and pop in as the line
+// reaches each one. ~8 seconds end-to-end regardless of trip length.
+const REPLAY_DURATION_MS = 8000;
+let _replayInFlight = false;
+
+async function replayTrip(tripKey) {
+  if (!map || _replayInFlight) return;
+  const ordered = allData
+    .filter(s => s.trip_id === tripKey && s.lat && s.lng && s.sighting_time)
+    .sort((a, b) => String(a.sighting_time).localeCompare(String(b.sighting_time)));
+  if (ordered.length < 2) { showShareToast('Not enough sightings to replay'); return; }
+  _replayInFlight = true;
+  let line = null;
+  try {
+    // Focus this trip and sync the card UI to the new selection (same
+    // visual state as a header click).
+    activeTripKey = tripKey;
+    refreshMarkers();
+    document.querySelectorAll('.trip-date-header').forEach(h => h.classList.remove('active-trip'));
+    document.querySelectorAll('.trip-card').forEach(c => { c.classList.remove('selected'); c.classList.remove('hidden'); });
+    const header = document.querySelector('.trip-date-header[data-trip="' + tripKey + '"]');
+    if (header) { header.classList.add('active-trip'); header.closest('.trip-card').classList.add('selected'); }
+
+    // Hide this trip's pins so they reveal in sequence.
+    const tripMarkers = markers.filter(m => m._tripKey === tripKey);
+    tripMarkers.forEach(m => setMarkerOpacity(m, 0));
+
+    // Frame the trip on the map and let the pan/zoom settle before drawing.
+    map.fitBounds(L.latLngBounds(ordered.map(s => [+s.lat, +s.lng])), { padding: [40, 40], maxZoom: 13, animate: true });
+    await wait(350);
+
+    line = L.polyline([], {
+      color: '#0fbfb1', weight: 3, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
+    }).addTo(map);
+
+    line.addLatLng([+ordered[0].lat, +ordered[0].lng]);
+    revealMarkerAt(tripMarkers, ordered[0]);
+
+    const segMs = REPLAY_DURATION_MS / (ordered.length - 1);
+    for (let i = 1; i < ordered.length; i++) {
+      const from = [+ordered[i - 1].lat, +ordered[i - 1].lng];
+      const to   = [+ordered[i    ].lat, +ordered[i    ].lng];
+      line.addLatLng(from);  // "head" point we'll move toward `to`
+      await animatePolylineHead(line, from, to, segMs);
+      revealMarkerAt(tripMarkers, ordered[i]);
+    }
+    // Linger so the finished path stays visible for a beat, then clear.
+    await wait(1200);
+  } finally {
+    if (line) line.remove();
+    _replayInFlight = false;
+  }
+}
+
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2; }
+
+function animatePolylineHead(line, from, to, ms) {
+  return new Promise(resolve => {
+    const start = performance.now();
+    function frame(now) {
+      const t = Math.min(1, (now - start) / ms);
+      const k = easeInOut(t);
+      const lat = from[0] + (to[0] - from[0]) * k;
+      const lng = from[1] + (to[1] - from[1]) * k;
+      const pts = line.getLatLngs();
+      pts[pts.length - 1] = L.latLng(lat, lng);
+      line.setLatLngs(pts);
+      if (t < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// Leaflet's L.Marker uses setOpacity; L.CircleMarker / Path use setStyle.
+// One helper that handles both keeps the replay code marker-type-agnostic.
+function setMarkerOpacity(marker, v) {
+  if (marker.setStyle) marker.setStyle({ opacity: v, fillOpacity: v * 0.95 });
+  else if (marker.setOpacity) marker.setOpacity(v);
+}
+
+function revealMarkerAt(tripMarkers, s) {
+  const lat = +s.lat, lng = +s.lng;
+  const target = tripMarkers.find(m => {
+    const ml = m.getLatLng();
+    return Math.abs(ml.lat - lat) < 1e-6 && Math.abs(ml.lng - lng) < 1e-6;
+  });
+  if (!target) return;
+  const start = performance.now();
+  const ms = 220;
+  function frame(now) {
+    const t = Math.min(1, (now - start) / ms);
+    setMarkerOpacity(target, t);
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 // ── Deep-link ─────────────────────────────────────────────────────────
