@@ -1431,24 +1431,32 @@ async function replayTrip(tripKey) {
     const tripMarkers = markers.filter(m => m._tripKey === tripKey);
     tripMarkers.forEach(m => setMarkerOpacity(m, 0));
 
-    // Frame the trip on the map and let the pan/zoom settle before drawing.
-    map.fitBounds(L.latLngBounds(ordered.map(s => [+s.lat, +s.lng])), { padding: [40, 40], maxZoom: 13, animate: true });
+    // Anchor list: every sighting in order, then the home port if known —
+    // so the line ends at the dock instead of trailing off at the last pin.
+    const homePort = (OP && OP.home_port) || null;
+    const anchors = ordered.map(s => [+s.lat, +s.lng]);
+    if (homePort) anchors.push([homePort.lat, homePort.lng]);
+
+    // Frame the whole path (sightings + harbor) and let the pan/zoom settle.
+    map.fitBounds(L.latLngBounds(anchors), { padding: [40, 40], maxZoom: 13, animate: true });
     await wait(350);
 
     line = L.polyline([], {
       color: '#0fbfb1', weight: 3, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
     }).addTo(map);
 
-    line.addLatLng([+ordered[0].lat, +ordered[0].lng]);
+    line.addLatLng(anchors[0]);
     revealMarkerAt(tripMarkers, ordered[0]);
 
-    const segMs = REPLAY_DURATION_MS / (ordered.length - 1);
-    for (let i = 1; i < ordered.length; i++) {
-      const from = [+ordered[i - 1].lat, +ordered[i - 1].lng];
-      const to   = [+ordered[i    ].lat, +ordered[i    ].lng];
+    const segMs = REPLAY_DURATION_MS / Math.max(anchors.length - 1, 1);
+    for (let i = 1; i < anchors.length; i++) {
+      const from = anchors[i - 1];
+      const to   = anchors[i];
       line.addLatLng(from);  // "head" point we'll move toward `to`
       await animatePolylineHead(line, from, to, segMs);
-      revealMarkerAt(tripMarkers, ordered[i]);
+      // Reveal the marker only when the anchor is a sighting (not the
+      // harbor, which has no marker).
+      if (i < ordered.length) revealMarkerAt(tripMarkers, ordered[i]);
     }
     // Linger so the finished path stays visible for a beat, then clear.
     await wait(1200);

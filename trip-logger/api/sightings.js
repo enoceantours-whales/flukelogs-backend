@@ -29,7 +29,7 @@ async function loadOperatorRow(slug) {
   try {
     const safeSlug = encodeURIComponent(slug);
     const res = await fetch(
-      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=id,slug,name,show_map_on_widget,logo_url,logo_url_email,widget_host_url&limit=1`,
+      `${url}/rest/v1/operators?slug=eq.${safeSlug}&select=id,slug,name,show_map_on_widget,logo_url,logo_url_email,widget_host_url,home_port_lat,home_port_lng&limit=1`,
       { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
     );
     if (!res.ok) return null;
@@ -133,6 +133,13 @@ module.exports = async function handler(req, res) {
     const tripParam = req.query && req.query.trip;
 
     const operator = await loadOperatorRow(slug);
+    // Home dock anchor for the widget's trip-replay animation — the line
+    // ends here. PostgREST returns numeric as a string, so parseFloat.
+    const portLat = operator && parseFloat(operator.home_port_lat);
+    const portLng = operator && parseFloat(operator.home_port_lng);
+    const homePort = Number.isFinite(portLat) && Number.isFinite(portLng)
+      ? { lat: portLat, lng: portLng }
+      : null;
     const opConfig = operator
       ? {
           id: operator.id,
@@ -142,8 +149,9 @@ module.exports = async function handler(req, res) {
           // share button so shared links land on their branded site, not
           // the bare vercel widget URL. Null = fall back to vercel domain.
           widget_host_url: operator.widget_host_url || null,
+          home_port: homePort,
         }
-      : { id: null, slug, show_map_on_widget: true, widget_host_url: null };
+      : { id: null, slug, show_map_on_widget: true, widget_host_url: null, home_port: null };
 
     // Per-trip enrichment only when both the operator AND the trip resolve
     // — otherwise fall through to the generic operator-level OG.
