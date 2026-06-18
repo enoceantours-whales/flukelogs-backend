@@ -126,19 +126,26 @@ async function getGuestStats(operatorId, email) {
 // captain copy. Centralized so adding a new branded surface = one edit here
 // instead of hunting for hardcoded "Enocean" strings.
 function brand(operator) {
-  const websiteUrl = pick(operator, 'website_url', 'https://enoceantours.com');
+  // Fallbacks are intentionally GENERIC, never Enocean-specific. They fire only
+  // for an operator that hasn't filled a field in yet — and a half-onboarded
+  // operator must never inherit Enocean's name, logo, or links on their guest
+  // email/PDF. Enocean's own operators row is fully populated, so none of these
+  // fallbacks ever fire for it: its output is unchanged by this.
+  const websiteUrl = pick(operator, 'website_url', '');
   const websiteHost = (websiteUrl || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toUpperCase();
-  // Logo fallbacks point at /Public/ assets served by the running app, not a
-  // hardcoded vercel.app domain — so previews and any future custom domain
-  // still work. Only fires when an operator has no logo_url set yet.
-  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
   return {
-    name:        pick(operator, 'name',           'Enocean Tours'),
-    slug:        pick(operator, 'slug',           'enocean'),
-    tagline:     pick(operator, 'tagline',        'MOSS LANDING HARBOR, MONTEREY BAY'),
-    logoPdf:     pick(operator, 'logo_url',       `${appUrl}/Public/Enocean_Tours_logo-05.png`),
-    logoEmail:   pick(operator, 'logo_url_email', `${appUrl}/Public/Enocean_Tours_logo-03.png`),
-    reviewUrl:   pick(operator, 'review_url',     'https://www.enoceantours.com/reviews'),
+    name:        pick(operator, 'name',               'Your Tour Company'),
+    slug:        pick(operator, 'slug',               'operator'),
+    tagline:     pick(operator, 'tagline',            ''),
+    // No generic logo asset exists, so the fallback is "no image" — the PDF
+    // header then draws an initials wordmark and the email omits the logo,
+    // rather than showing another operator's logo.
+    logoPdf:     pick(operator, 'logo_url',           null),
+    logoEmail:   pick(operator, 'logo_url_email',     null),
+    reviewUrl:   pick(operator, 'review_url',         ''),
+    // PDF static-map center; Enocean's row value equals the previous hardcoded
+    // constant, so the map frames identically.
+    mapCenter:   pick(operator, 'default_map_center', '36.78,-122.05'),
     websiteUrl,
     websiteHost,
     fromEmail:   operator && operator.from_email,
@@ -219,11 +226,11 @@ function resolveTripDate(tripData) {
 
 // ─── Fetch Google Maps Static Image ──────────────────────────────────────────
 
-function fetchMapImage(sightings) {
+function fetchMapImage(sightings, center) {
   return new Promise((resolve) => {
     const withCoords = sightings.filter(s => s.lat && s.lng);
 
-    const CENTER = '36.78,-122.05';
+    const CENTER = center || '36.78,-122.05';
     const ZOOM   = '10';
 
     if (withCoords.length === 0) {
@@ -315,7 +322,7 @@ function formatDepthLabel(m) {
 // ─── PDF Generator ───────────────────────────────────────────────────────────
 
 async function generatePDF(tripData, b) {
-  const mapImageBuffer = await fetchMapImage(tripData.sightings);
+  const mapImageBuffer = await fetchMapImage(tripData.sightings, b.mapCenter);
 
   let logoBuffer = null;
   try {
@@ -363,17 +370,24 @@ async function generatePDF(tripData, b) {
     const logoCX = M + logoRadius;
     const logoCY = headerH / 2;
     doc.circle(logoCX, logoCY, logoRadius).fill(WHITE);
+    // Wordmark fallback when an operator has no logo image. Generic operator
+    // initials (centered in the circle) so a logo-less operator never renders
+    // "ENOCEAN TOURS". Enocean has a logo set, so this never runs for it.
+    const initials = (b.name || '').split(/\s+/).filter(Boolean)
+      .map(w => w[0]).join('').slice(0, 3).toUpperCase() || 'TL';
+    const drawWordmark = () => {
+      doc.fillColor(BLACK).font(bold).fontSize(13)
+         .text(initials, logoCX - logoRadius, logoCY - 7, { width: logoRadius * 2, align: 'center', lineBreak: false });
+    };
     if (logoBuffer) {
       try {
         const logoSize = logoRadius * 2 - 4;
         doc.image(logoBuffer, logoCX - logoSize/2, logoCY - logoSize/2, { width: logoSize, height: logoSize });
       } catch(e) {
-        doc.fillColor(BLACK).font(bold).fontSize(6).text('ENOCEAN', logoCX - 18, logoCY - 6, { lineBreak: false });
-        doc.fillColor(BLACK).font(bold).fontSize(5).text('TOURS', logoCX - 12, logoCY + 2, { lineBreak: false });
+        drawWordmark();
       }
     } else {
-      doc.fillColor(BLACK).font(bold).fontSize(6).text('ENOCEAN', logoCX - 18, logoCY - 6, { lineBreak: false });
-      doc.fillColor(BLACK).font(bold).fontSize(5).text('TOURS', logoCX - 12, logoCY + 2, { lineBreak: false });
+      drawWordmark();
     }
 
     doc.fillColor(WHITE).font(bold).fontSize(18)
@@ -654,7 +668,7 @@ async function sendEmail(guestEmail, pdfBuffer, socialCardData, tripData, b, tra
     <table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#161b1f;border:1px solid #242a30;border-radius:16px;overflow:hidden;">
 
       <tr><td style="background:#0a0c0e;padding:34px 24px 26px;text-align:center;border-bottom:1px solid #242a30;">
-        <img src="${b.logoEmail}" alt="${b.name}" width="180" style="display:block;margin:0 auto 14px;border:0;outline:none;text-decoration:none;">
+        ${b.logoEmail ? `<img src="${b.logoEmail}" alt="${b.name}" width="180" style="display:block;margin:0 auto 14px;border:0;outline:none;text-decoration:none;">` : ''}
         <div style="font:600 9px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.34em;text-transform:uppercase;color:#c8a86b;">Trip Report</div>
         <div style="margin-top:10px;font:400 11px/1 'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:0.18em;text-transform:uppercase;color:rgba(244,246,247,0.42);">${date}</div>
       </td></tr>
