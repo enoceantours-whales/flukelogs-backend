@@ -128,6 +128,11 @@ function buildOgTags({ operator, trip, requestUrl }) {
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/html');
+  // No browser/CDN caching — mobile browsers were serving stale HTML
+  // after deploys, so the replay button + animation appeared missing
+  // until users cleared their cache. The page is tiny (~50KB gzipped)
+  // and the actual sighting data is loaded over a separate fetch.
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
   try {
     const slug = (req.query && req.query.op) || DEFAULT_SLUG;
     const tripParam = req.query && req.query.trip;
