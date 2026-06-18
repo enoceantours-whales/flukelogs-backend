@@ -1413,9 +1413,10 @@ function showShareToast(message) {
 
 // ── Replay ─────────────────────────────────────────────────────────────
 // Visitor taps ▶ on a trip card → the map zooms to that trip and a teal
-// polyline draws pin-to-pin in the order the captain logged the sightings
-// (sighting_time). Existing pins start hidden and pop in as the line
-// reaches each one. ~8 seconds end-to-end regardless of trip length.
+// polyline draws from the harbor, out through the sightings in the order the
+// captain logged them (sighting_time), and back to the harbor — so the route
+// starts and ends at the dock. Existing pins start hidden and pop in as the
+// line reaches each one. ~8 seconds end-to-end regardless of trip length.
 const REPLAY_DURATION_MS = 8000;
 let _replayInFlight = false;
 
@@ -1442,11 +1443,17 @@ async function replayTrip(tripKey, opts) {
     const tripMarkers = markers.filter(m => m._tripKey === tripKey);
     tripMarkers.forEach(m => setMarkerOpacity(m, 0));
 
-    // Anchor list: every sighting in order, then the home port if known —
-    // so the line ends at the dock instead of trailing off at the last pin.
+    // Path: home port → every sighting in order → home port, so the replay
+    // leaves the dock, visits each pin, and returns — starting and ending at
+    // the same place. Each anchor remembers whether it's a sighting (so the
+    // matching pin pops in as the line reaches it) or the harbor (no marker).
+    // When the home port is unknown, the path is just the sightings, as before.
     const homePort = (OP && OP.home_port) || null;
-    const anchors = ordered.map(s => [+s.lat, +s.lng]);
-    if (homePort) anchors.push([homePort.lat, homePort.lng]);
+    const path = [];
+    if (homePort) path.push({ pt: [homePort.lat, homePort.lng], sighting: null });
+    ordered.forEach(s => path.push({ pt: [+s.lat, +s.lng], sighting: s }));
+    if (homePort) path.push({ pt: [homePort.lat, homePort.lng], sighting: null });
+    const anchors = path.map(p => p.pt);
 
     // Frame the whole path (sightings + harbor) and let the pan/zoom settle.
     map.fitBounds(L.latLngBounds(anchors), { padding: [40, 40], maxZoom: 13, animate: true });
@@ -1457,7 +1464,9 @@ async function replayTrip(tripKey, opts) {
     }).addTo(map);
 
     line.addLatLng(anchors[0]);
-    revealMarkerAt(tripMarkers, ordered[0]);
+    // Reveal the starting anchor's pin only if it's a sighting — i.e. there's
+    // no home port, so the path begins at the first sighting rather than the dock.
+    if (path[0].sighting) revealMarkerAt(tripMarkers, path[0].sighting);
 
     const segMs = REPLAY_DURATION_MS / Math.max(anchors.length - 1, 1);
     for (let i = 1; i < anchors.length; i++) {
@@ -1465,9 +1474,8 @@ async function replayTrip(tripKey, opts) {
       const to   = anchors[i];
       line.addLatLng(from);  // "head" point we'll move toward `to`
       await animatePolylineHead(line, from, to, segMs);
-      // Reveal the marker only when the anchor is a sighting (not the
-      // harbor, which has no marker).
-      if (i < ordered.length) revealMarkerAt(tripMarkers, ordered[i]);
+      // Reveal the pin when this anchor is a sighting (harbor anchors have none).
+      if (path[i].sighting) revealMarkerAt(tripMarkers, path[i].sighting);
     }
     // Linger so the finished path stays visible for a beat, then clear.
     await wait(1200);
