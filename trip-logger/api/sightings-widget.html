@@ -595,18 +595,19 @@ const SPECIES_META = {
   'Resident Orcas':                { icon: '🐋', color: '#ffffff', borderColor: '#000000', isSplit: true },
   'Humpback Whale':                { icon: '🐳', color: '#111111', borderColor: '#555' },
   'Blue Whale':                    { icon: '🐋', color: '#2b6cb0', borderColor: '#1a4a8a' },
-  'Fin Whale':                     { icon: '🐋', color: '#744210', borderColor: '#4a2800' },
+  'Fin Whale':                     { icon: '🐋', color: '#ea580c', borderColor: '#9a3412' },
   'Gray Whale':                    { icon: '🐋', color: '#718096', borderColor: '#4a5568' },
   'Minke Whale':                   { icon: '🐋', color: '#2c7a7b', borderColor: '#1a5a5b' },
-  'Sperm Whale':                   { icon: '🐋', color: '#4a1942', borderColor: '#2d0f29' },
-  'Pacific White-sided Dolphin':   { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  'Common Dolphin':                { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  "Risso's Dolphin":               { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  'Bottlenose Dolphin':            { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  'Coastal Bottlenose Dolphin':    { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  'Northern Right Whale Dolphin':  { icon: '🐬', color: '#f0f0f0', borderColor: '#aaa' },
-  'Dall\'s Porpoise':              { icon: '🐬', color: '#e2e8f0', borderColor: '#999' },
-  'Harbor Porpoise':               { icon: '🐬', color: '#e2e8f0', borderColor: '#999' },
+  'Sperm Whale':                   { icon: '🐋', color: '#9333ea', borderColor: '#581c87' },
+  'Pacific White-sided Dolphin':   { icon: '🐬', color: '#ec4899', borderColor: '#be185d' },
+  'Common Dolphin':                { icon: '🐬', color: '#fbbf24', borderColor: '#a16207' },
+  "Risso's Dolphin":               { icon: '🐬', color: '#94a3b8', borderColor: '#475569' },
+  'Risso’s dolphins':         { icon: '🐬', color: '#94a3b8', borderColor: '#475569' },
+  'Bottlenose Dolphin':            { icon: '🐬', color: '#06b6d4', borderColor: '#0e7490' },
+  'Coastal Bottlenose Dolphin':    { icon: '🐬', color: '#38bdf8', borderColor: '#0284c7' },
+  'Northern Right Whale Dolphin':  { icon: '🐬', color: '#d946ef', borderColor: '#a21caf' },
+  'Dall\'s Porpoise':              { icon: '🐬', color: '#6366f1', borderColor: '#4338ca' },
+  'Harbor Porpoise':               { icon: '🐬', color: '#818cf8', borderColor: '#4f46e5' },
   'Sea Otter':                     { icon: '🦦', color: '#c05621', borderColor: '#7b341e' },
   'Harbor Seal':                   { icon: '🦭', color: '#b7791f', borderColor: '#7b5a00' },
   'Mola Mola':                     { icon: '🐟', color: '#6b46c1', borderColor: '#44337a' },
@@ -664,30 +665,30 @@ function refreshMarkers() {
   markers.forEach(m => map.removeLayer(m));
   markers.length = 0;
 
-  // Trip-date selection still hard-filters, but species filtering now dims
-  // non-matching pins instead of hiding them — keeps geographic context
-  // intact while highlighting the species the user picked (per design D).
+  // Trip-date and species selection both hard-filter the pins — when a
+  // species is active every other species disappears so the picked one
+  // stands alone (the older dimmed-out version looked muddy on the light
+  // basemap, especially for the pale dolphin colors).
   const dataToShow = activeTripKey
     ? allData.filter(s => s.trip_id === activeTripKey)
     : allData;
 
   dataToShow.forEach(s => {
     if (!s.lat || !s.lng) return;
+    if (activeFilter && s.species !== activeFilter) return;
     const meta = sm(s.species);
-    const isActiveSpecies = !activeFilter || s.species === activeFilter;
-    const dimOpacity = 0.18;
     let m;
 
     if (meta.isSplit) {
-      m = L.marker([+s.lat, +s.lng], { icon: createOrcaIcon(), opacity: isActiveSpecies ? 1 : dimOpacity });
+      m = L.marker([+s.lat, +s.lng], { icon: createOrcaIcon(), opacity: 1 });
     } else {
       m = L.circleMarker([+s.lat, +s.lng], {
-        radius: isActiveSpecies && activeFilter ? 8.5 : 7,
+        radius: activeFilter ? 8.5 : 7,
         fillColor: meta.color,
         color: meta.borderColor || '#000',
-        weight: isActiveSpecies && activeFilter ? 2 : 1.5,
-        fillOpacity: isActiveSpecies ? 0.95 : dimOpacity,
-        opacity: isActiveSpecies ? 1 : dimOpacity,
+        weight: activeFilter ? 2 : 1.5,
+        fillOpacity: 0.95,
+        opacity: 1,
       });
     }
 
