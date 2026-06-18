@@ -730,24 +730,33 @@ if (map) {
 }
 
 // ── Data ─────────────────────────────────────────────────────────────────────
-async function fetchSightings() {
-  const url = `${SUPABASE_URL}/rest/v1/${TABLE}?operator_id=eq.${OPERATOR_ID}&select=trip_id,trip_part,trip_date,sighting_time,species,count,lat,lng,depth_meters,created_at&order=trip_date.desc,created_at.desc&limit=${FEED_LIMIT}`;
-  const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
-  if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  return res.json();
+// Sightings + captain audio come from /api/widget-data (service role, scoped
+// to this operator by slug). The widget no longer reads the sightings /
+// trip_audio tables directly with the anon key — that scoping was client-side
+// only. Now one operator can't read another's rows, and the
+// show_map_on_widget opt-out is enforced server-side (lat/lng omitted there).
+// Both feeds arrive in one response; memoize so the two callers share it.
+let _widgetDataPromise = null;
+function loadWidgetData() {
+  if (_widgetDataPromise) return _widgetDataPromise;
+  const op = OP.slug ? encodeURIComponent(OP.slug) : '';
+  _widgetDataPromise = fetch(`/api/widget-data?op=${op}`, { headers: { 'Accept': 'application/json' } })
+    .then(res => { if (!res.ok) throw new Error(`widget-data ${res.status}`); return res.json(); })
+    .catch(() => ({ sightings: [], audio: [] }));
+  return _widgetDataPromise;
 }
 
-// Captain audio notes per trip. Public read via the same anon key.
-// Returns { trip_id -> { audio_url, duration_seconds } } so render code
-// can do a synchronous lookup per trip card.
+async function fetchSightings() {
+  const data = await loadWidgetData();
+  return Array.isArray(data.sightings) ? data.sightings : [];
+}
+
+// Captain audio notes per trip. Returns Map(trip_id -> { audio_url,
+// duration_seconds, play_count }) so render code can do a synchronous lookup.
 async function fetchTripAudio() {
-  try {
-    const url = `${SUPABASE_URL}/rest/v1/trip_audio?operator_id=eq.${OPERATOR_ID}&select=trip_id,audio_url,duration_seconds,play_count&order=trip_date.desc&limit=${FEED_LIMIT}`;
-    const res = await fetch(url, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } });
-    if (!res.ok) return new Map();
-    const rows = await res.json();
-    return new Map(rows.filter(r => r.trip_id).map(r => [r.trip_id, r]));
-  } catch (e) { return new Map(); }
+  const data = await loadWidgetData();
+  const rows = Array.isArray(data.audio) ? data.audio : [];
+  return new Map(rows.filter(r => r.trip_id).map(r => [r.trip_id, r]));
 }
 
 // ── Custom audio player with decorative waveform ────────────────────────────
