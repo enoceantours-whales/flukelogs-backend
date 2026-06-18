@@ -1163,6 +1163,9 @@ function syncFilterUI() {
 // re-syncs every surface that reflects it (map opacity, legend rows,
 // rail pills, trip-log filter).
 function setActiveFilter(speciesOrNull) {
+  // Any filter tap cancels a running replay so the animation doesn't keep
+  // playing underneath the filtered pins.
+  stopReplay();
   activeFilter = speciesOrNull;
   // Selecting a species also clears any active trip-date selection so the
   // user is never looking at two filters at once.
@@ -1541,6 +1544,14 @@ async function replayTrip(tripKey, opts) {
 function clearReplay() {
   if (_replayLine) { _replayLine.remove(); _replayLine = null; }
   if (_replayBoat) { _replayBoat.remove(); _replayBoat = null; }
+}
+
+// Cancel any in-flight replay — bump the token so its animation loops bail, and
+// clear its line + boat now. Called when the visitor taps a filter so the
+// playback stops instead of running on underneath the pins.
+function stopReplay() {
+  _replayToken++;
+  clearReplay();
 }
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
