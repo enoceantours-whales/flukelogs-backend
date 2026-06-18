@@ -1427,19 +1427,28 @@ const BOAT_SPEED_M_PER_MS = 3.2;      // map-metres covered per millisecond
 const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps
 const CIRCLE_MS = 1100;               // time for one loop around a sighting
 const CIRCLE_RADIUS_M = 320;          // loop radius, in metres
-let _replayInFlight = false;
+// Each ▶ click bumps _replayToken; an in-flight replay sees the number change
+// and bails out of its animation loops, so a new replay cleanly supersedes the
+// running one. _replayLine/_replayBoat are module-level so the new run can clear
+// whatever the previous one left on the map the instant it starts.
+let _replayToken = 0;
+let _replayLine = null;
+let _replayBoat = null;
 let _boatPrev = null;                 // last boat position, for heading
 
 async function replayTrip(tripKey, opts) {
   const silent = opts && opts.silent;
-  if (!map || _replayInFlight) return;
+  if (!map) return;
   const ordered = allData
     .filter(s => s.trip_id === tripKey && s.lat && s.lng && s.sighting_time)
     .sort((a, b) => String(a.sighting_time).localeCompare(String(b.sighting_time)));
   if (ordered.length < 2) { if (!silent) showShareToast('Not enough sightings to replay'); return; }
-  _replayInFlight = true;
-  let line = null;
-  let boat = null;
+
+  // Supersede any in-flight replay: bump the token (its animation loops check
+  // this and bail) and clear whatever it left on the map, then start fresh.
+  const token = ++_replayToken;
+  clearReplay();
+
   try {
     // Focus this trip and sync the card UI to the new selection (same
     // visual state as a header click).
@@ -1469,13 +1478,14 @@ async function replayTrip(tripKey, opts) {
     // Frame the whole path (sightings + harbor) and let the pan/zoom settle.
     map.fitBounds(L.latLngBounds(anchors), { padding: [40, 40], maxZoom: 13, animate: true });
     await wait(350);
+    if (token !== _replayToken) return;  // superseded during the pan/zoom settle
 
-    line = L.polyline([], {
+    const line = _replayLine = L.polyline([], {
       color: '#0fbfb1', weight: 3, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
     }).addTo(map);
 
     // The little boat that rides the head of the line.
-    boat = L.marker(anchors[0], { icon: makeBoatIcon(), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    const boat = _replayBoat = L.marker(anchors[0], { icon: makeBoatIcon(), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
     _boatPrev = null;
     moveBoat(boat, anchors[0][0], anchors[0][1]);
 
@@ -1485,6 +1495,7 @@ async function replayTrip(tripKey, opts) {
     if (path[0].sighting) revealMarkerAt(tripMarkers, path[0].sighting);
 
     for (let i = 1; i < anchors.length; i++) {
+      if (token !== _replayToken) return;  // a newer replay took over
       const from = anchors[i - 1];
       const to   = anchors[i];
       // Constant-ish speed: leg time ∝ distance, clamped so short hops aren't
@@ -1492,30 +1503,38 @@ async function replayTrip(tripKey, opts) {
       const meters = map.distance(from, to);
       const travelMs = Math.max(TRAVEL_MIN_MS, Math.min(TRAVEL_MAX_MS, meters / BOAT_SPEED_M_PER_MS));
       line.addLatLng(from);  // "head" point we'll move toward `to`
-      await animatePolylineHead(line, from, to, travelMs, boat);
+      await animatePolylineHead(line, from, to, travelMs, boat, token);
+      if (token !== _replayToken) return;
       if (path[i].sighting) {
         // Arrived at a sighting: reveal its pin, then loop the boat once around
         // it before moving on. Harbor anchors have no pin and no loop.
         revealMarkerAt(tripMarkers, path[i].sighting);
-        await circleBoat(boat, to, CIRCLE_RADIUS_M, CIRCLE_MS);
+        await circleBoat(boat, to, CIRCLE_RADIUS_M, CIRCLE_MS, token);
       }
     }
     // Linger so the finished path stays visible for a beat, then clear.
     await wait(1200);
   } finally {
-    if (line) line.remove();
-    if (boat) boat.remove();
-    _replayInFlight = false;
+    // Only tear down if we're still the active run; a superseding replay has
+    // already cleared us and now owns the globals.
+    if (token === _replayToken) clearReplay();
   }
+}
+
+// Remove the current replay's line + boat from the map and forget them.
+function clearReplay() {
+  if (_replayLine) { _replayLine.remove(); _replayLine = null; }
+  if (_replayBoat) { _replayBoat.remove(); _replayBoat = null; }
 }
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2; }
 
-function animatePolylineHead(line, from, to, ms, boat) {
+function animatePolylineHead(line, from, to, ms, boat, token) {
   return new Promise(resolve => {
     const start = performance.now();
     function frame(now) {
+      if (token !== _replayToken) { resolve(); return; }  // superseded → stop touching the line
       const t = Math.min(1, (now - start) / ms);
       // Linear so the boat holds a steady speed along the leg (the constant
       // pace comes from leg time ∝ distance, set by the caller).
@@ -1570,7 +1589,7 @@ function moveBoat(boat, lat, lng) {
 }
 
 // Loop the boat once around a sighting at `center`, radius in metres.
-function circleBoat(boat, center, meters, ms) {
+function circleBoat(boat, center, meters, ms, token) {
   return new Promise(resolve => {
     const latC = center[0], lngC = center[1];
     const dLat = meters / 111320;
@@ -1578,6 +1597,7 @@ function circleBoat(boat, center, meters, ms) {
     const start = performance.now();
     const a0 = -Math.PI / 2;  // begin at the top of the loop
     function frame(now) {
+      if (token !== _replayToken) { resolve(); return; }  // superseded → stop
       const t = Math.min(1, (now - start) / ms);
       const a = a0 + t * 2 * Math.PI;
       moveBoat(boat, latC + dLat * Math.sin(a), lngC + dLng * Math.cos(a));
