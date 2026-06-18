@@ -552,6 +552,7 @@ async function saveToSupabase(tripData, operatorId) {
     trip_date: tripDate,
     trip_id: tripData.tripId,
     trip_part: tripData.tripPart || null,
+    sighting_time: s.time || null,
     duration_minutes: durationMinutes,
     distance_nm: parseFloat((tripData.distanceNM || 0).toFixed(2)),
     passengers: tripData.passengers,
