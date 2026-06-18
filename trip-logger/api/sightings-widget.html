@@ -1416,9 +1416,19 @@ function showShareToast(message) {
 // polyline draws from the harbor, out through the sightings in the order the
 // captain logged them (sighting_time), and back to the harbor — so the route
 // starts and ends at the dock. Existing pins start hidden and pop in as the
-// line reaches each one. ~8 seconds end-to-end regardless of trip length.
-const REPLAY_DURATION_MS = 8000;
+// line reaches each one. A little boat rides the head of the line and loops
+// once around each sighting before carrying on, so it reads as a vessel
+// working the bay.
+//
+// Pacing: the boat moves at a roughly constant speed (segment time ∝ leg
+// distance, clamped) so the long harbor legs don't whip past, and it pauses to
+// circle each pin. Tune BOAT_SPEED_M_PER_MS for overall speed — higher = faster.
+const BOAT_SPEED_M_PER_MS = 2.4;      // map-metres covered per millisecond
+const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps
+const CIRCLE_MS = 1100;               // time for one loop around a sighting
+const CIRCLE_RADIUS_M = 320;          // loop radius, in metres
 let _replayInFlight = false;
+let _boatPrev = null;                 // last boat position, for heading
 
 async function replayTrip(tripKey, opts) {
   const silent = opts && opts.silent;
@@ -1429,6 +1439,7 @@ async function replayTrip(tripKey, opts) {
   if (ordered.length < 2) { if (!silent) showShareToast('Not enough sightings to replay'); return; }
   _replayInFlight = true;
   let line = null;
+  let boat = null;
   try {
     // Focus this trip and sync the card UI to the new selection (same
     // visual state as a header click).
@@ -1463,24 +1474,37 @@ async function replayTrip(tripKey, opts) {
       color: '#0fbfb1', weight: 3, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
     }).addTo(map);
 
+    // The little boat that rides the head of the line.
+    boat = L.marker(anchors[0], { icon: makeBoatIcon(), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    _boatPrev = null;
+    moveBoat(boat, anchors[0][0], anchors[0][1]);
+
     line.addLatLng(anchors[0]);
     // Reveal the starting anchor's pin only if it's a sighting — i.e. there's
     // no home port, so the path begins at the first sighting rather than the dock.
     if (path[0].sighting) revealMarkerAt(tripMarkers, path[0].sighting);
 
-    const segMs = REPLAY_DURATION_MS / Math.max(anchors.length - 1, 1);
     for (let i = 1; i < anchors.length; i++) {
       const from = anchors[i - 1];
       const to   = anchors[i];
+      // Constant-ish speed: leg time ∝ distance, clamped so short hops aren't
+      // instant and long harbor legs aren't tedious.
+      const meters = map.distance(from, to);
+      const travelMs = Math.max(TRAVEL_MIN_MS, Math.min(TRAVEL_MAX_MS, meters / BOAT_SPEED_M_PER_MS));
       line.addLatLng(from);  // "head" point we'll move toward `to`
-      await animatePolylineHead(line, from, to, segMs);
-      // Reveal the pin when this anchor is a sighting (harbor anchors have none).
-      if (path[i].sighting) revealMarkerAt(tripMarkers, path[i].sighting);
+      await animatePolylineHead(line, from, to, travelMs, boat);
+      if (path[i].sighting) {
+        // Arrived at a sighting: reveal its pin, then loop the boat once around
+        // it before moving on. Harbor anchors have no pin and no loop.
+        revealMarkerAt(tripMarkers, path[i].sighting);
+        await circleBoat(boat, to, CIRCLE_RADIUS_M, CIRCLE_MS);
+      }
     }
     // Linger so the finished path stays visible for a beat, then clear.
     await wait(1200);
   } finally {
     if (line) line.remove();
+    if (boat) boat.remove();
     _replayInFlight = false;
   }
 }
@@ -1488,17 +1512,75 @@ async function replayTrip(tripKey, opts) {
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2; }
 
-function animatePolylineHead(line, from, to, ms) {
+function animatePolylineHead(line, from, to, ms, boat) {
   return new Promise(resolve => {
     const start = performance.now();
     function frame(now) {
       const t = Math.min(1, (now - start) / ms);
-      const k = easeInOut(t);
-      const lat = from[0] + (to[0] - from[0]) * k;
-      const lng = from[1] + (to[1] - from[1]) * k;
+      // Linear so the boat holds a steady speed along the leg (the constant
+      // pace comes from leg time ∝ distance, set by the caller).
+      const lat = from[0] + (to[0] - from[0]) * t;
+      const lng = from[1] + (to[1] - from[1]) * t;
       const pts = line.getLatLngs();
       pts[pts.length - 1] = L.latLng(lat, lng);
       line.setLatLngs(pts);
+      if (boat) moveBoat(boat, lat, lng);
+      if (t < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ── Replay boat ────────────────────────────────────────────────────────
+// A small top-down boat (bow points "up" at 0°). It's a divIcon so we can
+// rotate an inner element to the heading without fighting Leaflet's own
+// position transform on the outer element.
+function makeBoatIcon() {
+  const svg =
+    '<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M12 2 C7 9 7 15 8 20 C8 21 16 21 16 20 C17 15 17 9 12 2 Z" ' +
+        'fill="#0fbfb1" stroke="#053b37" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<circle cx="12" cy="13" r="1.7" fill="#053b37"/>' +
+    '</svg>';
+  return L.divIcon({
+    className: 'replay-boat',
+    html: '<div class="replay-boat-inner" style="line-height:0;transform-origin:50% 50%;transition:transform .12s linear;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));">' + svg + '</div>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+// Move the boat to (lat,lng) and point its bow along the direction of travel.
+// Heading is computed from the previous position; tiny moves keep the prior
+// heading so the boat doesn't jitter when nearly still.
+function moveBoat(boat, lat, lng) {
+  if (_boatPrev) {
+    const dLat = lat - _boatPrev[0];
+    const dLng = (lng - _boatPrev[1]) * Math.cos(lat * Math.PI / 180);
+    if (Math.abs(dLat) > 1e-9 || Math.abs(dLng) > 1e-9) {
+      const deg = Math.atan2(dLng, dLat) * 180 / Math.PI;  // 0° = north (bow up)
+      const el = boat.getElement && boat.getElement();
+      const inner = el && el.querySelector('.replay-boat-inner');
+      if (inner) inner.style.transform = 'rotate(' + deg + 'deg)';
+    }
+  }
+  boat.setLatLng([lat, lng]);
+  _boatPrev = [lat, lng];
+}
+
+// Loop the boat once around a sighting at `center`, radius in metres.
+function circleBoat(boat, center, meters, ms) {
+  return new Promise(resolve => {
+    const latC = center[0], lngC = center[1];
+    const dLat = meters / 111320;
+    const dLng = meters / (111320 * Math.cos(latC * Math.PI / 180));
+    const start = performance.now();
+    const a0 = -Math.PI / 2;  // begin at the top of the loop
+    function frame(now) {
+      const t = Math.min(1, (now - start) / ms);
+      const a = a0 + t * 2 * Math.PI;
+      moveBoat(boat, latC + dLat * Math.sin(a), lngC + dLng * Math.cos(a));
       if (t < 1) requestAnimationFrame(frame);
       else resolve();
     }
