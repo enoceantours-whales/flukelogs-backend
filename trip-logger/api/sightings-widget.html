@@ -1431,17 +1431,16 @@ function showShareToast(message) {
 // polyline draws from the harbor, out through the sightings in the order the
 // captain logged them (sighting_time), and back to the harbor — so the route
 // starts and ends at the dock. Existing pins start hidden and pop in as the
-// line reaches each one. A little boat rides the head of the line and loops
-// once around each sighting before carrying on, so it reads as a vessel
-// working the bay.
+// line reaches each one. A little boat rides the head of the line and PAUSES
+// on each sighting for a beat before carrying on to the next.
 //
 // Pacing: the boat moves at a roughly constant speed (segment time ∝ leg
-// distance, clamped) so the long harbor legs don't whip past, and it pauses to
-// circle each pin. Tune BOAT_SPEED_M_PER_MS for overall speed — higher = faster.
+// distance, clamped) so the long harbor legs don't whip past, and it holds on
+// each pin for PIN_PAUSE_MS. Tune BOAT_SPEED_M_PER_MS for overall speed —
+// higher = faster.
 const BOAT_SPEED_M_PER_MS = 3.2;      // map-metres covered per millisecond
 const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps
-const CIRCLE_MS = 1100;               // time for one loop around a sighting
-const CIRCLE_RADIUS_M = 320;          // loop radius, in metres
+const PIN_PAUSE_MS = 1000;            // hold on each sighting before moving on
 // Each ▶ click bumps _replayToken; an in-flight replay sees the number change
 // and bails out of its animation loops, so a new replay cleanly supersedes the
 // running one. _replayLine/_replayBoat are module-level so the new run can clear
@@ -1525,10 +1524,10 @@ async function replayTrip(tripKey, opts) {
       await animatePolylineHead(line, from, to, travelMs, boat, token);
       if (token !== _replayToken) return;
       if (path[i].sighting) {
-        // Arrived at a sighting: reveal its pin, then loop the boat once around
-        // it before moving on. Harbor anchors have no pin and no loop.
+        // Arrived at a sighting: reveal its pin and hold the boat there for
+        // a beat before moving on. Harbor anchors have no pin and no pause.
         revealMarkerAt(tripMarkers, path[i].sighting);
-        await circleBoat(boat, to, CIRCLE_RADIUS_M, CIRCLE_MS, token);
+        await wait(PIN_PAUSE_MS);
       }
     }
     // Linger so the finished path stays visible for a beat, then clear.
@@ -1613,26 +1612,6 @@ function moveBoat(boat, lat, lng) {
   }
   boat.setLatLng([lat, lng]);
   _boatPrev = [lat, lng];
-}
-
-// Loop the boat once around a sighting at `center`, radius in metres.
-function circleBoat(boat, center, meters, ms, token) {
-  return new Promise(resolve => {
-    const latC = center[0], lngC = center[1];
-    const dLat = meters / 111320;
-    const dLng = meters / (111320 * Math.cos(latC * Math.PI / 180));
-    const start = performance.now();
-    const a0 = -Math.PI / 2;  // begin at the top of the loop
-    function frame(now) {
-      if (token !== _replayToken) { resolve(); return; }  // superseded → stop
-      const t = Math.min(1, (now - start) / ms);
-      const a = a0 + t * 2 * Math.PI;
-      moveBoat(boat, latC + dLat * Math.sin(a), lngC + dLng * Math.cos(a));
-      if (t < 1) requestAnimationFrame(frame);
-      else resolve();
-    }
-    requestAnimationFrame(frame);
-  });
 }
 
 // Leaflet's L.Marker uses setOpacity; L.CircleMarker / Path use setStyle.
