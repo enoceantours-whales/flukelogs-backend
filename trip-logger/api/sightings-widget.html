@@ -1440,7 +1440,7 @@ function showShareToast(message) {
 // higher = faster.
 const BOAT_SPEED_M_PER_MS = 3.2;      // map-metres covered per millisecond
 const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps
-const PIN_PAUSE_MS = 1000;            // hold on each sighting before moving on
+const PIN_PAUSE_MS = 500;             // hold on each sighting before moving on
 // Each ▶ click bumps _replayToken; an in-flight replay sees the number change
 // and bails out of its animation loops, so a new replay cleanly supersedes the
 // running one. _replayLine/_replayBoat are module-level so the new run can clear
