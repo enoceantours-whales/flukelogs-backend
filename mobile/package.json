@@ -1,0 +1,15 @@
+{
+  "name": "trip-logger-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Capacitor iOS wrapper for the Trip Logger PWA. Lives in this directory so the Vercel build for the web app (in ../trip-logger) is never affected. Phase 1 uses server.url to load the live PWA inside the native shell with no feature changes; Phase 2 will swap in a local bundle and native background GPS.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "open": "cap open ios"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/ios": "^6.1.0"
+  }
+}

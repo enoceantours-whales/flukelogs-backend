@@ -1,0 +1,19 @@
+# node_modules is large + reproducible from package.json
+node_modules/
+
+# Capacitor copies www/ here on every `cap sync`; regenerated from webDir.
+ios/App/App/public/
+
+# CocoaPods install output; regenerated from Podfile + plugins.
+ios/App/Pods/
+
+# Xcode build artefacts and derived data.
+ios/App/build/
+ios/App/output/
+ios/DerivedData/
+
+# Auto-generated Cordova plugin shim folder.
+ios/capacitor-cordova-ios-plugins/
+
+# macOS noise.
+.DS_Store
