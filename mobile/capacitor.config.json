@@ -1,0 +1,14 @@
+{
+  "appId": "com.enoceantours.triplogger",
+  "appName": "Trip Logger",
+  "webDir": "www",
+  "server": {
+    "url": "https://trip-logger-backend.vercel.app",
+    "cleartext": false,
+    "allowNavigation": ["trip-logger-backend.vercel.app"]
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
