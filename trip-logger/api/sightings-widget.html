@@ -287,6 +287,7 @@
     .ed-title { font-size: 30px; }
     .trip-body { flex-direction: column; padding: 6px 12px 12px; }
     .trip-gallery { flex: none; width: 100%; height: 170px; min-height: 0; }
+    .trip-carousel { margin: 0 12px 12px; }
   }
 
   .map-wrap {
@@ -486,19 +487,32 @@
   }
   .gallery-count svg { width: 13px; height: 13px; fill: currentColor; }
 
-  .gallery-lightbox { position: fixed; inset: 0; z-index: 9999; background: rgba(6,8,11,.95); }
-  .gallery-lightbox[hidden] { display: none; }
-  .gallery-close {
-    position: absolute; top: 14px; right: 16px; width: 40px; height: 40px;
-    border: none; border-radius: 50%; background: rgba(255,255,255,.14);
-    color: #fff; font-size: 24px; line-height: 1; cursor: pointer; z-index: 2;
+  /* Inline swipe carousel: expands inside the tapped card, so it always opens in
+     view (no fixed/absolute positioning to fight the auto-height iframe). */
+  .trip-carousel {
+    position: relative; margin: 0 16px 14px; border-radius: 12px;
+    overflow: hidden; background: #0b0e12; border: 1px solid var(--hair);
   }
-  .gallery-strip {
-    position: absolute; inset: 0; overflow-y: auto;
-    padding: 64px 16px 32px; display: flex; flex-direction: column;
-    gap: 12px; align-items: center;
+  .carousel-track {
+    display: flex; overflow-x: auto; aspect-ratio: 3 / 2;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
-  .gallery-strip img { max-width: 100%; max-height: 86vh; width: auto; border-radius: 10px; }
+  .carousel-track::-webkit-scrollbar { display: none; }
+  .carousel-track img {
+    flex: 0 0 100%; width: 100%; height: 100%;
+    object-fit: contain; scroll-snap-align: center; display: block; user-select: none;
+  }
+  .carousel-close {
+    position: absolute; top: 8px; right: 8px; z-index: 2;
+    width: 32px; height: 32px; border: none; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 19px; line-height: 1; cursor: pointer;
+  }
+  .carousel-counter {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
+    background: rgba(0,0,0,.55); color: #fff; padding: 4px 10px; border-radius: 999px;
+    font: 600 11px/1 "Open Sans", sans-serif; letter-spacing: .03em;
+  }
 
   .state-msg { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
   .spinner { width: 22px; height: 22px; border: 2px solid var(--hair); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
@@ -840,39 +854,84 @@ async function fetchTripPhotos() {
   return m;
 }
 
-// ── Trip photo gallery lightbox ─────────────────────────────────────────────
-function ensureLightbox() {
-  let lb = document.getElementById('galleryLightbox');
-  if (lb) return lb;
-  lb = document.createElement('div');
-  lb.id = 'galleryLightbox';
-  lb.className = 'gallery-lightbox';
-  lb.hidden = true;
-  lb.innerHTML = '<button class="gallery-close" type="button" aria-label="Close gallery">&times;</button><div class="gallery-strip"></div>';
-  lb.addEventListener('click', e => {
-    if (e.target === lb || e.target.classList.contains('gallery-close')) closeGalleryLightbox();
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGalleryLightbox(); });
-  document.body.appendChild(lb);
-  return lb;
+// Resized variant of a Supabase storage image via the render endpoint, so the
+// small hero loads a ~600 to 800px file instead of the full upload. Falls back
+// to the original URL if it is not a Supabase object URL.
+function thumbUrl(url, w) {
+  if (!url || url.indexOf('/object/public/') === -1) return url;
+  return url.replace('/object/public/', '/render/image/public/') +
+    '?width=' + w + '&quality=72&resize=cover';
 }
-function openGalleryLightbox(photos) {
-  const lb = ensureLightbox();
-  const strip = lb.querySelector('.gallery-strip');
-  strip.innerHTML = photos.map(p => `<img src="${p.photo_url}" alt="Trip photo" loading="lazy">`).join('');
-  strip.scrollTop = 0;
-  lb.hidden = false;
+
+// The exact URL the lightbox uses (full image, not cropped). Shared with the
+// hover/touch preloader so the preloaded file is a cache hit on click.
+function lightboxUrl(url) {
+  return thumbUrl(url, 1200).replace('&resize=cover', '');
 }
-function closeGalleryLightbox() {
-  const lb = document.getElementById('galleryLightbox');
-  if (lb) lb.hidden = true;
+
+// ── Trip photo gallery: inline swipe carousel ───────────────────────────────
+// The widget runs in an auto-height iframe (the parent page scrolls), so a
+// fixed/absolute overlay cannot reliably find the visible viewport, which made
+// the old lightbox open off-screen. Instead we expand a horizontal swipe
+// carousel inline inside the tapped card: it always opens in view because it
+// lives in the document flow, and guests swipe left/right instead of scrolling.
+// The iframe is asked to resize whenever it opens, closes, or an image loads.
+function closeAllCarousels() {
+  document.querySelectorAll('.trip-carousel').forEach(c => c.remove());
+  sendHeight();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllCarousels(); });
+
+function toggleTripCarousel(heroEl, key) {
+  const card = heroEl.closest('.trip-card');
+  if (!card) return;
+  if (card.querySelector('.trip-carousel')) { closeAllCarousels(); return; } // toggle off
+  closeAllCarousels(); // only one open at a time
+  const photos = tripPhotosByTrip.get(key) || [];
+  if (!photos.length) return;
+
+  const slides = photos.map(p => {
+    const big  = lightboxUrl(p.photo_url);
+    const blur = thumbUrl(p.photo_url, 48).replace('&resize=cover', '');
+    return `<img src="${big}" alt="Trip photo" draggable="false"
+              style="background:#11151b url('${blur}') center/cover no-repeat;"
+              onload="this.style.backgroundImage='none'; sendHeight();">`;
+  }).join('');
+
+  const car = document.createElement('div');
+  car.className = 'trip-carousel';
+  car.innerHTML =
+    '<button type="button" class="carousel-close" aria-label="Close photos">&times;</button>' +
+    (photos.length > 1 ? '<div class="carousel-counter">1 / ' + photos.length + '</div>' : '') +
+    '<div class="carousel-track">' + slides + '</div>';
+  card.appendChild(car);
+
+  car.querySelector('.carousel-close').addEventListener('click', (e) => { e.stopPropagation(); closeAllCarousels(); });
+  const track = car.querySelector('.carousel-track');
+  const counter = car.querySelector('.carousel-counter');
+  if (counter) {
+    track.addEventListener('scroll', () => {
+      const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      counter.textContent = (idx + 1) + ' / ' + photos.length;
+    }, { passive: true });
+  }
+  sendHeight();
+  car.scrollIntoView({ block: 'nearest' });
 }
 function bindTripGalleries(root) {
   root.querySelectorAll('.trip-gallery').forEach(el => {
     const key = el.getAttribute('data-gallery-trip');
-    const open = () => { const photos = tripPhotosByTrip.get(key) || []; if (photos.length) openGalleryLightbox(photos); };
-    el.addEventListener('click', (e) => { e.stopPropagation(); open(); });
-    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    // Warm the cache on intent (hover on desktop, first touch on mobile) so the
+    // carousel images are ready by the time it opens. Runs once.
+    let warmed = false;
+    const warm = () => {
+      if (warmed) return; warmed = true;
+      (tripPhotosByTrip.get(key) || []).forEach(p => { const im = new Image(); im.src = lightboxUrl(p.photo_url); });
+    };
+    el.addEventListener('mouseenter', warm);
+    el.addEventListener('touchstart', warm, { passive: true });
+    el.addEventListener('click', (e) => { e.stopPropagation(); toggleTripCarousel(el, key); });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTripCarousel(el, key); } });
   });
 }
 
@@ -1346,7 +1405,7 @@ function renderFeed(data) {
     const photos = tripPhotosByTrip.get(tripKey) || [];
     const photoBlock = photos.length
       ? `<div class="trip-gallery" data-gallery-trip="${tripKey}" role="button" tabindex="0" aria-label="View ${photos.length} photo${photos.length === 1 ? '' : 's'} from this trip">
-            <img src="${photos[0].photo_url}" alt="Trip photo" loading="lazy" onload="sendHeight()">
+            <img src="${thumbUrl(photos[0].photo_url, 800)}" alt="Trip photo" loading="lazy" onload="sendHeight()">
             ${photos.length > 1 ? `<span class="gallery-count"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>${photos.length}</span>` : ''}
           </div>`
       : '';
