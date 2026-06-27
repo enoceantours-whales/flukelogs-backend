@@ -873,7 +873,16 @@ function ensureLightbox() {
 function openGalleryLightbox(photos) {
   const lb = ensureLightbox();
   const strip = lb.querySelector('.gallery-strip');
-  strip.innerHTML = photos.map(p => `<img src="${p.photo_url}" alt="Trip photo" loading="lazy">`).join('');
+  strip.innerHTML = photos.map(p => {
+    // Medium variant (full image, not cropped) loads faster than the original;
+    // a tiny blurred variant shows instantly as a placeholder so there is no
+    // black gap, then the sharp image fades in over it.
+    const big  = thumbUrl(p.photo_url, 1200).replace('&resize=cover', '');
+    const blur = thumbUrl(p.photo_url, 48).replace('&resize=cover', '');
+    return `<img src="${big}" alt="Trip photo"
+              style="background:#11151b url('${blur}') center/cover no-repeat;"
+              onload="this.style.backgroundImage='none';">`;
+  }).join('');
   strip.scrollTop = 0;
   lb.hidden = false;
 }
