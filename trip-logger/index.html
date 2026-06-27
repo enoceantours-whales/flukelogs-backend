@@ -2139,7 +2139,12 @@
   function startGPSNative() {
     const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
     if (!plugin) { document.getElementById('statGPS').textContent = 'Native GPS not loaded'; return; }
-    plugin.addWatcher(
+    // addWatcher takes a callback, so the Capacitor bridge returns the watcher
+    // id directly (a string), not a Promise. Calling .then on it throws, which
+    // aborts startTrip before it navigates and, on login, makes restoreTrip
+    // swallow the error and strand the app on the spinner. Promise.resolve
+    // normalises both shapes (raw id or Promise<id>).
+    const watcher = plugin.addWatcher(
       {
         backgroundMessage: 'Trip Logger is tracking your trip.',
         backgroundTitle:   'Trip in progress',
@@ -2155,8 +2160,10 @@
         if (!location) return;
         handleGPSPoint(location.latitude, location.longitude, location.accuracy);
       }
-    ).then(id => { nativeGpsWatcherId = id; })
-     .catch(() => { document.getElementById('statGPS').textContent = 'Error starting GPS'; });
+    );
+    Promise.resolve(watcher)
+      .then(id => { nativeGpsWatcherId = id; })
+      .catch(() => { document.getElementById('statGPS').textContent = 'Error starting GPS'; });
   }
 
   function stopGPSNative() {
