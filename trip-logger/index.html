@@ -4564,7 +4564,7 @@
           canvas.width  = Math.max(1, Math.round(img.width  * scale));
           canvas.height = Math.max(1, Math.round(img.height * scale));
           canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.82).split(',')[1]);
+          resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
         };
         img.src = e.target.result;
       };
@@ -4616,7 +4616,7 @@
     for (let i = 0; i < files.length; i++) {
       status.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + '…';
       try {
-        const b64 = await resizeImageToJpeg(files[i], 1600);
+        const b64 = await resizeImageToJpeg(files[i], 2560);
         const res = await fetch('/api/trip-photos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
