@@ -1708,6 +1708,9 @@
       passengers: 6, waterTemp: '', visibility: '', conditions: '',
       sightings: [], lastLat: null, lastLng: null, photoData: null,
       distanceNM: 0, prevLat: null, prevLng: null,
+      // Continuous GPS breadcrumb, captured on every position update.
+      // Sent to the server at trip-end; widget draws the real boat path.
+      track: [],
     };
   }
 
@@ -2063,29 +2066,91 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  // True only inside the Capacitor native shell. In every other context
+  // (mobile Safari, desktop, the PWA) this is false and the existing
+  // navigator.geolocation path runs unchanged.
+  const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  // Native-only — id returned by the background-location plugin's addWatcher.
+  let nativeGpsWatcherId = null;
+
+  // Single landing point for every GPS update, regardless of source. Keeps
+  // the Haversine distance accounting, the on-screen stats, and the trip
+  // breadcrumb push in one place so the native and web paths can't diverge.
+  function handleGPSPoint(newLat, newLng, accuracy) {
+    if (trip.prevLat !== null && trip.prevLng !== null) {
+      const d = haversineNM(trip.prevLat, trip.prevLng, newLat, newLng);
+      if (d < 0.5) trip.distanceNM += d;
+    }
+    trip.prevLat = newLat; trip.prevLng = newLng;
+    trip.lastLat = newLat; trip.lastLng = newLng;
+    trip.track.push({
+      lat: newLat,
+      lng: newLng,
+      recorded_at: new Date().toISOString(),
+      accuracy: (accuracy != null && Number.isFinite(+accuracy)) ? +accuracy : null,
+    });
+    document.getElementById('statGPS').textContent = `${newLat.toFixed(4)}, ${newLng.toFixed(4)}`;
+    document.getElementById('statDistance').textContent = trip.distanceNM.toFixed(2) + ' NM';
+    saveTrip();
+  }
+
   function startGPS() {
+    if (isNativeApp) { startGPSNative(); return; }
+    startGPSWeb();
+  }
+
+  function stopGPS() {
+    if (isNativeApp) { stopGPSNative(); return; }
+    stopGPSWeb();
+  }
+
+  function startGPSWeb() {
     if (!navigator.geolocation) { document.getElementById('statGPS').textContent = 'Not supported'; return; }
     gpsWatcher = navigator.geolocation.watchPosition(
-      pos => {
-        const newLat = pos.coords.latitude;
-        const newLng = pos.coords.longitude;
-        if (trip.prevLat !== null && trip.prevLng !== null) {
-          const d = haversineNM(trip.prevLat, trip.prevLng, newLat, newLng);
-          if (d < 0.5) trip.distanceNM += d;
-        }
-        trip.prevLat = newLat; trip.prevLng = newLng;
-        trip.lastLat = newLat; trip.lastLng = newLng;
-        document.getElementById('statGPS').textContent = `${newLat.toFixed(4)}, ${newLng.toFixed(4)}`;
-        document.getElementById('statDistance').textContent = trip.distanceNM.toFixed(2) + ' NM';
-        saveTrip();
-      },
+      pos => handleGPSPoint(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
       err => { document.getElementById('statGPS').textContent = 'Error — check permissions'; },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
   }
 
-  function stopGPS() {
+  function stopGPSWeb() {
     if (gpsWatcher !== null) { navigator.geolocation.clearWatch(gpsWatcher); gpsWatcher = null; }
+  }
+
+  // Native path: @capacitor-community/background-geolocation. Keeps firing
+  // with the screen locked so the breadcrumb and distance stay accurate
+  // across a full trip — the whole point of going native. Permissions are
+  // requested on first addWatcher; iOS prompts "Allow Always" so background
+  // updates are authorised.
+  function startGPSNative() {
+    const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if (!plugin) { document.getElementById('statGPS').textContent = 'Native GPS not loaded'; return; }
+    plugin.addWatcher(
+      {
+        backgroundMessage: 'Trip Logger is tracking your trip.',
+        backgroundTitle:   'Trip in progress',
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: 5,
+      },
+      (location, error) => {
+        if (error) {
+          document.getElementById('statGPS').textContent = 'Error — check permissions';
+          return;
+        }
+        if (!location) return;
+        handleGPSPoint(location.latitude, location.longitude, location.accuracy);
+      }
+    ).then(id => { nativeGpsWatcherId = id; })
+     .catch(() => { document.getElementById('statGPS').textContent = 'Error starting GPS'; });
+  }
+
+  function stopGPSNative() {
+    const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if (!plugin || nativeGpsWatcherId == null) return;
+    plugin.removeWatcher({ id: nativeGpsWatcherId }).catch(() => {});
+    nativeGpsWatcherId = null;
   }
 
   function updateDurationDisplay() {

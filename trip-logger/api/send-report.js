@@ -611,6 +611,61 @@ async function saveToSupabase(tripData, operatorId) {
   }
 }
 
+// Persist the trip's continuous GPS breadcrumb. tripData.track is an array of
+// { lat, lng, recorded_at [ISO], accuracy? } pushed by the captain app during
+// the trip — natively via the background-location plugin on iOS, via
+// navigator.geolocation on the PWA. Server-side downsample to 500 points max
+// so a noisy device doesn't blow up the table, and silently no-op if the
+// payload is empty (the widget then falls back to pin-to-pin lines).
+async function saveTrackToSupabase(track, operatorId, tripId) {
+  if (!Array.isArray(track) || track.length === 0 || !operatorId || !tripId) return;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SECRET_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
+
+  const MAX_POINTS = 500;
+  let points = track;
+  if (points.length > MAX_POINTS) {
+    const step = points.length / MAX_POINTS;
+    const sampled = [];
+    for (let i = 0; i < MAX_POINTS; i++) sampled.push(points[Math.floor(i * step)]);
+    points = sampled;
+  }
+  const rows = points
+    .filter(p => p && Number.isFinite(+p.lat) && Number.isFinite(+p.lng) && p.recorded_at)
+    .map(p => ({
+      trip_id:     tripId,
+      operator_id: operatorId,
+      lat:         parseFloat((+p.lat).toFixed(6)),
+      lng:         parseFloat((+p.lng).toFixed(6)),
+      recorded_at: p.recorded_at,
+      accuracy_m:  (p.accuracy != null && Number.isFinite(+p.accuracy))
+        ? parseFloat((+p.accuracy).toFixed(1))
+        : null,
+    }));
+  if (rows.length === 0) return;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/trip_track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (!response.ok) {
+      console.error('trip_track save error:', response.status, (await response.text()).slice(0, 200));
+    } else {
+      console.log(`Saved ${rows.length} track points to trip_track`);
+    }
+  } catch (e) {
+    console.error('trip_track fetch error:', e.message);
+  }
+}
+
 // ─── Mailchimp ────────────────────────────────────────────────────────────────
 
 async function addToMailchimp(email, b) {
@@ -860,6 +915,10 @@ module.exports = async function handler(req, res) {
     // Skipped on an add-guests resend — the trip is already logged.
     if (!isAddGuests) {
       await saveToSupabase(tripData, operatorId);
+      // GPS breadcrumb for the public widget's real boat-path render. Fire
+      // and forget — a track failure shouldn't take down the report send.
+      saveTrackToSupabase(tripData.track, operatorId, tripData.tripId)
+        .catch(e => console.error('saveTrackToSupabase background error:', e.message));
     }
 
     // Record this trip's guests BEFORE the emails fire so getGuestStats()
