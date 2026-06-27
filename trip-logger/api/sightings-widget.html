@@ -854,6 +854,12 @@ function thumbUrl(url, w) {
     '?width=' + w + '&quality=72&resize=cover';
 }
 
+// The exact URL the lightbox uses (full image, not cropped). Shared with the
+// hover/touch preloader so the preloaded file is a cache hit on click.
+function lightboxUrl(url) {
+  return thumbUrl(url, 1200).replace('&resize=cover', '');
+}
+
 // ── Trip photo gallery lightbox ─────────────────────────────────────────────
 function ensureLightbox() {
   let lb = document.getElementById('galleryLightbox');
@@ -877,7 +883,7 @@ function openGalleryLightbox(photos) {
     // Medium variant (full image, not cropped) loads faster than the original;
     // a tiny blurred variant shows instantly as a placeholder so there is no
     // black gap, then the sharp image fades in over it.
-    const big  = thumbUrl(p.photo_url, 1200).replace('&resize=cover', '');
+    const big  = lightboxUrl(p.photo_url);
     const blur = thumbUrl(p.photo_url, 48).replace('&resize=cover', '');
     return `<img src="${big}" alt="Trip photo"
               style="background:#11151b url('${blur}') center/cover no-repeat;"
@@ -894,6 +900,15 @@ function bindTripGalleries(root) {
   root.querySelectorAll('.trip-gallery').forEach(el => {
     const key = el.getAttribute('data-gallery-trip');
     const open = () => { const photos = tripPhotosByTrip.get(key) || []; if (photos.length) openGalleryLightbox(photos); };
+    // Warm the cache on intent (hover on desktop, first touch on mobile) so the
+    // full lightbox images are ready by the time the click lands. Runs once.
+    let warmed = false;
+    const warm = () => {
+      if (warmed) return; warmed = true;
+      (tripPhotosByTrip.get(key) || []).forEach(p => { const im = new Image(); im.src = lightboxUrl(p.photo_url); });
+    };
+    el.addEventListener('mouseenter', warm);
+    el.addEventListener('touchstart', warm, { passive: true });
     el.addEventListener('click', (e) => { e.stopPropagation(); open(); });
     el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   });
