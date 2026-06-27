@@ -125,6 +125,74 @@ function buildOgTags({ operator, trip, requestUrl }) {
   return tags.join('\n');
 }
 
+// Recent sightings grouped by trip, for server-side rendering (SEO). Mirrors
+// the widget's grouping so crawlers get the same content the widget shows.
+async function loadRecentSightings(operatorId) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key || !operatorId) return [];
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/sightings?operator_id=eq.${operatorId}` +
+      `&select=trip_id,trip_date,trip_part,species,count` +
+      `&order=trip_date.desc,created_at.desc&limit=150`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    const trips = new Map(); // insertion order = recent first (rows are date desc)
+    for (const r of rows) {
+      const k = r.trip_id || r.trip_date;
+      if (!trips.has(k)) trips.set(k, { trip_date: r.trip_date, trip_part: r.trip_part || '', species: new Map() });
+      const t = trips.get(k);
+      t.species.set(r.species, (t.species.get(r.species) || 0) + (parseInt(r.count, 10) || 1));
+    }
+    return [...trips.values()].slice(0, 12).map(t => ({
+      trip_date: t.trip_date,
+      trip_part: t.trip_part,
+      species: [...t.species.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+    }));
+  } catch (e) {
+    console.error('sightings widget: recent sightings lookup failed:', e.message);
+    return [];
+  }
+}
+
+// Server-rendered SEO payload: crawlable HTML of recent trips (the widget's JS
+// replaces #feed-list on load, so visitors still get the interactive version),
+// a dynamic <title>, and JSON-LD structured data.
+function buildSeo(operator, trips) {
+  const operatorName = (operator && operator.name) || 'Trip Logger';
+  if (!trips.length) return { title: null, feedHtml: null, jsonLd: '' };
+
+  const tally = new Map();
+  trips.forEach(t => t.species.forEach(s => tally.set(s.name, (tally.get(s.name) || 0) + s.count)));
+  const topSpecies = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  const title = `Recent sightings: ${topSpecies.slice(0, 4).join(', ')} — ${operatorName}`;
+
+  const feedHtml = trips.map(t => {
+    const date = htmlEscape(prettyTripDate(t.trip_date)) + (t.trip_part ? ' &middot; ' + htmlEscape(t.trip_part) : '');
+    const items = t.species.map(s => `${htmlEscape(s.name)} (${s.count})`).join(', ');
+    return `<article class="seo-trip" style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.06);">` +
+      `<h4 style="margin:0 0 4px;font:600 14px/1.3 'Open Sans',sans-serif;color:#e7e9ec;">${date}</h4>` +
+      `<p style="margin:0;font:13px/1.4 'Open Sans',sans-serif;color:#9aa0a8;">${items}</p></article>`;
+  }).join('');
+
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    'name': `Recent wildlife sightings — ${operatorName}`,
+    'itemListElement': trips.map((t, i) => ({
+      '@type': 'ListItem',
+      'position': i + 1,
+      'name': `${prettyTripDate(t.trip_date)}${t.trip_part ? ' · ' + t.trip_part : ''}: ` +
+              t.species.map(s => `${s.name} (${s.count})`).join(', '),
+    })),
+  });
+
+  return { title, feedHtml, jsonLd: `<script type="application/ld+json">${jsonLd}</script>` };
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/html');
@@ -169,11 +237,29 @@ module.exports = async function handler(req, res) {
     const requestUrl = `${proto}://${host}${req.url || ''}`;
     const ogTags = buildOgTags({ operator, trip, requestUrl });
 
+    // Server-side SEO: real, crawlable sighting content + structured data, so
+    // Googlebot indexes the page without depending on the JS render or the
+    // iframe. Visitors still get the interactive widget (JS replaces it).
+    const recent = (operator && operator.id) ? await loadRecentSightings(operator.id) : [];
+    const seo = buildSeo(operator, recent);
+
     const filePath = path.join(__dirname, 'sightings-widget.html');
     let html = fs.readFileSync(filePath, 'utf8');
 
     const configScript = `<script>window.__OP_CONFIG = ${JSON.stringify(opConfig)};</script>`;
-    html = html.replace('</head>', `${ogTags}\n${configScript}\n</head>`);
+    html = html.replace('</head>', `${ogTags}\n${seo.jsonLd}\n${configScript}\n</head>`);
+
+    if (seo.title) {
+      html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${htmlEscape(seo.title)}</title>`);
+    }
+    if (seo.feedHtml) {
+      // Replace the loading spinner with the real recent sightings. The widget
+      // JS overwrites #feed-list with the interactive feed on load.
+      html = html.replace(
+        '<div class="state-msg"><div class="spinner"></div>Fetching sightings&hellip;</div>',
+        `<div class="seo-ssr">${seo.feedHtml}</div>`
+      );
+    }
 
     res.status(200).send(html);
   } catch (err) {
