@@ -473,7 +473,6 @@
   .trip-body .sighting-row { padding-left: 0; padding-right: 0; }
   .trip-gallery {
     position: relative; flex: 0 0 44%; align-self: flex-start;
-    aspect-ratio: 3 / 2; /* default; JS sets it to the first photo's real aspect */
     border-radius: 12px; overflow: hidden; cursor: pointer;
     background: var(--ink-2, #11151b); border: 1px solid var(--hair);
   }
@@ -490,13 +489,13 @@
 
   /* Hero is a swipeable mini carousel filling the gallery box. */
   .hero-track {
-    display: flex; width: 100%; height: 100%; overflow-x: auto;
+    display: flex; width: 100%; align-items: flex-start; overflow-x: auto;
     scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .hero-track::-webkit-scrollbar { display: none; }
   .hero-track img {
-    flex: 0 0 100%; width: 100%; height: 100%;
-    object-fit: contain; scroll-snap-align: center; display: block; user-select: none;
+    flex: 0 0 100%; width: 100%; height: auto;
+    scroll-snap-align: center; display: block; user-select: none;
   }
 
   /* Photo viewer, shared by the full-screen (.gv-fullscreen) and inline-fallback
@@ -1458,7 +1457,7 @@ function renderFeed(data) {
     const photoBlock = photos.length
       ? `<div class="trip-gallery" data-gallery-trip="${tripKey}" role="button" tabindex="0" aria-label="View ${photos.length} photo${photos.length === 1 ? '' : 's'} from this trip">
             <div class="hero-track">
-              ${photos.map((p, i) => `<img src="${thumbUrl(p.photo_url, 900).replace('&resize=cover', '')}" data-idx="${i}" alt="Trip photo" loading="lazy"${i === 0 ? ' onload="this.closest(\'.trip-gallery\').style.aspectRatio=this.naturalWidth+\'/\'+this.naturalHeight; sendHeight();"' : ''}>`).join('')}
+              ${photos.map((p, i) => `<img src="${thumbUrl(p.photo_url, 900).replace('&resize=cover', '')}" data-idx="${i}" alt="Trip photo" loading="lazy"${i === 0 ? ' onload="sendHeight()"' : ''}>`).join('')}
             </div>
             ${photos.length > 1 ? `<span class="gallery-count"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>${photos.length}</span>` : ''}
           </div>`
