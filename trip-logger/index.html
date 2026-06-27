@@ -3328,6 +3328,11 @@
       f.src = f.src + sep + 'trip=' + encodeURIComponent(trip);
     });
   }
+  // Tell each widget this page can expand it to full screen (for the photo
+  // viewer), on load and on request.
+  frames.forEach(function(f) {
+    f.addEventListener('load', function() { try { f.contentWindow.postMessage({ galleryHostReady: true }, '*'); } catch (err) {} });
+  });
   window.addEventListener('message', function(e) {
     if (!e.data) return;
     if (e.data.iframeHeight) {
@@ -3338,6 +3343,25 @@
     // that sent the message.
     if (e.data.widgetScrollIntoView) {
       frames.forEach(function(f) { if (f.contentWindow === e.source) f.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    }
+    // Widget loaded before this script and is asking whether full screen is okay.
+    if (e.data.galleryHostQuery) {
+      frames.forEach(function(f) { if (f.contentWindow === e.source) { try { f.contentWindow.postMessage({ galleryHostReady: true }, '*'); } catch (err) {} } });
+    }
+    // Expand the requesting widget to a full-screen overlay (photo viewer), and
+    // restore it on close.
+    if (typeof e.data.galleryFullscreen !== 'undefined') {
+      frames.forEach(function(f) {
+        if (f.contentWindow !== e.source) return;
+        if (e.data.galleryFullscreen) {
+          f.dataset.prevStyle = f.getAttribute('style') || '';
+          f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;max-width:none;margin:0;border:0;z-index:2147483647;';
+          document.documentElement.style.overflow = 'hidden';
+        } else {
+          f.setAttribute('style', f.dataset.prevStyle || '');
+          document.documentElement.style.overflow = '';
+        }
+      });
     }
   });
 })();
