@@ -16,6 +16,32 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 
+const crypto = require('crypto');
+
+// Shared-secret authentication for the webhook. FareHarbor's webhook config is
+// a free-text URL with no signature/HMAC or custom-header option, so the only
+// channel for a secret is the URL itself: configure the FH webhook URL as
+// .../api/fh-webhook?key=<secret> and set FH_WEBHOOK_SECRET to the same value
+// in the deployment env. A forged POST that doesn't carry the key is rejected.
+//
+// Rollout is log-then-enforce so live bookings never drop:
+//   • FH_WEBHOOK_SECRET unset            -> no auth (current behaviour, safe default)
+//   • set, FH_WEBHOOK_ENFORCE !== 'true' -> LOG ONLY: log pass/fail, still process
+//   • set, FH_WEBHOOK_ENFORCE === 'true' -> reject calls without a valid key (401)
+// Sequence: deploy -> set secret (log-only) -> update FH URL with ?key= ->
+// confirm logs show 'key valid' -> set FH_WEBHOOK_ENFORCE=true.
+const FH_WEBHOOK_SECRET  = process.env.FH_WEBHOOK_SECRET || '';
+const FH_WEBHOOK_ENFORCE = process.env.FH_WEBHOOK_ENFORCE === 'true';
+
+// Constant-time compare; returns null when no secret is configured at all.
+function checkWebhookKey(req) {
+  if (!FH_WEBHOOK_SECRET) return null;
+  const provided = String((req.query && req.query.key) || req.headers['x-webhook-key'] || '');
+  const a = Buffer.from(provided);
+  const b = Buffer.from(FH_WEBHOOK_SECRET);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 async function pgGet(path) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
@@ -60,6 +86,18 @@ function findHeardAboutUs(customFieldValues) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Shared-secret gate (see header comment). null = not configured.
+  const keyValid = checkWebhookKey(req);
+  if (keyValid === false) {
+    if (FH_WEBHOOK_ENFORCE) {
+      console.warn('[FH-WEBHOOK] rejected: missing/invalid key');
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    console.warn('[FH-WEBHOOK] LOG-ONLY: key missing/invalid (would reject when FH_WEBHOOK_ENFORCE=true)');
+  } else if (keyValid === true && !FH_WEBHOOK_ENFORCE) {
+    console.log('[FH-WEBHOOK] LOG-ONLY: key valid');
   }
 
   const payload = req.body;
