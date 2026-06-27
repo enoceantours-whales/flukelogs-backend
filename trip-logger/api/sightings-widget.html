@@ -622,9 +622,11 @@ const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 // ── State ────────────────────────────────────────────────────────────────────
 let allData = [];
 let tripAudioByTrip = new Map(); // trip_id -> { audio_url, duration_seconds }
+let tripTrackById  = new Map();  // trip_id -> [ {lat,lng,t}, … ]  (Phase 2 breadcrumbs)
 let activeFilter = null;   // species name or null
 let activeTripKey = null;  // selected trip_id or null
 const markers = [];
+let _staticTrackLine = null;  // faint polyline of the selected trip's real boat path
 
 // ── Map ──────────────────────────────────────────────────────────────────────
 // Per-operator: some operators don't want to publish GPS pins. When
@@ -705,6 +707,21 @@ function refreshMarkers() {
     markers.push(m);
   });
 
+  // Static breadcrumb of the active trip's real boat path (Phase 2). Drawn
+  // faint so the bright replay polyline pops on top of it during animation,
+  // and so it doesn't fight the species pins for attention when idle. Trips
+  // logged before Phase 2 shipped have no track and just show pins as before.
+  if (_staticTrackLine) { _staticTrackLine.remove(); _staticTrackLine = null; }
+  if (activeTripKey) {
+    const track = tripTrackById.get(activeTripKey);
+    if (Array.isArray(track) && track.length > 1) {
+      _staticTrackLine = L.polyline(
+        track.map(p => [+p.lat, +p.lng]),
+        { color: '#0fbfb1', weight: 2, opacity: 0.45, lineCap: 'round', lineJoin: 'round' }
+      ).addTo(map);
+    }
+  }
+
   // Update hint
   const hint = document.getElementById('map-hint');
   if (activeTripKey) {
@@ -757,6 +774,19 @@ async function fetchTripAudio() {
   const data = await loadWidgetData();
   const rows = Array.isArray(data.audio) ? data.audio : [];
   return new Map(rows.filter(r => r.trip_id).map(r => [r.trip_id, r]));
+}
+
+// Continuous GPS breadcrumb per trip (Phase 2). Returns Map(trip_id -> [points]).
+// Empty for trips logged before Phase 2 shipped, and empty for any operator
+// who has hidden their map (server strips both lat/lng and tracks together).
+async function fetchTripTracks() {
+  const data = await loadWidgetData();
+  const obj = (data && data.tracks) || {};
+  const m = new Map();
+  for (const id of Object.keys(obj)) {
+    if (Array.isArray(obj[id]) && obj[id].length > 1) m.set(id, obj[id]);
+  }
+  return m;
 }
 
 // ── Custom audio player with decorative waveform ────────────────────────────
@@ -1428,18 +1458,24 @@ function showShareToast(message) {
 
 // ── Replay ─────────────────────────────────────────────────────────────
 // Visitor taps ▶ on a trip card → the map zooms to that trip and a teal
-// polyline draws from the harbor, out through the sightings in the order the
-// captain logged them (sighting_time), and back to the harbor — so the route
-// starts and ends at the dock. Existing pins start hidden and pop in as the
-// line reaches each one. A little boat rides the head of the line and PAUSES
-// on each sighting for a beat before carrying on to the next.
+// polyline draws from the harbor, out across the bay, and back. Existing
+// pins start hidden and pop in as the line reaches each one. A little boat
+// rides the head of the line and PAUSES on each sighting for a beat before
+// carrying on to the next.
 //
-// Pacing: the boat moves at a roughly constant speed (segment time ∝ leg
-// distance, clamped) so the long harbor legs don't whip past, and it holds on
-// each pin for PIN_PAUSE_MS. Tune BOAT_SPEED_M_PER_MS for overall speed —
-// higher = faster.
-const BOAT_SPEED_M_PER_MS = 3.2;      // map-metres covered per millisecond
-const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps
+// Phase 2: when a real GPS breadcrumb exists for the trip (tripTrackById),
+// the boat follows the actual recorded path and reveals each sighting when
+// it passes within proximity of the pin. For older trips with no recorded
+// track (pre-Phase 2), it falls back to straight pin-to-pin lines from
+// harbor → sightings → harbor.
+//
+// Pacing: track-based replay uses a fixed total duration regardless of how
+// many points were recorded, so a 4-hour trip with thousands of breadcrumbs
+// doesn't take minutes to play back. The older sighting-to-sighting path
+// uses constant-ish speed (segment time ∝ leg distance, clamped).
+const BOAT_SPEED_M_PER_MS = 3.2;      // map-metres per ms (pin-to-pin fallback)
+const TRAVEL_MIN_MS = 650, TRAVEL_MAX_MS = 3400;  // per-leg clamps (fallback)
+const TRACK_REPLAY_TOTAL_MS = 10000;  // total travel time when following the real track
 const PIN_PAUSE_MS = 500;             // hold on each sighting before moving on
 // Each ▶ click bumps _replayToken; an in-flight replay sees the number change
 // and bails out of its animation loops, so a new replay cleanly supersedes the
@@ -1481,19 +1517,50 @@ async function replayTrip(tripKey, opts) {
     const tripMarkers = markers.filter(m => m._tripKey === tripKey);
     tripMarkers.forEach(m => setMarkerOpacity(m, 0));
 
-    // Path: home port → every sighting in order → home port, so the replay
-    // leaves the dock, visits each pin, and returns — starting and ending at
-    // the same place. Each anchor remembers whether it's a sighting (so the
-    // matching pin pops in as the line reaches it) or the harbor (no marker).
-    // When the home port is unknown, the path is just the sightings, as before.
+    // Prefer the real GPS breadcrumb (Phase 2) so the boat follows the actual
+    // route the captain took. Older trips with no recorded track fall back to
+    // the straight harbor → sightings → harbor path.
     const homePort = (OP && OP.home_port) || null;
-    const path = [];
-    if (homePort) path.push({ pt: [homePort.lat, homePort.lng], sighting: null });
-    ordered.forEach(s => path.push({ pt: [+s.lat, +s.lng], sighting: s }));
-    if (homePort) path.push({ pt: [homePort.lat, homePort.lng], sighting: null });
-    const anchors = path.map(p => p.pt);
+    const track = tripTrackById.get(tripKey);
+    const useTrack = Array.isArray(track) && track.length >= 2;
 
-    // Frame the whole path (sightings + harbor) and let the pan/zoom settle.
+    let anchors;           // [ [lat,lng], … ] — the line the boat follows
+    let revealAtIdx;       // Map(anchorIndex -> [sighting, …]) — pin pop-ins
+    let useFixedTiming;    // true when the path is dense (track) so legs are short
+
+    if (useTrack) {
+      anchors = track.map(p => [+p.lat, +p.lng]);
+      if (homePort) {
+        anchors = [[homePort.lat, homePort.lng], ...anchors, [homePort.lat, homePort.lng]];
+      }
+      // Reveal each sighting when the boat reaches the breadcrumb point
+      // nearest to it (spatial match — doesn't care about clock differences
+      // between phone and server).
+      revealAtIdx = new Map();
+      for (const s of ordered) {
+        let bestIdx = 0, bestDist = Infinity;
+        for (let i = 0; i < anchors.length; i++) {
+          const d = map.distance(anchors[i], [+s.lat, +s.lng]);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        if (!revealAtIdx.has(bestIdx)) revealAtIdx.set(bestIdx, []);
+        revealAtIdx.get(bestIdx).push(s);
+      }
+      useFixedTiming = true;
+    } else {
+      // Fallback: home → each sighting in order → home. One anchor per stop.
+      const startsAtHome = !!homePort;
+      anchors = [];
+      if (homePort) anchors.push([homePort.lat, homePort.lng]);
+      ordered.forEach(s => anchors.push([+s.lat, +s.lng]));
+      if (homePort) anchors.push([homePort.lat, homePort.lng]);
+      revealAtIdx = new Map();
+      const sightingBase = startsAtHome ? 1 : 0;
+      ordered.forEach((s, k) => revealAtIdx.set(sightingBase + k, [s]));
+      useFixedTiming = false;
+    }
+
+    // Frame the whole path and let the pan/zoom settle.
     map.fitBounds(L.latLngBounds(anchors), { padding: [40, 40], maxZoom: 13, animate: true });
     await wait(350);
     if (token !== _replayToken) return;  // superseded during the pan/zoom settle
@@ -1508,25 +1575,30 @@ async function replayTrip(tripKey, opts) {
     moveBoat(boat, anchors[0][0], anchors[0][1]);
 
     line.addLatLng(anchors[0]);
-    // Reveal the starting anchor's pin only if it's a sighting — i.e. there's
-    // no home port, so the path begins at the first sighting rather than the dock.
-    if (path[0].sighting) revealMarkerAt(tripMarkers, path[0].sighting);
+    // Reveal anything pinned to the starting anchor (only happens in the
+    // fallback path when there's no home port).
+    (revealAtIdx.get(0) || []).forEach(s => revealMarkerAt(tripMarkers, s));
+
+    const fixedLegMs = TRACK_REPLAY_TOTAL_MS / Math.max(anchors.length - 1, 1);
 
     for (let i = 1; i < anchors.length; i++) {
       if (token !== _replayToken) return;  // a newer replay took over
       const from = anchors[i - 1];
       const to   = anchors[i];
-      // Constant-ish speed: leg time ∝ distance, clamped so short hops aren't
-      // instant and long harbor legs aren't tedious.
-      const meters = map.distance(from, to);
-      const travelMs = Math.max(TRAVEL_MIN_MS, Math.min(TRAVEL_MAX_MS, meters / BOAT_SPEED_M_PER_MS));
-      line.addLatLng(from);  // "head" point we'll move toward `to`
+      let travelMs;
+      if (useFixedTiming) {
+        travelMs = fixedLegMs;
+      } else {
+        // Constant-ish speed for the fallback: leg time ∝ leg distance.
+        const meters = map.distance(from, to);
+        travelMs = Math.max(TRAVEL_MIN_MS, Math.min(TRAVEL_MAX_MS, meters / BOAT_SPEED_M_PER_MS));
+      }
+      line.addLatLng(from);
       await animatePolylineHead(line, from, to, travelMs, boat, token);
       if (token !== _replayToken) return;
-      if (path[i].sighting) {
-        // Arrived at a sighting: reveal its pin and hold the boat there for
-        // a beat before moving on. Harbor anchors have no pin and no pause.
-        revealMarkerAt(tripMarkers, path[i].sighting);
+      const reveals = revealAtIdx.get(i);
+      if (reveals && reveals.length) {
+        reveals.forEach(s => revealMarkerAt(tripMarkers, s));
         await wait(PIN_PAUSE_MS);
       }
     }
@@ -1689,7 +1761,9 @@ function applyInitialTripFromUrl() {
     return;
   }
   try {
-    [allData, tripAudioByTrip] = await Promise.all([fetchSightings(), fetchTripAudio()]);
+    [allData, tripAudioByTrip, tripTrackById] = await Promise.all([
+      fetchSightings(), fetchTripAudio(), fetchTripTracks()
+    ]);
     renderNowBanner(allData);
     renderLegend(allData);
     renderSegmentedRail(allData);

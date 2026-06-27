@@ -23,7 +23,12 @@
 //   { sightings: [ {trip_id,trip_part,trip_date,sighting_time,species,count,
 //                    lat,lng,depth_meters,created_at}, … ],
 //     audio:     [ {trip_id,audio_url,duration_seconds,play_count}, … ],
+//     tracks:    { <trip_id>: [ {lat,lng,t}, … ], … },
 //     show_map_on_widget: <bool> }
+//
+// `tracks` is the continuous GPS breadcrumb per trip (Phase 2). When
+// show_map_on_widget = false, tracks is empty AND lat/lng are stripped from
+// sightings — same opt-out applies to both.
 
 const FEED_LIMIT = 100;
 
@@ -86,9 +91,32 @@ module.exports = async function handler(req, res) {
       return rest;
     });
 
+    // Continuous breadcrumb tracks per trip. Only fetched when the operator
+    // exposes their map (same opt-out as lat/lng on sightings). Scoped by the
+    // exact trip_ids that came back in `sightings` — never returns tracks for
+    // trips that aren't already in this feed.
+    let tracks = {};
+    if (showMap) {
+      const tripIds = [...new Set(sightingRows.map(s => s.trip_id).filter(Boolean))];
+      if (tripIds.length) {
+        const idList = tripIds.map(id => `"${id}"`).join(',');
+        const trackRows = await pgGet(
+          `trip_track?operator_id=eq.${operatorId}` +
+          `&trip_id=in.(${idList})` +
+          `&select=trip_id,lat,lng,recorded_at` +
+          `&order=trip_id.asc,recorded_at.asc&limit=20000`
+        );
+        for (const p of (trackRows || [])) {
+          if (!tracks[p.trip_id]) tracks[p.trip_id] = [];
+          tracks[p.trip_id].push({ lat: p.lat, lng: p.lng, t: p.recorded_at });
+        }
+      }
+    }
+
     res.status(200).json({
       sightings: sightingRows,
       audio: audio || [],
+      tracks,
       show_map_on_widget: showMap,
     });
   } catch (err) {
