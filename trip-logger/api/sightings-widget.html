@@ -874,8 +874,11 @@ async function fetchTripPhotos() {
 // to the original URL if it is not a Supabase object URL.
 function thumbUrl(url, w) {
   if (!url || url.indexOf('/object/public/') === -1) return url;
+  // resize=contain scales proportionally and keeps the WHOLE photo. The render
+  // endpoint crops by default (and with resize=cover) when only a width is
+  // given, which is what was slicing the photos.
   return url.replace('/object/public/', '/render/image/public/') +
-    '?width=' + w + '&quality=72&resize=cover';
+    '?width=' + w + '&quality=72&resize=contain';
 }
 
 // The exact URL the lightbox uses (full image, not cropped). Shared with the
