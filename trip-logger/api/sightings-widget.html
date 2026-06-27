@@ -894,10 +894,11 @@ function thumbUrl(url, w) {
     '?width=' + w + '&quality=72&resize=contain';
 }
 
-// The exact URL the lightbox uses (full image, not cropped). Shared with the
-// hover/touch preloader so the preloaded file is a cache hit on click.
+// The exact URL the viewer uses: the stored original at full resolution (no
+// downscaling). Shared with the hover/touch preloader so the preloaded file is
+// a cache hit on click.
 function lightboxUrl(url) {
-  return thumbUrl(url, 1200).replace('&resize=cover', '');
+  return url;
 }
 
 // ── Trip photo gallery viewer ───────────────────────────────────────────────

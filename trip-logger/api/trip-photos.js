@@ -32,12 +32,12 @@ const ALLOWED_TYPES = {
   'image/png':  'png',
   'image/webp': 'webp',
 };
-const MAX_BYTES = 5 * 1024 * 1024; // 5MB per photo (client resizes to ~1600px JPEG)
+const MAX_BYTES = 8 * 1024 * 1024; // 8MB per photo (client resizes to ~2560px JPEG)
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 module.exports.config = {
-  api: { bodyParser: { sizeLimit: '8mb' } },
+  api: { bodyParser: { sizeLimit: '12mb' } },
 };
 
 async function uploadToStorage(path, contentType, bytes) {
@@ -132,7 +132,7 @@ module.exports = async function handler(req, res) {
     catch (e) { return res.status(400).json({ error: 'data_base64 invalid' }); }
     if (bytes.length === 0) return res.status(400).json({ error: 'decoded image is empty' });
     if (bytes.length > MAX_BYTES) {
-      return res.status(413).json({ error: `photo too large (max ${MAX_BYTES} bytes / 5MB)` });
+      return res.status(413).json({ error: `photo too large (max ${MAX_BYTES} bytes / 8MB)` });
     }
 
     const operator = await getOperator(operatorId);
