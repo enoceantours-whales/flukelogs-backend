@@ -1688,8 +1688,21 @@
   // Anon key is safe to ship client-side — it's gated by RLS server-side.
   const SUPABASE_URL  = 'https://czotpzjtnuukoxscjduj.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b3Rwemp0bnV1a294c2NqZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTIzNDcsImV4cCI6MjA5MzU4ODM0N30.o1sAH23f-AgLmRhBiCptySJkEV3nnQqNxmldA6evx9c';
+  // The passthrough lock keeps supabase-js off the browser Web Locks API
+  // (navigator.locks). Inside the iOS Capacitor WKWebView that lock can
+  // deadlock: the network sign-in succeeds but the next auth call
+  // (getSession) waits on a lock that never releases, so the app hangs on
+  // a spinner with no error. Running the callback directly preserves the
+  // same serialization without touching navigator.locks. Harmless on the
+  // web PWA, where calls were already effectively serialized.
+  const passthroughAuthLock = async (_name, _acquireTimeout, fn) => fn();
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storage: window.localStorage,
+      lock: passthroughAuthLock,
+    },
   });
 
   let trip = newTripState();
