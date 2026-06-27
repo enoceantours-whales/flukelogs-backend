@@ -528,6 +528,19 @@
     background: rgba(0,0,0,.6); color: #fff; padding: 5px 12px; border-radius: 999px;
     font: 600 12px/1 "Open Sans", sans-serif; letter-spacing: .03em;
   }
+  /* Tap-to-advance zones, desktop only (phone uses swipe). */
+  .gv-nav {
+    position: absolute; top: 0; bottom: 0; width: 22%; max-width: 200px; z-index: 2;
+    border: none; background: transparent; color: #fff; cursor: pointer;
+    display: none; align-items: center; font-size: 44px; line-height: 1;
+    opacity: .55; transition: opacity .15s, background .15s; -webkit-tap-highlight-color: transparent;
+  }
+  .gv-nav:hover { opacity: 1; background: rgba(0,0,0,.22); }
+  .gv-prev { left: 0; justify-content: flex-start; padding-left: 20px; }
+  .gv-next { right: 0; justify-content: flex-end; padding-right: 20px; }
+  @media (hover: hover) and (pointer: fine) {
+    .gv-fullscreen .gv-nav, .gv-inline .gv-nav { display: flex; }
+  }
 
   .state-msg { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
   .spinner { width: 22px; height: 22px; border: 2px solid var(--hair); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
@@ -917,15 +930,21 @@ function gallerySlide(p, full) {
 function buildSwipeTrack(cls, photos, startIdx, onClose, hasCounter) {
   const wrap = document.createElement('div');
   wrap.className = cls;
+  const multi = photos.length > 1;
   wrap.innerHTML =
     '<button type="button" class="gv-close" aria-label="Close photos">&times;</button>' +
-    (hasCounter && photos.length > 1 ? '<div class="gv-counter"></div>' : '') +
+    (hasCounter && multi ? '<div class="gv-counter"></div>' : '') +
+    (multi ? '<button type="button" class="gv-nav gv-prev" aria-label="Previous photo">&#8249;</button>' +
+             '<button type="button" class="gv-nav gv-next" aria-label="Next photo">&#8250;</button>' : '') +
     '<div class="gv-track">' + photos.map(p => gallerySlide(p, true)).join('') + '</div>';
   const track = wrap.querySelector('.gv-track');
   const counter = wrap.querySelector('.gv-counter');
   const update = () => { if (counter) { const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); counter.textContent = (i + 1) + ' / ' + photos.length; } };
   track.addEventListener('scroll', update, { passive: true });
   wrap.querySelector('.gv-close').addEventListener('click', (e) => { e.stopPropagation(); onClose(); });
+  const prevBtn = wrap.querySelector('.gv-prev'), nextBtn = wrap.querySelector('.gv-next');
+  if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); track.scrollBy({ left: -track.clientWidth, behavior: 'smooth' }); });
+  if (nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); track.scrollBy({ left: track.clientWidth, behavior: 'smooth' }); });
   wrap.addEventListener('click', (e) => { if (e.target.tagName !== 'IMG') onClose(); });
   requestAnimationFrame(() => { track.scrollLeft = (startIdx || 0) * track.clientWidth; update(); });
   return wrap;
@@ -937,7 +956,13 @@ function closeAllGalleries() {
   document.querySelectorAll('.gv-inline').forEach(c => c.remove());
   sendHeight();
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllGalleries(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeAllGalleries(); return; }
+  const t = document.querySelector('.gv-fullscreen .gv-track, .gv-inline .gv-track');
+  if (!t) return;
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); t.scrollBy({ left: -t.clientWidth, behavior: 'smooth' }); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); t.scrollBy({ left:  t.clientWidth, behavior: 'smooth' }); }
+});
 
 function openFullscreenViewer(photos, startIdx) {
   closeAllGalleries();
