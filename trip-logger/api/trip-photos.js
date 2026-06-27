@@ -1,6 +1,6 @@
-// GET    /api/trip-photos?trip_id=<uuid>  — list a trip's gallery (captain edit UI)
-// POST   /api/trip-photos                 — upload ONE photo for {trip_id}, insert a row
-// DELETE /api/trip-photos?id=<uuid>        — remove one photo row (orphan file left
+// GET    /api/trip-photos?trip_id=<uuid>  - list a trip's gallery (captain edit UI)
+// POST   /api/trip-photos                 - upload ONE photo for {trip_id}, insert a row
+// DELETE /api/trip-photos?id=<uuid>        - remove one photo row (orphan file left
 //                                            in the bucket, cheap to ignore for now)
 //
 // Photos are keyed on trip_id so each trip carries its own gallery. One photo per
