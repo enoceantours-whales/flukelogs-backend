@@ -73,11 +73,11 @@ whale watching,trip log,wildlife,sightings,boat,gps,marine,naturalist,ocean,logb
 | Field | Value |
 |-------|-------|
 | Privacy Policy URL | https://trip-logger-backend.vercel.app/privacy.html |
-| Support URL | << your support page, e.g. https://enoceantours.com/support or a mailto page >> |
+| Support URL | https://trip-logger-backend.vercel.app/support.html |
 | Marketing URL (optional) | << e.g. https://enoceantours.com >> |
 
-> Apple requires a Support URL. If you do not have a support page, a simple page
-> with a contact email works, or I can add a `/support.html` like the privacy page.
+> Both the privacy and support pages are live once their PRs merge (privacy #92,
+> support #95).
 
 ---
 
@@ -127,8 +127,8 @@ This app is used by marine tour operators and their crew to log trips and
 wildlife sightings. An operator account is required.
 
 Demo account:
-  Email:    << demo captain email >>
-  Password: << demo captain password >>
+  Email:    appreview@enoceantours.com
+  Password: ReviewDemo2026!
 
 How to test:
   1. Sign in with the demo account above.
@@ -144,9 +144,13 @@ trip ends. It is used solely to record the route and compute distance, never
 for advertising, and is not sold.
 ```
 
-> ACTION: create a dedicated demo captain account (its own operator or a test
-> operator) so you are not handing Apple your real login. I can help set one up
-> in Supabase when you are ready.
+> DONE: this is a dedicated demo captain on its own isolated operator
+> ("Trip Logger Demo", slug `demo`), created 2026-06-27. Config cloned from
+> Enocean so the app is fully usable (5-species dropdown, lands on Start), but
+> `show_map_on_widget` is off and it is a separate operator_id, so anything the
+> reviewer logs never appears on Enocean's live public widget. Verified: sign-in
+> returns a token and `/api/me` resolves the operator. Delete the user + operator
+> after approval if you want.
 
 ---
 
@@ -161,8 +165,10 @@ toggle when we archive.
 
 ## 10. Still needed from you (checklist)
 
-- [ ] Support URL (or let me add a `/support.html`)
-- [ ] Demo captain account (email + password) for the reviewer
+- [x] Support URL (added: /support.html, PR #95)
+- [x] Demo captain account for the reviewer (appreview@enoceantours.com, created + verified)
+- [ ] Apple Developer Program: D-U-N-S lookup, then convert Individual to Organization via Apple Support
 - [ ] Screenshots from a real device (I will tell you which screens and sizes)
 - [ ] Confirm primary category Business (vs Travel)
 - [ ] Confirm the sub-processor list in the privacy policy
+- [ ] Marketing URL (optional)
