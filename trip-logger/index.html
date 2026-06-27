@@ -1360,6 +1360,16 @@
 
       <button class="btn btn-primary" type="button" id="tripAudioSaveBtn" onclick="saveTripAudio()" style="display:none;">Save audio</button>
       <button class="btn btn-danger"  type="button" id="tripAudioDeleteBtn" onclick="deleteTripAudio()" style="display:none;">Remove audio</button>
+
+      <div class="field" style="margin-top:18px;border-top:1px solid var(--border,#23252b);padding-top:16px;">
+        <label>Photo gallery</label>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;line-height:1.5;">Add photos from the day. They show on your public sightings widget for this trip.</p>
+        <div id="tripGalleryGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+        <input type="file" id="tripGalleryInput" accept="image/*" multiple style="display:none;" onchange="handleGalleryFiles(event)">
+        <button class="btn btn-outline" type="button" onclick="document.getElementById('tripGalleryInput').click()">Add photos</button>
+        <p id="tripGalleryStatus" style="font-size:13px;color:var(--text-muted);margin-top:8px;"></p>
+      </div>
+
       <button class="btn btn-outline" type="button" onclick="showScreen('screenPastTrips')">Back</button>
     </div>
   </div>
@@ -4502,6 +4512,119 @@
       existingEl.style.display = 'none';
       noExisting.style.display = 'block';
       deleteBtn.style.display = 'none';
+    }
+
+    // Load this trip's photo gallery (separate from audio, same screen).
+    document.getElementById('tripGalleryStatus').textContent = '';
+    loadTripPhotos(tripId);
+  }
+
+  // ── Trip photo gallery ───────────────────────────────────────────
+  // Photos attach to a trip and surface on the public sightings widget.
+  // Uploaded one at a time so a flaky boat connection can still get a
+  // partial set up. Stored in the trip-photos bucket via /api/trip-photos.
+  let currentTripPhotos = [];
+
+  // Resize to a max edge and re-encode as JPEG so big phone photos upload
+  // fast. Returns base64 (no data: prefix) for the API.
+  function resizeImageToJpeg(file, maxDim) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.onload = e => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('decode failed'));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.max(1, Math.round(img.width  * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82).split(',')[1]);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function loadTripPhotos(tripId) {
+    const grid = document.getElementById('tripGalleryGrid');
+    grid.innerHTML = '<p style="font-size:13px;color:var(--text-dim);margin:0;">Loading…</p>';
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return handleLogout();
+      const res = await fetch('/api/trip-photos?trip_id=' + encodeURIComponent(tripId), {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      const body = res.ok ? await res.json() : { photos: [] };
+      currentTripPhotos = body.photos || [];
+      renderTripGallery();
+    } catch (e) {
+      grid.innerHTML = '<p style="font-size:13px;color:var(--text-dim);margin:0;">Could not load photos.</p>';
+    }
+  }
+
+  function renderTripGallery() {
+    const grid = document.getElementById('tripGalleryGrid');
+    if (!currentTripPhotos.length) {
+      grid.innerHTML = '<p style="font-size:13px;color:var(--text-dim);margin:0;">No photos yet for this trip.</p>';
+      return;
+    }
+    grid.innerHTML = currentTripPhotos.map(p =>
+      '<div style="position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;background:#11151b;">' +
+        '<img src="' + p.photo_url + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+        '<button type="button" aria-label="Remove photo" onclick="deleteTripPhoto(\'' + p.id + '\')" ' +
+          'style="position:absolute;top:2px;right:2px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;cursor:pointer;">&times;</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  async function handleGalleryFiles(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = ''; // reset so the same file can be re-picked
+    if (!files.length) return;
+    const status = document.getElementById('tripGalleryStatus');
+    const tripId = currentAudioTripId, tripDate = currentAudioDate;
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return handleLogout();
+    let done = 0;
+    for (let i = 0; i < files.length; i++) {
+      status.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + '…';
+      try {
+        const b64 = await resizeImageToJpeg(files[i], 1600);
+        const res = await fetch('/api/trip-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            trip_id: tripId, trip_date: tripDate,
+            content_type: 'image/jpeg', data_base64: b64,
+          }),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        done++;
+      } catch (err) {
+        toast('A photo failed to upload', 'error');
+      }
+    }
+    status.textContent = done ? (done + ' photo' + (done === 1 ? '' : 's') + ' added') : '';
+    await loadTripPhotos(tripId);
+  }
+
+  async function deleteTripPhoto(id) {
+    if (!confirm('Remove this photo?')) return;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return handleLogout();
+      const res = await fetch('/api/trip-photos?id=' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (res.status !== 204 && !res.ok) throw new Error('HTTP ' + res.status);
+      currentTripPhotos = currentTripPhotos.filter(p => p.id !== id);
+      renderTripGallery();
+    } catch (e) {
+      toast('Could not remove photo', 'error');
     }
   }
 

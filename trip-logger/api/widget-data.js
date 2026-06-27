@@ -53,7 +53,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'GET') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-  const empty = { sightings: [], audio: [], show_map_on_widget: true };
+  const empty = { sightings: [], audio: [], photos: [], show_map_on_widget: true };
 
   try {
     const slug = req.query && req.query.op;
@@ -70,7 +70,7 @@ module.exports = async function handler(req, res) {
     const operatorId = operator.id;
     const showMap = operator.show_map_on_widget !== false;
 
-    const [sightings, audio] = await Promise.all([
+    const [sightings, audio, photos] = await Promise.all([
       pgGet(
         `sightings?operator_id=eq.${operatorId}` +
         `&select=trip_id,trip_part,trip_date,sighting_time,species,count,lat,lng,depth_meters,created_at` +
@@ -80,6 +80,13 @@ module.exports = async function handler(req, res) {
         `trip_audio?operator_id=eq.${operatorId}` +
         `&select=trip_id,audio_url,duration_seconds,play_count` +
         `&order=trip_date.desc&limit=${FEED_LIMIT}`
+      ),
+      // Gallery photos per trip. Not location data, so returned regardless of
+      // the map opt-out. Ordered so each trip's photos arrive in gallery order.
+      pgGet(
+        `trip_photos?operator_id=eq.${operatorId}` +
+        `&select=id,trip_id,photo_url,sort_order` +
+        `&order=trip_date.desc,sort_order.asc,created_at.asc&limit=600`
       ),
     ]);
 
@@ -116,6 +123,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       sightings: sightingRows,
       audio: audio || [],
+      photos: photos || [],
       tracks,
       show_map_on_widget: showMap,
     });

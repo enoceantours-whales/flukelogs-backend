@@ -285,6 +285,8 @@
     .legend-col { display: none; }
     .filter-mobile { display: block; }
     .ed-title { font-size: 30px; }
+    .trip-body { flex-direction: column; padding: 6px 12px 12px; }
+    .trip-gallery { flex: none; width: 100%; height: 170px; min-height: 0; }
   }
 
   .map-wrap {
@@ -454,6 +456,7 @@
   }
   .audio-waveform .bar.played { background: var(--teal); box-shadow: 0 0 4px rgba(111,177,172,.4); }
   .audio-time {
+    display: none; /* duration already shown in the captain's-notes label */
     flex-shrink: 0;
     font: 600 11px/1 "Open Sans", sans-serif;
     color: var(--text-dim);
@@ -462,6 +465,40 @@
     min-width: 64px;
     text-align: right;
   }
+
+  /* Trip photo gallery: hero photo beside the species list on desktop. */
+  .trip-body { display: flex; align-items: stretch; gap: 16px; padding: 6px 16px 14px; }
+  .trip-body .trip-sightings { flex: 1; min-width: 0; padding: 0; }
+  .trip-body .sighting-row { padding-left: 0; padding-right: 0; }
+  .trip-gallery {
+    position: relative; flex: 0 0 44%; min-height: 150px;
+    border-radius: 12px; overflow: hidden; cursor: pointer;
+    background: var(--ink-2, #11151b); border: 1px solid var(--hair);
+  }
+  .trip-gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .trip-gallery:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .gallery-count {
+    position: absolute; right: 8px; bottom: 8px;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(8,12,16,.72); color: #e7edf2;
+    font: 600 11px/1 "Open Sans", sans-serif;
+    padding: 4px 9px; border-radius: 999px;
+  }
+  .gallery-count svg { width: 13px; height: 13px; fill: currentColor; }
+
+  .gallery-lightbox { position: fixed; inset: 0; z-index: 9999; background: rgba(6,8,11,.95); }
+  .gallery-lightbox[hidden] { display: none; }
+  .gallery-close {
+    position: absolute; top: 14px; right: 16px; width: 40px; height: 40px;
+    border: none; border-radius: 50%; background: rgba(255,255,255,.14);
+    color: #fff; font-size: 24px; line-height: 1; cursor: pointer; z-index: 2;
+  }
+  .gallery-strip {
+    position: absolute; inset: 0; overflow-y: auto;
+    padding: 64px 16px 32px; display: flex; flex-direction: column;
+    gap: 12px; align-items: center;
+  }
+  .gallery-strip img { max-width: 100%; max-height: 86vh; width: auto; border-radius: 10px; }
 
   .state-msg { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
   .spinner { width: 22px; height: 22px; border: 2px solid var(--hair); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
@@ -622,6 +659,7 @@ const sm = n => SPECIES_META[n] || SPECIES_META['default'];
 // ── State ────────────────────────────────────────────────────────────────────
 let allData = [];
 let tripAudioByTrip = new Map(); // trip_id -> { audio_url, duration_seconds }
+let tripPhotosByTrip = new Map(); // trip_id -> [ { id, photo_url } ]
 let tripTrackById  = new Map();  // trip_id -> [ {lat,lng,t}, … ]  (Phase 2 breadcrumbs)
 let activeFilter = null;   // species name or null
 let activeTripKey = null;  // selected trip_id or null
@@ -787,6 +825,55 @@ async function fetchTripTracks() {
     if (Array.isArray(obj[id]) && obj[id].length > 1) m.set(id, obj[id]);
   }
   return m;
+}
+
+// Gallery photos per trip. Returns Map(trip_id -> [{id, photo_url}]) in order.
+async function fetchTripPhotos() {
+  const data = await loadWidgetData();
+  const rows = Array.isArray(data.photos) ? data.photos : [];
+  const m = new Map();
+  for (const r of rows) {
+    if (!r.trip_id || !r.photo_url) continue;
+    if (!m.has(r.trip_id)) m.set(r.trip_id, []);
+    m.get(r.trip_id).push(r);
+  }
+  return m;
+}
+
+// ── Trip photo gallery lightbox ─────────────────────────────────────────────
+function ensureLightbox() {
+  let lb = document.getElementById('galleryLightbox');
+  if (lb) return lb;
+  lb = document.createElement('div');
+  lb.id = 'galleryLightbox';
+  lb.className = 'gallery-lightbox';
+  lb.hidden = true;
+  lb.innerHTML = '<button class="gallery-close" type="button" aria-label="Close gallery">&times;</button><div class="gallery-strip"></div>';
+  lb.addEventListener('click', e => {
+    if (e.target === lb || e.target.classList.contains('gallery-close')) closeGalleryLightbox();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGalleryLightbox(); });
+  document.body.appendChild(lb);
+  return lb;
+}
+function openGalleryLightbox(photos) {
+  const lb = ensureLightbox();
+  const strip = lb.querySelector('.gallery-strip');
+  strip.innerHTML = photos.map(p => `<img src="${p.photo_url}" alt="Trip photo" loading="lazy">`).join('');
+  strip.scrollTop = 0;
+  lb.hidden = false;
+}
+function closeGalleryLightbox() {
+  const lb = document.getElementById('galleryLightbox');
+  if (lb) lb.hidden = true;
+}
+function bindTripGalleries(root) {
+  root.querySelectorAll('.trip-gallery').forEach(el => {
+    const key = el.getAttribute('data-gallery-trip');
+    const open = () => { const photos = tripPhotosByTrip.get(key) || []; if (photos.length) openGalleryLightbox(photos); };
+    el.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
 }
 
 // ── Custom audio player with decorative waveform ────────────────────────────
@@ -1253,6 +1340,17 @@ function renderFeed(data) {
     const audio = tripAudioByTrip.get(tripKey);
     const audioBlock = audio ? renderAudioPlayer(audio) : '';
 
+    // Photo gallery: hero image (first photo) with a count badge, opens a
+    // lightbox. Only renders when the trip has photos; otherwise the species
+    // list keeps its original full-width layout untouched.
+    const photos = tripPhotosByTrip.get(tripKey) || [];
+    const photoBlock = photos.length
+      ? `<div class="trip-gallery" data-gallery-trip="${tripKey}" role="button" tabindex="0" aria-label="View ${photos.length} photo${photos.length === 1 ? '' : 's'} from this trip">
+            <img src="${photos[0].photo_url}" alt="Trip photo" loading="lazy" onload="sendHeight()">
+            ${photos.length > 1 ? `<span class="gallery-count"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>${photos.length}</span>` : ''}
+          </div>`
+      : '';
+
     // Replay needs at least two sightings with both a GPS pin and a logged
     // time. Backfill from migration 0016 gives older trips a synthetic
     // spread; new trips get the captain's real per-sighting times.
@@ -1278,7 +1376,9 @@ function renderFeed(data) {
         </div>
       </div>
       ${audioBlock}
-      <div class="trip-sightings">${rows}</div>
+      ${photoBlock
+        ? `<div class="trip-body">${photoBlock}<div class="trip-sightings">${rows}</div></div>`
+        : `<div class="trip-sightings">${rows}</div>`}
     </div>`;
   }).join('');
 
@@ -1352,6 +1452,7 @@ function renderFeed(data) {
 
   // Wire up the custom audio players that just got painted into trip cards
   bindAudioPlayers(list);
+  bindTripGalleries(list);
 
   sendHeight();
 }
@@ -1761,8 +1862,8 @@ function applyInitialTripFromUrl() {
     return;
   }
   try {
-    [allData, tripAudioByTrip, tripTrackById] = await Promise.all([
-      fetchSightings(), fetchTripAudio(), fetchTripTracks()
+    [allData, tripAudioByTrip, tripTrackById, tripPhotosByTrip] = await Promise.all([
+      fetchSightings(), fetchTripAudio(), fetchTripTracks(), fetchTripPhotos()
     ]);
     renderNowBanner(allData);
     renderLegend(allData);
