@@ -287,7 +287,7 @@
     .ed-title { font-size: 30px; }
     .trip-body { flex-direction: column; padding: 6px 12px 12px; }
     .trip-gallery { flex: none; width: 100%; height: 170px; min-height: 0; }
-    .trip-carousel { margin: 0 12px 12px; }
+    .gv-inline { margin: 0 12px 12px; }
   }
 
   .map-wrap {
@@ -487,31 +487,44 @@
   }
   .gallery-count svg { width: 13px; height: 13px; fill: currentColor; }
 
-  /* Inline swipe carousel: expands inside the tapped card, so it always opens in
-     view (no fixed/absolute positioning to fight the auto-height iframe). */
-  .trip-carousel {
+  /* Hero is a swipeable mini carousel filling the gallery box. */
+  .hero-track {
+    display: flex; width: 100%; height: 100%; overflow-x: auto;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .hero-track::-webkit-scrollbar { display: none; }
+  .hero-track img {
+    flex: 0 0 100%; width: 100%; height: 100%;
+    object-fit: cover; scroll-snap-align: center; display: block; user-select: none;
+  }
+
+  /* Photo viewer, shared by the full-screen (.gv-fullscreen) and inline-fallback
+     (.gv-inline) modes. Full-screen relies on the page expanding the iframe. */
+  .gv-fullscreen { position: fixed; inset: 0; z-index: 100000; background: rgba(6,8,11,.97); }
+  .gv-inline {
     position: relative; margin: 0 16px 14px; border-radius: 12px;
     overflow: hidden; background: #0b0e12; border: 1px solid var(--hair);
   }
-  .carousel-track {
-    display: flex; overflow-x: auto; aspect-ratio: 3 / 2;
-    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+  .gv-track {
+    display: flex; overflow-x: auto;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
-  .carousel-track::-webkit-scrollbar { display: none; }
-  .carousel-track img {
+  .gv-track::-webkit-scrollbar { display: none; }
+  .gv-fullscreen .gv-track { position: absolute; inset: 0; }
+  .gv-inline .gv-track { aspect-ratio: 3 / 2; }
+  .gv-track img {
     flex: 0 0 100%; width: 100%; height: 100%;
     object-fit: contain; scroll-snap-align: center; display: block; user-select: none;
   }
-  .carousel-close {
-    position: absolute; top: 8px; right: 8px; z-index: 2;
-    width: 32px; height: 32px; border: none; border-radius: 50%;
-    background: rgba(0,0,0,.55); color: #fff; font-size: 19px; line-height: 1; cursor: pointer;
+  .gv-close {
+    position: absolute; top: 10px; right: 12px; z-index: 2;
+    width: 36px; height: 36px; border: none; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 21px; line-height: 1; cursor: pointer;
   }
-  .carousel-counter {
-    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
-    background: rgba(0,0,0,.55); color: #fff; padding: 4px 10px; border-radius: 999px;
-    font: 600 11px/1 "Open Sans", sans-serif; letter-spacing: .03em;
+  .gv-counter {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 2;
+    background: rgba(0,0,0,.6); color: #fff; padding: 5px 12px; border-radius: 999px;
+    font: 600 12px/1 "Open Sans", sans-serif; letter-spacing: .03em;
   }
 
   .state-msg { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
@@ -869,60 +882,88 @@ function lightboxUrl(url) {
   return thumbUrl(url, 1200).replace('&resize=cover', '');
 }
 
-// ── Trip photo gallery: inline swipe carousel ───────────────────────────────
-// The widget runs in an auto-height iframe (the parent page scrolls), so a
-// fixed/absolute overlay cannot reliably find the visible viewport, which made
-// the old lightbox open off-screen. Instead we expand a horizontal swipe
-// carousel inline inside the tapped card: it always opens in view because it
-// lives in the document flow, and guests swipe left/right instead of scrolling.
-// The iframe is asked to resize whenever it opens, closes, or an image loads.
-function closeAllCarousels() {
-  document.querySelectorAll('.trip-carousel').forEach(c => c.remove());
+// ── Trip photo gallery viewer ───────────────────────────────────────────────
+// The hero in each card is a swipeable mini carousel. Tapping a photo opens a
+// FULL-SCREEN viewer when the embedding page supports it: an auto-height iframe
+// cannot position a full-screen overlay on its own, so the page expands the
+// iframe to full screen via postMessage (handshake below). When the page does
+// not support it (older embed), we fall back to an inline carousel in the card,
+// so the feature always works.
+
+let hostFullscreenReady = false;
+window.addEventListener('message', e => {
+  if (e && e.data && e.data.galleryHostReady) hostFullscreenReady = true;
+});
+// Ask the host, in case this widget loaded before the host script registered.
+try { if (window.parent !== window) window.parent.postMessage({ galleryHostQuery: true }, '*'); } catch (e) {}
+function postToHost(msg) { try { if (window.parent !== window) window.parent.postMessage(msg, '*'); } catch (e) {} }
+
+// One slide. `full` = the large viewer image (contain); otherwise a cropped
+// hero/carousel image (cover). Tiny blurred variant fills in instantly.
+function gallerySlide(p, full) {
+  const src  = full ? lightboxUrl(p.photo_url) : thumbUrl(p.photo_url, 900);
+  const blur = thumbUrl(p.photo_url, 48).replace('&resize=cover', '');
+  const fit  = full ? 'contain' : 'cover';
+  return `<img src="${src}" alt="Trip photo" draggable="false"
+            style="object-fit:${fit}; background:#11151b url('${blur}') center/cover no-repeat;"
+            onload="this.style.backgroundImage='none';${full ? '' : ' sendHeight();'}">`;
+}
+
+function buildSwipeTrack(cls, photos, startIdx, onClose, hasCounter) {
+  const wrap = document.createElement('div');
+  wrap.className = cls;
+  wrap.innerHTML =
+    '<button type="button" class="gv-close" aria-label="Close photos">&times;</button>' +
+    (hasCounter && photos.length > 1 ? '<div class="gv-counter"></div>' : '') +
+    '<div class="gv-track">' + photos.map(p => gallerySlide(p, true)).join('') + '</div>';
+  const track = wrap.querySelector('.gv-track');
+  const counter = wrap.querySelector('.gv-counter');
+  const update = () => { if (counter) { const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); counter.textContent = (i + 1) + ' / ' + photos.length; } };
+  track.addEventListener('scroll', update, { passive: true });
+  wrap.querySelector('.gv-close').addEventListener('click', (e) => { e.stopPropagation(); onClose(); });
+  wrap.addEventListener('click', (e) => { if (e.target.tagName !== 'IMG') onClose(); });
+  requestAnimationFrame(() => { track.scrollLeft = (startIdx || 0) * track.clientWidth; update(); });
+  return wrap;
+}
+
+function closeAllGalleries() {
+  const fs = document.querySelector('.gv-fullscreen');
+  if (fs) { fs.remove(); postToHost({ galleryFullscreen: false }); }
+  document.querySelectorAll('.gv-inline').forEach(c => c.remove());
   sendHeight();
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllCarousels(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllGalleries(); });
 
-function toggleTripCarousel(heroEl, key) {
+function openFullscreenViewer(photos, startIdx) {
+  closeAllGalleries();
+  postToHost({ galleryFullscreen: true }); // page expands the iframe to full screen
+  const ov = buildSwipeTrack('gv-fullscreen', photos, startIdx, closeAllGalleries, true);
+  document.body.appendChild(ov);
+}
+
+function openInlineViewer(heroEl, photos, startIdx) {
   const card = heroEl.closest('.trip-card');
   if (!card) return;
-  if (card.querySelector('.trip-carousel')) { closeAllCarousels(); return; } // toggle off
-  closeAllCarousels(); // only one open at a time
-  const photos = tripPhotosByTrip.get(key) || [];
-  if (!photos.length) return;
-
-  const slides = photos.map(p => {
-    const big  = lightboxUrl(p.photo_url);
-    const blur = thumbUrl(p.photo_url, 48).replace('&resize=cover', '');
-    return `<img src="${big}" alt="Trip photo" draggable="false"
-              style="background:#11151b url('${blur}') center/cover no-repeat;"
-              onload="this.style.backgroundImage='none'; sendHeight();">`;
-  }).join('');
-
-  const car = document.createElement('div');
-  car.className = 'trip-carousel';
-  car.innerHTML =
-    '<button type="button" class="carousel-close" aria-label="Close photos">&times;</button>' +
-    (photos.length > 1 ? '<div class="carousel-counter">1 / ' + photos.length + '</div>' : '') +
-    '<div class="carousel-track">' + slides + '</div>';
+  if (card.querySelector('.gv-inline')) { closeAllGalleries(); return; } // toggle off
+  closeAllGalleries();
+  const car = buildSwipeTrack('gv-inline', photos, startIdx, closeAllGalleries, true);
   card.appendChild(car);
-
-  car.querySelector('.carousel-close').addEventListener('click', (e) => { e.stopPropagation(); closeAllCarousels(); });
-  const track = car.querySelector('.carousel-track');
-  const counter = car.querySelector('.carousel-counter');
-  if (counter) {
-    track.addEventListener('scroll', () => {
-      const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
-      counter.textContent = (idx + 1) + ' / ' + photos.length;
-    }, { passive: true });
-  }
   sendHeight();
   car.scrollIntoView({ block: 'nearest' });
 }
+
+function openTripViewer(heroEl, key, startIdx) {
+  const photos = tripPhotosByTrip.get(key) || [];
+  if (!photos.length) return;
+  if (hostFullscreenReady) openFullscreenViewer(photos, startIdx);
+  else openInlineViewer(heroEl, photos, startIdx);
+}
+
 function bindTripGalleries(root) {
   root.querySelectorAll('.trip-gallery').forEach(el => {
     const key = el.getAttribute('data-gallery-trip');
-    // Warm the cache on intent (hover on desktop, first touch on mobile) so the
-    // carousel images are ready by the time it opens. Runs once.
+    const heroTrack = el.querySelector('.hero-track');
+    // Warm the cache on intent (hover/first touch) so the viewer is ready. Once.
     let warmed = false;
     const warm = () => {
       if (warmed) return; warmed = true;
@@ -930,8 +971,14 @@ function bindTripGalleries(root) {
     };
     el.addEventListener('mouseenter', warm);
     el.addEventListener('touchstart', warm, { passive: true });
-    el.addEventListener('click', (e) => { e.stopPropagation(); toggleTripCarousel(el, key); });
-    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTripCarousel(el, key); } });
+    const currentIdx = () => heroTrack ? Math.round(heroTrack.scrollLeft / Math.max(1, heroTrack.clientWidth)) : 0;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tapped = e.target.closest('img');
+      const idx = (tapped && tapped.dataset.idx != null) ? parseInt(tapped.dataset.idx, 10) : currentIdx();
+      openTripViewer(el, key, idx);
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTripViewer(el, key, currentIdx()); } });
   });
 }
 
@@ -1399,13 +1446,16 @@ function renderFeed(data) {
     const audio = tripAudioByTrip.get(tripKey);
     const audioBlock = audio ? renderAudioPlayer(audio) : '';
 
-    // Photo gallery: hero image (first photo) with a count badge, opens a
-    // lightbox. Only renders when the trip has photos; otherwise the species
-    // list keeps its original full-width layout untouched.
+    // Photo gallery: the hero is a swipeable mini carousel (cover-cropped); a
+    // count badge shows the total, and tapping any photo opens the viewer.
+    // Only renders when the trip has photos; otherwise the species list keeps
+    // its original full-width layout untouched.
     const photos = tripPhotosByTrip.get(tripKey) || [];
     const photoBlock = photos.length
       ? `<div class="trip-gallery" data-gallery-trip="${tripKey}" role="button" tabindex="0" aria-label="View ${photos.length} photo${photos.length === 1 ? '' : 's'} from this trip">
-            <img src="${thumbUrl(photos[0].photo_url, 800)}" alt="Trip photo" loading="lazy" onload="sendHeight()">
+            <div class="hero-track">
+              ${photos.map((p, i) => `<img src="${thumbUrl(p.photo_url, 900)}" data-idx="${i}" alt="Trip photo" loading="lazy"${i === 0 ? ' onload="sendHeight()"' : ''}>`).join('')}
+            </div>
             ${photos.length > 1 ? `<span class="gallery-count"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>${photos.length}</span>` : ''}
           </div>`
       : '';
