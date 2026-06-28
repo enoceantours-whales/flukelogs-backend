@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/", "has": [{ "type": "host", "value": "sightings.enoceantours.com" }], "destination": "/api/sightings?op=enocean" },
     { "source": "/landing", "destination": "/api/landing" },
     { "source": "/sightings", "destination": "/api/sightings" },
     { "source": "/profile", "destination": "/profile.html" },
