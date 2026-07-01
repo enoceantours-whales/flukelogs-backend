@@ -706,7 +706,6 @@ let tripTrackById  = new Map();  // trip_id -> [ {lat,lng,t}, … ]  (Phase 2 br
 let activeFilter = null;   // species name or null
 let activeTripKey = null;  // selected trip_id or null
 const markers = [];
-let _staticTrackLine = null;  // faint polyline of the selected trip's real boat path
 
 // ── Map ──────────────────────────────────────────────────────────────────────
 // Per-operator: some operators don't want to publish GPS pins. When
@@ -787,20 +786,10 @@ function refreshMarkers() {
     markers.push(m);
   });
 
-  // Static breadcrumb of the active trip's real boat path (Phase 2). Drawn
-  // faint so the bright replay polyline pops on top of it during animation,
-  // and so it doesn't fight the species pins for attention when idle. Trips
-  // logged before Phase 2 shipped have no track and just show pins as before.
-  if (_staticTrackLine) { _staticTrackLine.remove(); _staticTrackLine = null; }
-  if (activeTripKey) {
-    const track = tripTrackById.get(activeTripKey);
-    if (Array.isArray(track) && track.length > 1) {
-      _staticTrackLine = L.polyline(
-        track.map(p => [+p.lat, +p.lng]),
-        { color: '#0fbfb1', weight: 2, opacity: 0.45, lineCap: 'round', lineJoin: 'round' }
-      ).addTo(map);
-    }
-  }
+  // The boat's real path is intentionally NOT drawn here. Selecting a trip
+  // shows only its pins; the track line is revealed progressively by the ▶
+  // replay as the boat follows it (see replayTrip / _replayLine), so it
+  // "draws itself" rather than appearing all at once ahead of the boat.
 
   // Update hint
   const hint = document.getElementById('map-hint');
