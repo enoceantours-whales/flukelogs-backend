@@ -1717,6 +1717,7 @@
 
   let trip = newTripState();
   let guestEmails = [];
+  const GUESTS_KEY = 'flukelogs_guest_emails';
   // trip_id returned by the server after a successful send. Lets the captain
   // email a forgotten guest afterward without re-logging the trip.
   let sentTripId = null;
@@ -1763,6 +1764,9 @@
       tag.innerHTML = `<span>${email}</span><button class="remove-tag" onclick="removeEmail(${i})">×</button>`;
       wrap.insertBefore(tag, input);
     });
+    // Persist so a WKWebView reload (e.g. leaving to take a photo mid-report)
+    // doesn't wipe the loaded guest emails. restoreTrip() reads this back.
+    try { guestEmails.length ? localStorage.setItem(GUESTS_KEY, JSON.stringify(guestEmails)) : localStorage.removeItem(GUESTS_KEY); } catch (e) {}
   }
 
   function addEmailFromInput() {
@@ -2821,6 +2825,9 @@
       restored.startTime = new Date(restored.startTime);
       if (restored.endTime) restored.endTime = new Date(restored.endTime);
       trip = restored;
+      // Reload guest emails staged before the reload and rebuild their tags, so
+      // the Send Report screen isn't blank after the web view reloads.
+      try { const g = localStorage.getItem(GUESTS_KEY); if (g) { guestEmails = JSON.parse(g) || []; renderEmailTags(); } } catch (e) {}
       if (!trip.endTime) {
         setCurrentTime();
         startGPS();
@@ -2834,7 +2841,7 @@
     } catch(e) {}
   }
 
-  function clearSavedTrip() { localStorage.removeItem(STORAGE_KEY); }
+  function clearSavedTrip() { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(GUESTS_KEY); }
 
   // ── Auth ─────────────────────────────────────────────────────────
   // Step 2: client-side gate only. The API endpoints are still open;
