@@ -1,6 +1,6 @@
 {
-  "appId": "com.enoceantours.triplogger",
-  "appName": "Trip Logger",
+  "appId": "com.flukesend.flukelogs",
+  "appName": "Flukelogs",
   "webDir": "www",
   "server": {
     "url": "https://trip-logger-backend.vercel.app",
