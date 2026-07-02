@@ -47,7 +47,7 @@ npx cap open ios
 2. In Xcode, top bar: select your device as the run target.
 3. Project navigator → `App` → `Signing & Capabilities`. Select your
    Apple Developer Team. Xcode will register the bundle id
-   `com.enoceantours.triplogger` (or your chosen id, see below) with your
+   `com.flukesend.flukelogs` (or your chosen id, see below) with your
    account automatically the first time.
 4. Press the Run (▶) button. The app installs and launches; you should
    see the Trip Logger PWA exactly as it appears in mobile Safari.
@@ -60,7 +60,7 @@ Device Management → trust your developer profile, then re-launch.
 
 Defaults in `capacitor.config.json`:
 
-- `appId`: `com.enoceantours.triplogger`
+- `appId`: `com.flukesend.flukelogs`
 - `appName`: `Trip Logger`
 
 You can change either before running `cap add ios`. The bundle id is hard

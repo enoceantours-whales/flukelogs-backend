@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Trip Logger uses your location during a trip to track your route and calculate distance traveled.</string>
+	<string>Flukelogs uses your location during a trip to track your route and calculate distance traveled.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Trip Logger keeps tracking your route while the screen is locked so your distance and breadcrumb path stay accurate for the whole trip.</string>
+	<string>Flukelogs keeps tracking your route while the screen is locked so your distance and breadcrumb path stay accurate for the whole trip.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>Enocean Tours</string>
+	<string>Flukelogs</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
