@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Flukelogs — Story Video Probe</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: #0d0d0d; color: #f4f6f7;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 20px 16px 60px; max-width: 640px; margin: 0 auto;
+  }
+  h1 { font-size: 19px; letter-spacing: 0.02em; margin: 0 0 4px; }
+  .sub { color: #8b9398; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #16181a; border: 1px solid #23262a; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: #8b9398; margin: 0 0 10px; font-weight: 600; }
+  button {
+    appearance: none; border: 0; border-radius: 12px; padding: 15px 20px;
+    font: 600 16px -apple-system, sans-serif; letter-spacing: 0.02em;
+    background: #f4f6f7; color: #0d0d0d; width: 100%; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; }
+  canvas { width: 100%; max-width: 270px; aspect-ratio: 9/16; display: block; margin: 0 auto 14px; border-radius: 12px; background: #111; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid #202327; font-size: 13px; }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: #8b9398; }
+  .row .v { font-weight: 600; text-align: right; word-break: break-word; }
+  .ok { color: #2fbf71; } .bad { color: #ff6b6b; } .warn { color: #ffcf5c; }
+  video { width: 100%; max-width: 270px; aspect-ratio: 9/16; display: block; margin: 10px auto 0; border-radius: 12px; background: #000; }
+  a.dl { display: block; text-align: center; margin-top: 12px; color: #4aa3ff; font-weight: 600; text-decoration: none; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: #8b9398; margin: 8px 0 0; }
+</style>
+</head>
+<body>
+  <h1>🐋 Story Video Probe</h1>
+  <div class="sub">Confirms whether this phone can turn the track animation into a shareable video file. Nothing is uploaded — everything stays on this device.</div>
+
+  <div class="card">
+    <h2>1 · This device supports</h2>
+    <div id="support"></div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Record a sample</h2>
+    <canvas id="c" width="540" height="960"></canvas>
+    <button id="go">Record 5-second sample</button>
+    <pre id="status">Tap the button. You'll see the boat draw its path, then a video appears below.</pre>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <h2>3 · Result</h2>
+    <div id="result"></div>
+    <video id="out" controls playsinline muted></video>
+    <a class="dl" id="dl" download="flukelogs-story-test.mp4">⬇︎ Save / share this file</a>
+    <pre id="verdict"></pre>
+  </div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+
+  // ── Capability report ───────────────────────────────────────────────
+  var CANDIDATES = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=h264',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm'
+  ];
+  var hasRecorder = typeof MediaRecorder !== 'undefined';
+  var hasCapture = !!canvas.captureStream;
+  var supported = hasRecorder ? CANDIDATES.filter(function (t) {
+    try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; }
+  }) : [];
+  var bestType = supported[0] || '';
+  var willBeMp4 = bestType.indexOf('mp4') === 0;
+
+  function row(k, v, cls) {
+    return '<div class="row"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>';
+  }
+  document.getElementById('support').innerHTML =
+    row('MediaRecorder', hasRecorder ? 'yes' : 'no', hasRecorder ? 'ok' : 'bad') +
+    row('canvas.captureStream', hasCapture ? 'yes' : 'no', hasCapture ? 'ok' : 'bad') +
+    row('Best format', bestType || 'none', bestType ? (willBeMp4 ? 'ok' : 'warn') : 'bad') +
+    row('MP4 native', willBeMp4 ? 'yes 🎉' : (bestType ? 'no — would use ' + (bestType.indexOf('webm') > -1 ? 'WebM/GIF fallback' : bestType) : 'no'), willBeMp4 ? 'ok' : 'warn');
+
+  // ── Sample animation: a fake track drawing on a dark 9:16 canvas ─────
+  var pts = [];
+  (function seed() {
+    // a wandering path across the frame, roughly the shape of a bay run
+    var n = 60, cx = W * 0.5, cy = H * 0.28, r = W * 0.32;
+    for (var i = 0; i < n; i++) {
+      var a = (i / n) * Math.PI * 2.4 + 0.5;
+      var rr = r * (0.55 + 0.45 * Math.sin(i * 0.7));
+      pts.push([cx + Math.cos(a) * rr * 0.8, cy + i * (H * 0.5 / n) + Math.sin(a) * rr * 0.5]);
+    }
+  })();
+
+  function drawFrame(progress) {
+    // bg
+    ctx.fillStyle = '#0e1418'; ctx.fillRect(0, 0, W, H);
+    // faux "ocean" gradient
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0e1a22'); g.addColorStop(1, '#0b1116');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // header brand bar
+    ctx.fillStyle = '#f4f6f7';
+    ctx.font = '600 26px -apple-system, Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('FLUKELOGS', W / 2, 60);
+    ctx.font = '600 14px -apple-system, Arial';
+    ctx.fillStyle = '#7fd4c8';
+    ctx.fillText('TODAY’S TRACK', W / 2, 88);
+
+    // progressive path
+    var cut = Math.max(1, Math.floor(pts.length * progress));
+    ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#0fbfb1';
+    ctx.beginPath();
+    for (var i = 0; i < cut; i++) {
+      var p = pts[i];
+      if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+    }
+    ctx.stroke();
+
+    // boat head
+    var head = pts[Math.min(cut - 1, pts.length - 1)];
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(head[0], head[1], 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0fbfb1';
+    ctx.beginPath(); ctx.arc(head[0], head[1], 5, 0, Math.PI * 2); ctx.fill();
+
+    // footer stat reveal near the end
+    if (progress > 0.7) {
+      ctx.globalAlpha = Math.min(1, (progress - 0.7) / 0.2);
+      ctx.fillStyle = '#f4f6f7';
+      ctx.font = '700 40px -apple-system, Arial';
+      ctx.fillText('30.1 nm · 5 sightings', W / 2, H - 90);
+      ctx.font = '600 16px -apple-system, Arial';
+      ctx.fillStyle = '#8b9398';
+      ctx.fillText('Humpback Whales · Monterey Bay', W / 2, H - 56);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawFrame(0.35); // static preview before recording
+
+  // ── Record ──────────────────────────────────────────────────────────
+  var btn = document.getElementById('go');
+  var statusEl = document.getElementById('status');
+  btn.addEventListener('click', function () {
+    if (!hasRecorder || !hasCapture || !bestType) {
+      statusEl.textContent = '✕ This browser is missing MediaRecorder or captureStream — we would fall back to an animated GIF here.';
+      statusEl.className = 'bad';
+      return;
+    }
+    btn.disabled = true;
+    statusEl.textContent = 'Recording…';
+
+    var stream = canvas.captureStream(30);
+    var chunks = [];
+    var rec;
+    try {
+      rec = new MediaRecorder(stream, { mimeType: bestType, videoBitsPerSecond: 6000000 });
+    } catch (e) {
+      statusEl.textContent = '✕ MediaRecorder threw: ' + e.message;
+      statusEl.className = 'bad'; btn.disabled = false; return;
+    }
+    rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function () {
+      var blob = new Blob(chunks, { type: bestType.split(';')[0] });
+      var url = URL.createObjectURL(blob);
+      var isMp4 = blob.type.indexOf('mp4') > -1;
+      document.getElementById('resultCard').style.display = 'block';
+      document.getElementById('out').src = url;
+      var dl = document.getElementById('dl');
+      dl.href = url;
+      dl.download = 'flukelogs-story-test.' + (isMp4 ? 'mp4' : (blob.type.indexOf('webm') > -1 ? 'webm' : 'bin'));
+      document.getElementById('result').innerHTML =
+        row('Output type', blob.type || '(unknown)', isMp4 ? 'ok' : 'warn') +
+        row('File size', (blob.size / 1024 / 1024).toFixed(2) + ' MB') +
+        row('Plays inline above', 'check 👆', '');
+      document.getElementById('verdict').textContent = isMp4
+        ? '🎉 This phone produced a real MP4. The full branded story video will work natively here. Tap “Save / share” — on iPhone it should offer Save Video / share to Instagram.'
+        : '⚠️ This phone produced ' + blob.type + ', not MP4. It still plays, but for Instagram Stories we would convert to GIF (or MP4 server-side). Note the result.';
+      statusEl.textContent = 'Done.';
+      btn.disabled = false;
+    };
+
+    rec.start();
+    var t0 = performance.now ? performance.now() : Date.now();
+    (function anim(now) {
+      var t = ((now || Date.now()) - t0) / 5000; // 5s
+      drawFrame(Math.min(1, t));
+      if (t < 1) requestAnimationFrame(anim);
+      else setTimeout(function () { try { rec.stop(); } catch (e) {} }, 200);
+    })(t0);
+  });
+})();
+</script>
+</body>
+</html>
