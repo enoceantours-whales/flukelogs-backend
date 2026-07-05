@@ -139,6 +139,8 @@
     }
     .header-logo { width: 100%; max-width: 200px; height: 44px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
     .header-logo img { width: 100%; height: 100%; object-fit: contain; }
+    /* Text fallback when the logged-in operator has no light-on-dark logo yet */
+    .header-logo span { font-weight: 600; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .header h1, .header p { display: none; }
 
     /* ── Screen wrappers + sections ─────────────────────────────── */
@@ -1025,7 +1027,10 @@
       <svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 1 6.3 6.3M20 4v7h-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="header-logo">
-      <img src="/Public/Enocean_Tours_logo-03.png" alt="Enocean Tours">
+      <!-- Product brand (Flukelogs) when logged out; swapped to the operator's
+           light-on-dark logo (or their name as text) by applyHeaderBrand(). -->
+      <img id="headerLogoImg" src="/Public/flukelogs-wordmark-white.png" alt="Flukelogs">
+      <span id="headerLogoText" hidden></span>
     </div>
     <button class="iconbtn menu-btn" id="btnMenu" type="button" onclick="toggleHeaderMenu(event)" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-linejoin="round"/></svg>
@@ -1099,7 +1104,9 @@
   <!-- Start -->
   <div class="screen" id="screenStart">
     <section class="greeting">
-      <div class="kicker" id="startKicker">Moss Landing · Monterey Bay</div>
+      <!-- Per-operator harbor/tagline — populated by applyOperatorChrome();
+           stays hidden until the logged-in operator has one set. -->
+      <div class="kicker" id="startKicker" hidden></div>
       <h1>Ready when you are, Captain</h1>
       <div class="meta" id="startMeta">&nbsp;</div>
     </section>
@@ -1235,6 +1242,11 @@
           </div>
           <input type="url" id="settingsLogoUrlEmail" hidden>
           <input type="file" id="settingsLogoUrlEmailFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handleLogoUpload(event, 'email', 'settingsLogoUrlEmail', 'settingsLogoUrlEmailPreview')">
+        </div>
+
+        <div class="field">
+          <label>Harbor / Tagline <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;">(shown on the trip screen and report footers)</span></label>
+          <input type="text" id="settingsTagline" placeholder="e.g. MOSS LANDING HARBOR, MONTEREY BAY">
         </div>
       </div>
     </details>
@@ -2469,17 +2481,18 @@
     });
   }
 
-  // Resolves operator-specific branding strings for the canvas cards. Falls
-  // back to current Enocean defaults when operatorConfig hasn't loaded or a
-  // field is missing, so the cards always render something sensible.
+  // Resolves operator-specific branding strings for the canvas cards.
+  // Deliberately tenant-neutral: missing fields render as nothing (empty
+  // strings / no logo) rather than falling back to any one operator's
+  // branding — a new operator's cards must never show another company.
   function clientBrand() {
     const o = operatorConfig || {};
-    const websiteUrl = o.website_url || 'https://enoceantours.com';
+    const websiteUrl = o.website_url || '';
     const websiteHost = (websiteUrl || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').toUpperCase();
     return {
-      name:        o.name        || 'Enocean Tours',
-      tagline:     o.tagline     || 'MOSS LANDING HARBOR  ·  MONTEREY BAY',
-      logoPdf:     o.logo_url    || '/Public/Enocean_Tours_logo-05.png',
+      name:        o.name        || 'Flukelogs',
+      tagline:     o.tagline     || '',
+      logoPdf:     o.logo_url    || null,
       websiteHost,
     };
   }
@@ -2503,7 +2516,7 @@
   //                     sighting that has GPS
   //   stats strip   ->  duration / distance / passengers / sightings
   //   sightings list-> species, count, depth (auto-scaled font for long lists)
-  //   black footer  ->  ENOCEANTOURS.COM
+  //   black footer  ->  operator website host (from Settings; blank if unset)
   // Returns a base64 JPEG (~150KB), same shape as generateSocialCard.
   async function generateCaptainCard() {
     const W = 1080, H = 1920;
@@ -2525,8 +2538,10 @@
     ctx.fillRect(0, 0, W, 320);
 
     // Logo — black-on-white logo drawn into a white circle so it pops against
-    // the black header, matching the PDF style.
+    // the black header, matching the PDF style. Skipped entirely when the
+    // operator hasn't uploaded one (no cross-tenant fallback).
     try {
+      if (!b.logoPdf) throw new Error('no logo');
       const logo = await loadCanvasImage(b.logoPdf);
       const logoBoxY = 200;
       const logoSize = 90;
@@ -2809,7 +2824,14 @@
     });
   }
 
-  const STORAGE_KEY = 'enocean_active_trip';
+  const STORAGE_KEY = 'flukelogs_active_trip';
+  // One-time migration from the pre-rebrand key so a trip that was mid-flight
+  // when this deploy landed still restores instead of silently vanishing.
+  try {
+    const legacyTrip = localStorage.getItem('enocean_active_trip');
+    if (legacyTrip && !localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, legacyTrip);
+    if (legacyTrip) localStorage.removeItem('enocean_active_trip');
+  } catch (e) {}
 
   function saveTrip() {
     if (!trip.startTime) return;
@@ -2897,6 +2919,9 @@
 
   async function handleLogout() {
     try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
+    // Drop the operator's branding with their session — the login screen
+    // must always be product-branded (Flukelogs), never the previous tenant.
+    operatorConfig = null;
     // Don't carry an in-progress trip across logins — the next user
     // (or a different browser tab) shouldn't inherit it.
     clearSavedTrip();
@@ -2915,6 +2940,7 @@
   function setRibbonForLoggedOut() {
     document.body.classList.add('is-login');
     closeHeaderMenu();
+    applyOperatorChrome();  // operatorConfig is null here → Flukelogs branding
     ['footerLogout','footerSettings','footerAdmin','footerPastTrips','footerSightings'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
@@ -3025,6 +3051,38 @@
   // Fetch /api/me and apply the returned operator config to the UI.
   // Populates the species dropdown if the operator has a species_list.
   // Also toggles the Admin footer link based on super-admin status.
+  // Operator-vs-product chrome. Logged out (operatorConfig null) the app is
+  // pure Flukelogs: wordmark in the header, no harbor line. Once an operator
+  // loads, the header becomes THEIR light-on-dark logo (name as text if they
+  // haven't uploaded one) and the trip-screen kicker shows THEIR harbor/
+  // tagline. Called from loadMe(), saveSettings() (hot-reload), and the
+  // logged-out paths (boot + logout) so the chrome always matches the session.
+  function applyOperatorChrome() {
+    const img = document.getElementById('headerLogoImg');
+    const txt = document.getElementById('headerLogoText');
+    const o = operatorConfig;
+    if (img && txt) {
+      if (o && o.logo_url_email) {
+        img.src = o.logo_url_email;
+        img.alt = o.name || 'Operator logo';
+        img.hidden = false; txt.hidden = true;
+      } else if (o && o.name) {
+        txt.textContent = o.name;
+        img.hidden = true; txt.hidden = false;
+      } else {
+        img.src = '/Public/flukelogs-wordmark-white.png';
+        img.alt = 'Flukelogs';
+        img.hidden = false; txt.hidden = true;
+      }
+    }
+    const kicker = document.getElementById('startKicker');
+    if (kicker) {
+      const tagline = (o && o.tagline) || '';
+      kicker.textContent = tagline;
+      kicker.hidden = !tagline;
+    }
+  }
+
   async function loadMe(token) {
     try {
       const res = await fetch('/api/me', {
@@ -3036,11 +3094,7 @@
       if (operatorConfig && operatorConfig.species_list && operatorConfig.species_list.length) {
         renderSpeciesDropdown(operatorConfig.species_list);
       }
-      // Greeting kicker = operator tagline (e.g. "Moss Landing · Monterey Bay")
-      const kicker = document.getElementById('startKicker');
-      if (kicker && operatorConfig && operatorConfig.tagline) {
-        kicker.textContent = operatorConfig.tagline;
-      }
+      applyOperatorChrome();
       isSuperAdmin = !!(body.user && body.user.is_super_admin);
 
       // Super-admins don't run trips — they onboard operators and edit each
@@ -3104,6 +3158,14 @@
         help: 'Used on the PDF report and email header.',
         required: false,
         done: !!(cfg.logo_url && cfg.logo_url_email),
+        focus: 'branding',
+      },
+      {
+        key: 'harbor',
+        title: 'Harbor / tagline',
+        help: 'Your home harbor — shown on the trip screen and report footers.',
+        required: false,
+        done: !!cfg.tagline,
         focus: 'branding',
       },
       {
@@ -3220,6 +3282,7 @@
     document.getElementById('settingsName').value             = cfg.name || '';
     document.getElementById('settingsLogoUrl').value          = cfg.logo_url || '';
     document.getElementById('settingsLogoUrlEmail').value     = cfg.logo_url_email || '';
+    document.getElementById('settingsTagline').value          = cfg.tagline || '';
     document.getElementById('settingsReviewUrl').value        = cfg.review_url || '';
     document.getElementById('settingsFromEmail').value        = cfg.from_email || '';
     document.getElementById('settingsGmailPwd').value         = '';
@@ -3249,12 +3312,12 @@
     const hint = document.getElementById('settingsWidgetHostHint');
     if (!hint) return;
     const raw = (document.getElementById('settingsWidgetHostUrl').value || '').trim();
-    const slug = (operatorConfig && operatorConfig.slug) || 'enocean';
+    const slug = (operatorConfig && operatorConfig.slug) || '';
     if (raw) {
       const sep = raw.indexOf('?') === -1 ? '?' : '&';
       hint.textContent = 'Visitors will share: ' + raw + sep + 'trip=YYYY-MM-DD';
     } else {
-      hint.textContent = 'Visitors will share: ' + window.location.origin + '/api/sightings?op=' + slug + '&trip=YYYY-MM-DD';
+      hint.textContent = 'Visitors will share: ' + window.location.origin + '/api/sightings?' + (slug ? 'op=' + slug + '&' : '') + 'trip=YYYY-MM-DD';
     }
   }
 
@@ -3504,6 +3567,7 @@
     const body = {
       logo_url:                document.getElementById('settingsLogoUrl').value.trim()      || null,
       logo_url_email:          document.getElementById('settingsLogoUrlEmail').value.trim() || null,
+      tagline:                 document.getElementById('settingsTagline').value.trim()      || null,
       review_url:              document.getElementById('settingsReviewUrl').value.trim()    || null,
       from_email:              document.getElementById('settingsFromEmail').value.trim()    || null,
       gmail_app_password:      document.getElementById('settingsGmailPwd').value.replace(/\s+/g, ''), // strip display spaces; empty = keep current
@@ -3534,6 +3598,7 @@
       if (Array.isArray(updated.species_list) && updated.species_list.length) {
         renderSpeciesDropdown(updated.species_list);
       }
+      applyOperatorChrome(); // header logo + harbor kicker reflect the save immediately
 
       toast('Settings saved', 'success');
       populateSettingsForm(updated); // reset password placeholder + masked hint
