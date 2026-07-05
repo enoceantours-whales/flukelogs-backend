@@ -858,6 +858,23 @@
       background: var(--ink-4);
     }
     .photo-drop:hover { border-color: rgba(255,255,255,0.32); background: #1f262b; }
+    /* ── Per-guest rows (email + own photo) on the send screen ──── */
+    .guest-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .guest-row input[type="email"] { flex: 1; min-width: 0; }
+    .guest-photo-btn {
+      width: 44px; height: 44px; flex: 0 0 44px; border-radius: 10px;
+      border: 1px dashed rgba(255,255,255,0.24); background: transparent;
+      color: var(--text-dim); font-size: 18px; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .guest-photo-btn img { width: 100%; height: 100%; object-fit: cover; border-radius: 9px; }
+    .guest-photo-btn.has-photo { border-style: solid; border-color: var(--success, #2fbf71); }
+    .guest-row-remove {
+      width: 32px; height: 44px; flex: 0 0 32px; border: 0; background: transparent;
+      color: var(--text-dim); font-size: 18px; cursor: pointer; padding: 0;
+    }
+    .guest-row-photo-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .guest-photo-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; }
     .photo-drop p { font-size: 12px; color: var(--text-dim); margin-top: 6px; letter-spacing: 0.04em; }
     .photo-drop strong { color: var(--text); font-weight: 600; letter-spacing: 0.05em; }
     .photo-drop input { display: none; }
@@ -1631,10 +1648,10 @@
   <!-- Review & Send -->
   <div class="screen" id="screenReview">
     <div class="section">
-      <div class="section-label">Photo</div>
+      <div class="section-label">Trip Photo</div>
       <div class="photo-drop" onclick="document.getElementById('inputPhoto').click()">
         <strong>Tap to add photo</strong>
-        <p>Group shot, whale, or anything from the trip</p>
+        <p>Goes on every report — unless a guest below has their own photo</p>
         <input type="file" id="inputPhoto" accept="image/*" onchange="handlePhoto(event)">
         <img id="photoPreview" class="photo-preview">
       </div>
@@ -1642,23 +1659,26 @@
 
     <div class="section">
       <div class="section-label">Send Report to Guests</div>
-      <div class="field">
-        <label>Guest Emails <span style="color:var(--muted);font-weight:400;">— type and press Enter or comma</span></label>
-        <div class="email-tag-wrap" id="emailTagWrap" onclick="document.getElementById('emailTagInput').focus()">
-          <input type="email" id="emailTagInput" class="email-tag-input" placeholder="guest@email.com" inputmode="email" autocomplete="off">
-        </div>
-      </div>
+      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Two groups on board? Give each row its own photo — every guest gets one report with their photo, and the trip posts to your sightings page once.</p>
+      <div id="guestRows"></div>
+      <button class="btn btn-outline" type="button" style="margin-bottom:12px;" onclick="addGuestRow()">+ Add guest</button>
       <button class="btn btn-primary" id="btnSend" onclick="sendReport()">Send Trip Report</button>
+      <!-- Shared picker for per-row photos; routed by _pendingPhotoRow -->
+      <input type="file" id="rowPhotoInput" accept="image/*" style="display:none;" onchange="handleRowPhoto(event)">
     </div>
 
     <!-- Revealed after a successful send: email a forgotten guest without
          re-logging the trip. -->
     <div class="section" id="addGuestBlock" style="display:none;">
       <div class="section-label">Add a Guest</div>
-      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Forgot someone? Send them the trip recap — this won't log the trip again.</p>
+      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Forgot someone? Send them the trip recap — this won't log the trip again. Optionally attach their own photo first.</p>
       <div class="field">
         <label>Guest email</label>
         <input type="email" id="addGuestInput" placeholder="guest@email.com" inputmode="email" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addGuestSend();}">
+      </div>
+      <div class="guest-row-photo-line">
+        <button type="button" class="btn btn-outline" id="btnAddGuestPhoto" onclick="_pendingPhotoRow = 'addGuest'; document.getElementById('rowPhotoInput').click();">Add their photo (optional)</button>
+        <img id="addGuestPhotoThumb" class="guest-photo-thumb" hidden>
       </div>
       <button class="btn btn-primary" type="button" id="btnAddGuest" onclick="addGuestSend()">Email this guest</button>
     </div>
@@ -1728,7 +1748,14 @@
   });
 
   let trip = newTripState();
-  let guestEmails = [];
+  // Guest rows: one row per guest — email + optional per-guest photo, so two
+  // groups on one boat each get a report with THEIR photo from ONE send (one
+  // trip on the widget). Emails survive a web-view reload via GUESTS_KEY;
+  // photos are deliberately NOT persisted (multiple base64 images would risk
+  // the localStorage quota) — after a reload the photo slots just re-arm.
+  let guestGroups = [];          // [{ email, photoData|null }]
+  let _pendingPhotoRow = null;   // row index (or 'addGuest') awaiting the photo picker
+  let _addGuestPhoto = null;     // photo staged in the post-send "Add a Guest" block
   const GUESTS_KEY = 'flukelogs_guest_emails';
   // trip_id returned by the server after a successful send. Lets the captain
   // email a forgotten guest afterward without re-logging the trip.
@@ -1766,46 +1793,69 @@
   // ── Email tag input ──────────────────────────────────────────
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  function renderEmailTags() {
-    const wrap = document.getElementById('emailTagWrap');
-    const input = document.getElementById('emailTagInput');
-    wrap.querySelectorAll('.email-tag').forEach(t => t.remove());
-    guestEmails.forEach((email, i) => {
-      const tag = document.createElement('div');
-      tag.className = 'email-tag';
-      tag.innerHTML = `<span>${email}</span><button class="remove-tag" onclick="removeEmail(${i})">×</button>`;
-      wrap.insertBefore(tag, input);
+  // Persist emails (not photos) so a WKWebView reload — e.g. leaving the app
+  // to take a photo mid-report — doesn't wipe the loaded guest list.
+  // restoreTrip() reads this back.
+  function persistGuestEmails() {
+    try {
+      const emails = guestGroups.map(g => g.email).filter(Boolean);
+      emails.length ? localStorage.setItem(GUESTS_KEY, JSON.stringify(emails)) : localStorage.removeItem(GUESTS_KEY);
+    } catch (e) {}
+  }
+
+  function renderGuestRows() {
+    const wrap = document.getElementById('guestRows');
+    if (!wrap) return;
+    if (guestGroups.length === 0) guestGroups.push({ email: '', photoData: null });
+    wrap.innerHTML = guestGroups.map((g, i) => `
+      <div class="guest-row">
+        <input type="email" placeholder="guest@email.com" inputmode="email" autocomplete="off"
+               value="${escapeHtml(g.email || '')}"
+               oninput="guestGroups[${i}].email = this.value.trim(); persistGuestEmails();">
+        <button type="button" class="guest-photo-btn ${g.photoData ? 'has-photo' : ''}"
+                title="${g.photoData ? 'Change photo' : 'Add their photo (optional)'}"
+                onclick="_pendingPhotoRow = ${i}; document.getElementById('rowPhotoInput').click();">
+          ${g.photoData ? `<img src="${g.photoData}" alt="">` : '📷'}
+        </button>
+        <button type="button" class="guest-row-remove" onclick="removeGuestRow(${i})" aria-label="Remove guest">×</button>
+      </div>`).join('');
+    persistGuestEmails();
+  }
+
+  function addGuestRow(email) {
+    guestGroups.push({ email: typeof email === 'string' ? email : '', photoData: null });
+    renderGuestRows();
+  }
+
+  function removeGuestRow(i) {
+    guestGroups.splice(i, 1);
+    renderGuestRows();
+  }
+
+  // Routes the shared hidden file input to whichever row (or the post-send
+  // Add a Guest block) opened the picker.
+  function handleRowPhoto(event) {
+    const file = event.target.files[0];
+    event.target.value = '';  // allow re-picking the same file
+    if (!file) return;
+    const target = _pendingPhotoRow;
+    _pendingPhotoRow = null;
+    resizeImageFile(file, dataUrl => {
+      if (target === 'addGuest') {
+        _addGuestPhoto = dataUrl;
+        const thumb = document.getElementById('addGuestPhotoThumb');
+        if (thumb) { thumb.src = dataUrl; thumb.hidden = false; }
+        const btn = document.getElementById('btnAddGuestPhoto');
+        if (btn) btn.textContent = 'Change their photo';
+      } else if (typeof target === 'number' && guestGroups[target]) {
+        guestGroups[target].photoData = dataUrl;
+        renderGuestRows();
+      }
     });
-    // Persist so a WKWebView reload (e.g. leaving to take a photo mid-report)
-    // doesn't wipe the loaded guest emails. restoreTrip() reads this back.
-    try { guestEmails.length ? localStorage.setItem(GUESTS_KEY, JSON.stringify(guestEmails)) : localStorage.removeItem(GUESTS_KEY); } catch (e) {}
-  }
-
-  function addEmailFromInput() {
-    const input = document.getElementById('emailTagInput');
-    const val = input.value.trim().replace(/,+$/, '');
-    if (!val) return;
-    if (!emailRegex.test(val)) { toast('Invalid email: ' + val, 'error'); return; }
-    if (guestEmails.includes(val)) { input.value = ''; return; }
-    guestEmails.push(val);
-    input.value = '';
-    renderEmailTags();
-  }
-
-  function removeEmail(i) {
-    guestEmails.splice(i, 1);
-    renderEmailTags();
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const input = document.getElementById('emailTagInput');
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmailFromInput(); }
-      if (e.key === 'Backspace' && input.value === '' && guestEmails.length > 0) {
-        guestEmails.pop(); renderEmailTags();
-      }
-    });
-    input.addEventListener('blur', () => { if (input.value.trim()) addEmailFromInput(); });
+    renderGuestRows();
 
     // ── Stepper for passenger count (start screen) ──────────────
     // Visible UI is the ± stepper; underlying value lives on the hidden
@@ -1928,7 +1978,7 @@
   // and renders a slot picker above the passenger count. One slot →
   // auto-select. Two or more → tappable radio cards. Selecting a slot
   // sets the passenger count to the booked total and stages the booker
-  // emails into the guestEmails array (deduped) so they're pre-loaded
+  // emails as guest rows (deduped) so they're pre-loaded
   // when the captain reaches the trip-end review screen. The captain can
   // still adjust everything manually.
   //
@@ -2035,13 +2085,17 @@
     if (dec) dec.disabled = n <= 0;
     if (inc) inc.disabled = n >= PAX_MAX;
 
-    // Stage booker emails (deduped). renderEmailTags rebuilds the review-
-    // screen tag wrap from this array, so the tags will be visible when
-    // the captain navigates there.
+    // Stage booker emails (deduped) as guest rows — visible when the captain
+    // reaches the send screen; each booker can then get their own photo.
     for (const email of (slot.booker_emails || [])) {
-      if (email && !guestEmails.includes(email)) guestEmails.push(email);
+      if (email && !guestGroups.some(g => g.email === email)) {
+        // Fill the initial blank row first, then append.
+        const blank = guestGroups.find(g => !g.email && !g.photoData);
+        if (blank) blank.email = email;
+        else guestGroups.push({ email, photoData: null });
+      }
     }
-    renderEmailTags();
+    renderGuestRows();
   }
 
   // Updates the Sea Temp / Wind tiles on the start screen with the latest
@@ -2343,7 +2397,9 @@
   }
 
   function endTrip() {
-    trip.endTime = new Date();
+    // Restored already-ended trips arrive here with a real endTime — keep it,
+    // or the duration would silently stretch to "now" after a reload.
+    if (!trip.endTime) trip.endTime = new Date();
     stopGPS();
     stopDurationTimer();
     document.getElementById('revDate').textContent =
@@ -2366,13 +2422,31 @@
             <div class="sighting-badge">×${s.count}</div>
           </div>`).join('');
     saveTrip();
+    renderGuestRows();
+    // A reload after a successful send lands back here — restore the sent
+    // state so the captain can't accidentally re-log the trip (the old
+    // "looks unsent, send again" path created duplicate trips on the
+    // widget), and surface Add-a-Guest for any extra emails instead.
+    const btnSend = document.getElementById('btnSend');
+    if (trip.sentTripId) {
+      sentTripId = trip.sentTripId;
+      btnSend.disabled = true;
+      btnSend.innerHTML = '✓ Report Sent';
+      btnSend.style.background = 'var(--success)';
+      document.getElementById('addGuestBlock').style.display = 'block';
+    } else {
+      btnSend.disabled = false;
+      btnSend.innerHTML = 'Send Trip Report';
+      btnSend.style.background = '';
+      document.getElementById('addGuestBlock').style.display = 'none';
+    }
     document.querySelectorAll('#screenReview details.section').forEach(d => d.open = false);
     showScreen('screenReview');
   }
 
-  function handlePhoto(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+  // Shared downscale (max 1200px wide, jpeg 0.75) used by the trip photo and
+  // the per-guest row photos — keeps every photo payload email/PDF sized.
+  function resizeImageFile(file, cb) {
     const reader = new FileReader();
     reader.onload = e => {
       const img = new Image();
@@ -2382,14 +2456,22 @@
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        trip.photoData = canvas.toDataURL('image/jpeg', 0.75);
-        const preview = document.getElementById('photoPreview');
-        preview.src = trip.photoData;
-        preview.style.display = 'block';
+        cb(canvas.toDataURL('image/jpeg', 0.75));
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  }
+
+  function handlePhoto(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    resizeImageFile(file, dataUrl => {
+      trip.photoData = dataUrl;
+      const preview = document.getElementById('photoPreview');
+      preview.src = trip.photoData;
+      preview.style.display = 'block';
+    });
   }
 
   async function generateSocialCard() {
@@ -2692,10 +2774,13 @@
     return canvas.toDataURL('image/jpeg', 0.92);
   }
 
-  // Shared POST to /api/send-report. With mode 'add-guests' (+ tripId) the
-  // server delivers the recap to a forgotten guest without re-logging the
-  // trip. Returns the parsed result; throws on failure.
-  async function postTripReport({ emails, mode, tripId }) {
+  // Shared POST to /api/send-report. `guests` is [{email, photoData|null}] —
+  // the server builds one PDF per distinct photo so each group gets THEIR
+  // photo, while the trip logs to the widget exactly once. With mode
+  // 'add-guests' (+ tripId) the server delivers the recap to a forgotten
+  // guest without re-logging the trip. Returns the parsed result; throws on
+  // failure.
+  async function postTripReport({ guests, mode, tripId }) {
     const socialCardData = await generateSocialCard();
     // The captain copy only goes out on the original send, so skip the
     // (slow) captain-card render on an add-guests resend.
@@ -2717,7 +2802,14 @@
     const _ts = trip.startTime instanceof Date ? trip.startTime : new Date(trip.startTime);
     const tripDate = `${_ts.getFullYear()}-${String(_ts.getMonth() + 1).padStart(2, '0')}-${String(_ts.getDate()).padStart(2, '0')}`;
 
-    const body = { tripData: trip, tripDate, guestEmails: emails, socialCardData, captainCardData };
+    // guestEmails (flat list) rides along for server back-compat during the
+    // deploy window; the server prefers the richer guests[] payload.
+    const body = {
+      tripData: trip, tripDate,
+      guests,
+      guestEmails: guests.map(g => g.email),
+      socialCardData, captainCardData,
+    };
     if (mode)   body.mode   = mode;
     if (tripId) body.tripId = tripId;
 
@@ -2735,16 +2827,29 @@
   }
 
   async function sendReport() {
-    // Commit any email still in the input box
-    addEmailFromInput();
-    if (guestEmails.length === 0) return toast('Add at least one email', 'error');
+    // Guard against the double-log that used to happen when the captain
+    // re-sent after a reload wiped the "already sent" state.
+    if (trip.sentTripId) {
+      document.getElementById('addGuestBlock').style.display = 'block';
+      return toast('Already sent — use "Add a Guest" below for more emails', 'error');
+    }
+    const guests = guestGroups
+      .map(g => ({ email: (g.email || '').trim(), photoData: g.photoData || null }))
+      .filter(g => g.email);
+    if (guests.length === 0) return toast('Add at least one email', 'error');
+    const bad = guests.find(g => !emailRegex.test(g.email));
+    if (bad) return toast('Invalid email: ' + bad.email, 'error');
     const btn = document.getElementById('btnSend');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Sending...';
     try {
-      const result = await postTripReport({ emails: guestEmails });
+      const result = await postTripReport({ guests });
       sentTripId = result.trip_id || null;
-      toast(`Sent to ${guestEmails.length} guest${guestEmails.length > 1 ? 's' : ''}!`, 'success');
+      // Persist the sent marker on the trip itself — a web-view reload used
+      // to lose this, making the report look unsent and inviting a second
+      // submission (= duplicate trip on the widget).
+      if (sentTripId) { trip.sentTripId = sentTripId; saveTrip(); }
+      toast(`Sent to ${guests.length} guest${guests.length > 1 ? 's' : ''}!`, 'success');
       btn.innerHTML = '✓ Report Sent';
       btn.style.background = 'var(--success)';
       // Reveal the add-a-guest path so a forgotten email can still go out
@@ -2770,9 +2875,18 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Sending...';
     try {
-      await postTripReport({ emails: [email], mode: 'add-guests', tripId: sentTripId });
+      await postTripReport({
+        guests: [{ email, photoData: _addGuestPhoto || null }],
+        mode: 'add-guests',
+        tripId: sentTripId,
+      });
       toast(`Recap sent to ${email}`, 'success');
       input.value = '';
+      _addGuestPhoto = null;
+      const thumb = document.getElementById('addGuestPhotoThumb');
+      if (thumb) { thumb.hidden = true; thumb.src = ''; }
+      const photoBtn = document.getElementById('btnAddGuestPhoto');
+      if (photoBtn) photoBtn.textContent = 'Add their photo (optional)';
     } catch (err) {
       console.error(err);
       toast(err.message || 'Failed to send', 'error');
@@ -2785,11 +2899,16 @@
   function startNewTrip() {
     clearSavedTrip();
     trip = newTripState();
-    guestEmails = [];
+    guestGroups = [];
+    _addGuestPhoto = null;
+    _pendingPhotoRow = null;
+    renderGuestRows();  // repaints the single blank row + clears GUESTS_KEY
+    const agThumb = document.getElementById('addGuestPhotoThumb');
+    if (agThumb) { agThumb.hidden = true; agThumb.src = ''; }
+    const agBtn = document.getElementById('btnAddGuestPhoto');
+    if (agBtn) agBtn.textContent = 'Add their photo (optional)';
     document.getElementById('inputPhoto').value = '';
     document.getElementById('photoPreview').style.display = 'none';
-    document.getElementById('emailTagWrap').querySelectorAll('.email-tag').forEach(t => t.remove());
-    document.getElementById('emailTagInput').value = '';
     document.getElementById('btnSend').innerHTML = 'Send Trip Report';
     document.getElementById('btnSend').disabled = false;
     document.getElementById('btnSend').style.background = '';
@@ -2847,9 +2966,16 @@
       restored.startTime = new Date(restored.startTime);
       if (restored.endTime) restored.endTime = new Date(restored.endTime);
       trip = restored;
-      // Reload guest emails staged before the reload and rebuild their tags, so
-      // the Send Report screen isn't blank after the web view reloads.
-      try { const g = localStorage.getItem(GUESTS_KEY); if (g) { guestEmails = JSON.parse(g) || []; renderEmailTags(); } } catch (e) {}
+      // Reload guest emails staged before the reload and rebuild their rows,
+      // so the Send Report screen isn't blank after the web view reloads.
+      // Per-guest photos aren't persisted (quota) — those slots re-arm empty.
+      try {
+        const g = localStorage.getItem(GUESTS_KEY);
+        if (g) {
+          guestGroups = (JSON.parse(g) || []).map(email => ({ email, photoData: null }));
+          renderGuestRows();
+        }
+      } catch (e) {}
       if (!trip.endTime) {
         setCurrentTime();
         startGPS();
@@ -2926,7 +3052,8 @@
     // (or a different browser tab) shouldn't inherit it.
     clearSavedTrip();
     trip = newTripState();
-    guestEmails = [];
+    guestGroups = [];
+    try { localStorage.removeItem(GUESTS_KEY); } catch (e) {}
     sentTripId = null;
     document.getElementById('addGuestBlock').style.display = 'none';
     document.getElementById('loginPassword').value = '';
