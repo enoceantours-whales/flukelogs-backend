@@ -107,15 +107,27 @@ module.exports = async function handler(req, res) {
       const tripIds = [...new Set(sightingRows.map(s => s.trip_id).filter(Boolean))];
       if (tripIds.length) {
         const idList = tripIds.map(id => `"${id}"`).join(',');
-        const trackRows = await pgGet(
-          `trip_track?operator_id=eq.${operatorId}` +
-          `&trip_id=in.(${idList})` +
-          `&select=trip_id,lat,lng,recorded_at` +
-          `&order=trip_id.asc,recorded_at.asc&limit=20000`
-        );
-        for (const p of (trackRows || [])) {
-          if (!tracks[p.trip_id]) tracks[p.trip_id] = [];
-          tracks[p.trip_id].push({ lat: p.lat, lng: p.lng, t: p.recorded_at });
+        // PostgREST enforces a hard server-side row cap (~1000) that silently
+        // overrides any &limit=. A single request therefore truncates: ordered
+        // by trip_id, the lowest-sorting trips eat the whole budget and every
+        // later trip (incl. the most recent) comes back with ZERO track points
+        // and falls back to the straight pin-to-pin line on the widget — even
+        // though its real GPS breadcrumb exists. Page through with offset until
+        // a short page marks the end so every trip in the feed gets its track.
+        const PAGE = 1000;
+        for (let offset = 0; ; offset += PAGE) {
+          const page = await pgGet(
+            `trip_track?operator_id=eq.${operatorId}` +
+            `&trip_id=in.(${idList})` +
+            `&select=trip_id,lat,lng,recorded_at` +
+            `&order=trip_id.asc,recorded_at.asc&limit=${PAGE}&offset=${offset}`
+          );
+          if (!page || page.length === 0) break;
+          for (const p of page) {
+            if (!tracks[p.trip_id]) tracks[p.trip_id] = [];
+            tracks[p.trip_id].push({ lat: p.lat, lng: p.lng, t: p.recorded_at });
+          }
+          if (page.length < PAGE) break;
         }
       }
     }
