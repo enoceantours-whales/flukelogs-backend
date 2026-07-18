@@ -1874,6 +1874,11 @@
   document.addEventListener('DOMContentLoaded', () => {
     renderGuestRows();
 
+    // Manual edits to the sighting time pause its auto-tracking until the
+    // next sighting is saved (see autoRefreshSightingTime).
+    const timeInput = document.getElementById('inputTime');
+    if (timeInput) timeInput.addEventListener('input', () => { sightingTimeDirty = true; });
+
     // ── Stepper for passenger count (start screen) ──────────────
     // Visible UI is the ± stepper; underlying value lives on the hidden
     // #inputPassengers input so the existing startTrip() reader keeps working.
@@ -2160,10 +2165,26 @@
     showScreen('screenLog');
   }
 
+  // The sighting-time field tracks the clock on its own while a trip is
+  // running (refreshed by the duration ticker + on return from background),
+  // so the captain never has to bump a stale time before logging. Manually
+  // editing the field pauses auto-tracking (deliberate backdating of a
+  // late log); saving a sighting calls setCurrentTime() which resumes it.
+  let sightingTimeDirty = false;
+
   function setCurrentTime() {
     const now = new Date();
     document.getElementById('inputTime').value =
       String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    sightingTimeDirty = false;
+  }
+
+  function autoRefreshSightingTime() {
+    if (sightingTimeDirty) return;                    // captain backdated on purpose
+    if (!trip.startTime || trip.endTime) return;      // only during an active trip
+    const el = document.getElementById('inputTime');
+    if (!el || document.activeElement === el) return; // don't fight their finger
+    setCurrentTime();
   }
 
   function haversineNM(lat1, lng1, lat2, lng2) {
@@ -2281,13 +2302,19 @@
 
   function startDurationTimer() {
     updateDurationDisplay();
-    durationTimer = setInterval(updateDurationDisplay, 15000);
+    durationTimer = setInterval(() => {
+      updateDurationDisplay();
+      autoRefreshSightingTime();
+    }, 15000);
   }
 
   function stopDurationTimer() { clearInterval(durationTimer); durationTimer = null; }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && trip.startTime && !trip.endTime) updateDurationDisplay();
+    if (document.visibilityState === 'visible' && trip.startTime && !trip.endTime) {
+      updateDurationDisplay();
+      autoRefreshSightingTime(); // phone was in a pocket — catch the clock up
+    }
   });
 
   function logSighting() {
