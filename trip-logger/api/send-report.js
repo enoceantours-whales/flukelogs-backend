@@ -906,6 +906,9 @@ module.exports = async function handler(req, res) {
     .map(g => ({
       email: String((g && g.email) || '').trim(),
       photoData: (g && typeof g.photoData === 'string' && /^data:image\//.test(g.photoData)) ? g.photoData : null,
+      // Per-guest story card (client-rendered with this guest's photo).
+      // Falls back to the shared legacy socialCardData when absent.
+      socialCardData: (g && typeof g.socialCardData === 'string' && /^data:image\//.test(g.socialCardData)) ? g.socialCardData : null,
     }))
     .filter(g => emailRegex.test(g.email));
   const validEmails = validGuests.map(g => g.email);
@@ -956,7 +959,7 @@ module.exports = async function handler(req, res) {
     // guest emails (it swallows its own errors inside sendCaptainCopy).
     await Promise.all([
       ...validGuests.map(g => Promise.all([
-        sendEmail(g.email, pdfByPhoto.get(g.photoData || TRIP_PHOTO_KEY), socialCardData, tripData, b, transporter, operatorId),
+        sendEmail(g.email, pdfByPhoto.get(g.photoData || TRIP_PHOTO_KEY), g.socialCardData || socialCardData, tripData, b, transporter, operatorId),
         addToMailchimp(g.email, b),
       ])),
       // The captain already got their copy on the original send — don't
