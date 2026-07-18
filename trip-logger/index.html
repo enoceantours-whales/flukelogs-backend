@@ -915,6 +915,11 @@
       text-transform: uppercase;
       color: var(--text);
       z-index: 1200; /* toasts above the (now z-1100) header */
+      /* Toasts are never interactive — without this, the INVISIBLE hidden
+         pill (opacity 0, fixed ~bottom 40-100px) silently ate taps meant
+         for buttons underneath it, most notably End Trip on the Log screen
+         ("I have to press just under the button"). */
+      pointer-events: none;
       transition: transform var(--t-med), opacity var(--t-med);
       white-space: nowrap;
       box-shadow: 0 30px 60px rgba(0,0,0,0.55);
