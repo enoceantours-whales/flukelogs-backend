@@ -858,6 +858,13 @@
       background: var(--ink-4);
     }
     .photo-drop:hover { border-color: rgba(255,255,255,0.32); background: #1f262b; }
+    /* ── Sightings map cluster bubbles (dark chrome, teal ring) ─── */
+    .fl-cluster {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(13,17,20,0.88); border: 2px solid #0fbfb1;
+      color: var(--text); font-weight: 600; font-size: 12px; line-height: 30px;
+      text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    }
     /* ── Per-guest rows (email + own photo) on the send screen ──── */
     .guest-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .guest-row input[type="email"] { flex: 1; min-width: 0; }
@@ -1424,16 +1431,16 @@
         </select>
         <div class="admin-sightings-chips" role="tablist" style="display:flex;gap:6px;">
           <button type="button" class="chip" data-range="7"   onclick="setAdminSightingsRange(7)">7d</button>
-          <button type="button" class="chip" data-range="30"  onclick="setAdminSightingsRange(30)">30d</button>
-          <button type="button" class="chip active" data-range="all" onclick="setAdminSightingsRange('all')">All</button>
+          <button type="button" class="chip active" data-range="30"  onclick="setAdminSightingsRange(30)">30d</button>
+          <button type="button" class="chip" data-range="all" onclick="setAdminSightingsRange('all')">All</button>
         </div>
       </div>
       <div id="adminSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
       <div class="admin-sightings-listbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
         <div id="adminSightingsCount" style="font-size:12px;color:var(--text-dim);"></div>
         <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
-          <button type="button" class="chip active" data-view="individual" onclick="setAdminSightingsView('individual')">Individual</button>
-          <button type="button" class="chip"        data-view="grouped"    onclick="setAdminSightingsView('grouped')">Grouped</button>
+          <button type="button" class="chip"        data-view="individual" onclick="setAdminSightingsView('individual')">Individual</button>
+          <button type="button" class="chip active" data-view="grouped"    onclick="setAdminSightingsView('grouped')">Grouped</button>
         </div>
       </div>
       <div id="adminSightingsTable"><div class="empty">Loading…</div></div>
@@ -1449,16 +1456,16 @@
       <div class="admin-sightings-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
         <div class="admin-sightings-chips" role="tablist" style="display:flex;gap:6px;">
           <button type="button" class="chip" data-cap-range="7"   onclick="setCaptainSightingsRange(7)">7d</button>
-          <button type="button" class="chip" data-cap-range="30"  onclick="setCaptainSightingsRange(30)">30d</button>
-          <button type="button" class="chip active" data-cap-range="all" onclick="setCaptainSightingsRange('all')">All</button>
+          <button type="button" class="chip active" data-cap-range="30"  onclick="setCaptainSightingsRange(30)">30d</button>
+          <button type="button" class="chip" data-cap-range="all" onclick="setCaptainSightingsRange('all')">All</button>
         </div>
       </div>
       <div id="captainSightingsMap" style="height:360px;border-radius:8px;overflow:hidden;background:#0e1620;margin-bottom:14px;"></div>
       <div class="admin-sightings-listbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
         <div id="captainSightingsCount" style="font-size:12px;color:var(--text-dim);"></div>
         <div class="admin-sightings-chips admin-sightings-view-toggle" role="tablist" style="display:flex;gap:6px;">
-          <button type="button" class="chip active" data-cap-view="individual" onclick="setCaptainSightingsView('individual')">Individual</button>
-          <button type="button" class="chip"        data-cap-view="grouped"    onclick="setCaptainSightingsView('grouped')">Grouped</button>
+          <button type="button" class="chip"        data-cap-view="individual" onclick="setCaptainSightingsView('individual')">Individual</button>
+          <button type="button" class="chip active" data-cap-view="grouped"    onclick="setCaptainSightingsView('grouped')">Grouped</button>
         </div>
       </div>
       <div id="captainSightingsTable"><div class="empty">Loading…</div></div>
@@ -3829,8 +3836,11 @@
 
   const adminSightingsState = {
     rows: [],          // raw rows from /api/admin/sightings
-    rangeDays: 'all',  // '7' | '30' | 'all'
-    viewMode: 'individual', // 'individual' | 'grouped'
+    // Defaults tuned for a calm first paint: recent window + grouped-by-trip
+    // (a season of individual pins reads as an unpolished blob).
+    rangeDays: '30',   // '7' | '30' | 'all'
+    viewMode: 'grouped', // 'individual' | 'grouped'
+    clusterLayer: null, // marker-cluster group currently on the map
     showAll: false,    // expand the 5-row cap in individual view
     focusedTripKey: null, // operator_id|trip_id — when set, the map only
                           // shows that trip's pins (set by grouped-view
@@ -3851,11 +3861,41 @@
       document.head.appendChild(css);
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve();
+      script.onload = () => {
+        // Marker-cluster plugin so dense sightings collapse into clean
+        // numbered bubbles instead of a blob of overlapping pins. Best
+        // effort: if the plugin fails to load we resolve anyway and the
+        // maps fall back to plain individual markers.
+        const cs = document.createElement('script');
+        cs.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+        cs.onload = () => resolve();
+        cs.onerror = () => resolve();
+        document.head.appendChild(cs);
+      };
       script.onerror = () => reject(new Error('Failed to load Leaflet'));
       document.head.appendChild(script);
     });
     return leafletLoading;
+  }
+
+  // Shared cluster layer for the sightings maps (admin + captain). Custom
+  // divIcon so the bubbles match the app's dark chrome — we intentionally
+  // skip the plugin's default green/white CSS. Returns null when the plugin
+  // didn't load; callers then add markers straight to the map as before.
+  function makeSightingsClusterLayer() {
+    if (!window.L || !L.markerClusterGroup) return null;
+    return L.markerClusterGroup({
+      maxClusterRadius: 42,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      disableClusteringAtZoom: 12,
+      iconCreateFunction: c => L.divIcon({
+        html: `<div class="fl-cluster">${c.getChildCount()}</div>`,
+        className: '',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      }),
+    });
   }
 
   async function openAdminSightings() {
@@ -3968,8 +4008,10 @@
   function renderAdminSightingsMarkers(rows) {
     const map = adminSightingsState.map;
     if (!map) return;
+    if (adminSightingsState.clusterLayer) { map.removeLayer(adminSightingsState.clusterLayer); adminSightingsState.clusterLayer = null; }
     adminSightingsState.markers.forEach(m => map.removeLayer(m));
     adminSightingsState.markers = [];
+    const cluster = makeSightingsClusterLayer();
     const latlngs = [];
     rows.forEach(r => {
       if (r.lat == null || r.lng == null) return;
@@ -3993,10 +4035,11 @@
       marker._sightingId = r.id;
       marker._tripKey = `${r.operator_id}|${r.trip_id || r.trip_date}`;
       marker._species = r.species;
-      marker.addTo(map);
+      if (cluster) cluster.addLayer(marker); else marker.addTo(map);
       adminSightingsState.markers.push(marker);
       latlngs.push([+r.lat, +r.lng]);
     });
+    if (cluster) { cluster.addTo(map); adminSightingsState.clusterLayer = cluster; }
     if (latlngs.length) {
       map.fitBounds(latlngs, { padding: [30, 30], maxZoom: 12 });
     }
@@ -4144,12 +4187,14 @@
 
   const captainSightingsState = {
     rows: [],
-    rangeDays: 'all',
-    viewMode: 'individual',
+    // Same calm defaults as the admin screen: recent + grouped.
+    rangeDays: '30',
+    viewMode: 'grouped',
     showAll: false,
     focusedTripKey: null,
     map: null,
     markers: [],
+    clusterLayer: null,
   };
 
   async function openCaptainSightings() {
@@ -4252,8 +4297,10 @@
   function renderCaptainSightingsMarkers(rows) {
     const map = captainSightingsState.map;
     if (!map) return;
+    if (captainSightingsState.clusterLayer) { map.removeLayer(captainSightingsState.clusterLayer); captainSightingsState.clusterLayer = null; }
     captainSightingsState.markers.forEach(m => map.removeLayer(m));
     captainSightingsState.markers = [];
+    const cluster = makeSightingsClusterLayer();
     const latlngs = [];
     rows.forEach(r => {
       if (r.lat == null || r.lng == null) return;
@@ -4275,10 +4322,11 @@
       marker._sightingId = r.id;
       marker._tripKey = r.trip_id || r.trip_date;
       marker._species = r.species;
-      marker.addTo(map);
+      if (cluster) cluster.addLayer(marker); else marker.addTo(map);
       captainSightingsState.markers.push(marker);
       latlngs.push([+r.lat, +r.lng]);
     });
+    if (cluster) { cluster.addTo(map); captainSightingsState.clusterLayer = cluster; }
     if (latlngs.length) {
       map.fitBounds(latlngs, { padding: [30, 30], maxZoom: 12 });
     }
