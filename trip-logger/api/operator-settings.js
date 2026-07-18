@@ -20,6 +20,7 @@ const { getOperator } = require('../lib/operators');
 const OPERATOR_EDITABLE = [
   'logo_url',
   'logo_url_email',
+  'tagline',
   'review_url',
   'species_list',
   'from_email',
@@ -44,6 +45,7 @@ function operatorSettingsView(operator) {
     name:                     operator.name,
     logo_url:                 operator.logo_url,
     logo_url_email:           operator.logo_url_email,
+    tagline:                  operator.tagline || null,
     review_url:               operator.review_url,
     species_list:             operator.species_list || [],
     from_email:               operator.from_email,
