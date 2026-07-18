@@ -126,7 +126,10 @@
     .header {
       position: sticky;
       top: 0;
-      z-index: 10;
+      /* Above Leaflet's in-map panes/controls (which reach z-index 1000) —
+         the dropdown menu lives INSIDE this stacking context, so the header
+         itself must outrank the map or the menu paints behind it. */
+      z-index: 1100;
       padding: 14px 20px 12px;
       display: grid;
       grid-template-columns: 40px 1fr 40px;
@@ -139,8 +142,10 @@
     }
     .header-logo { width: 100%; max-width: 200px; height: 44px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
     .header-logo img { width: 100%; height: 100%; object-fit: contain; }
-    /* Text fallback when the logged-in operator has no light-on-dark logo yet */
-    .header-logo span { font-weight: 600; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Text fallback when the logged-in operator has no light-on-dark logo yet.
+       Long names get a tighter second size so a brand never ellipsizes. */
+    .header-logo span { font-weight: 600; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .header-logo span.long { font-size: 11px; letter-spacing: 0.04em; }
     .header h1, .header p { display: none; }
 
     /* ── Screen wrappers + sections ─────────────────────────────── */
@@ -909,7 +914,7 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text);
-      z-index: 100;
+      z-index: 1200; /* toasts above the (now z-1100) header */
       transition: transform var(--t-med), opacity var(--t-med);
       white-space: nowrap;
       box-shadow: 0 30px 60px rgba(0,0,0,0.55);
@@ -3202,6 +3207,7 @@
         img.hidden = false; txt.hidden = true;
       } else if (o && o.name) {
         txt.textContent = o.name;
+        txt.classList.toggle('long', o.name.length > 16);
         img.hidden = true; txt.hidden = false;
       } else {
         img.src = '/Public/flukelogs-wordmark-white.png';
@@ -3888,7 +3894,9 @@
       maxClusterRadius: 42,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
-      disableClusteringAtZoom: 12,
+      // fitBounds caps at zoom 12, so clustering must stay active AT 12 or
+      // small datasets land exactly there and show overlapping raw pins.
+      disableClusteringAtZoom: 13,
       iconCreateFunction: c => L.divIcon({
         html: `<div class="fl-cluster">${c.getChildCount()}</div>`,
         className: '',
@@ -4052,11 +4060,11 @@
     const map = adminSightingsState.map;
     document.getElementById('adminSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     if (matches.length === 1) {
-      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 12), { duration: 0.6 });
+      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 13), { duration: 0.6 });
       matches[0].openPopup();
     } else {
       const bounds = L.latLngBounds(matches.map(m => m.getLatLng()));
-      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 0.6 });
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 13, duration: 0.6 });
       matches[0].openPopup();
     }
   }
@@ -4337,11 +4345,11 @@
     const map = captainSightingsState.map;
     document.getElementById('captainSightingsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     if (matches.length === 1) {
-      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 12), { duration: 0.6 });
+      map.flyTo(matches[0].getLatLng(), Math.max(map.getZoom(), 13), { duration: 0.6 });
       matches[0].openPopup();
     } else {
       const bounds = L.latLngBounds(matches.map(m => m.getLatLng()));
-      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 0.6 });
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 13, duration: 0.6 });
       matches[0].openPopup();
     }
   }
