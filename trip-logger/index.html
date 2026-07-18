@@ -1665,18 +1665,8 @@
   <!-- Review & Send -->
   <div class="screen" id="screenReview">
     <div class="section">
-      <div class="section-label">Trip Photo</div>
-      <div class="photo-drop" onclick="document.getElementById('inputPhoto').click()">
-        <strong>Tap to add photo</strong>
-        <p>Goes on every report — unless a guest below has their own photo</p>
-        <input type="file" id="inputPhoto" accept="image/*" onchange="handlePhoto(event)">
-        <img id="photoPreview" class="photo-preview">
-      </div>
-    </div>
-
-    <div class="section">
       <div class="section-label">Send Report to Guests</div>
-      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Two groups on board? Give each row its own photo — every guest gets one report with their photo, and the trip posts to your sightings page once.</p>
+      <p style="font-size:12px;color:var(--muted);font-weight:400;margin-bottom:12px;line-height:1.5;">Tap the camera on each row to add that guest's photo — it goes on their report and their story card. Guests without a photo get a clean branded report.</p>
       <div id="guestRows"></div>
       <button class="btn btn-outline" type="button" style="margin-bottom:12px;" onclick="addGuestRow()">+ Add guest</button>
       <button class="btn btn-primary" id="btnSend" onclick="sendReport()">Send Trip Report</button>
@@ -2507,18 +2497,12 @@
     reader.readAsDataURL(file);
   }
 
-  function handlePhoto(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    resizeImageFile(file, dataUrl => {
-      trip.photoData = dataUrl;
-      const preview = document.getElementById('photoPreview');
-      preview.src = trip.photoData;
-      preview.style.display = 'block';
-    });
-  }
+  // (The old single shared "Trip Photo" slot is gone — photos are per-guest
+  // rows only, so each guest's PDF and story card carries THEIR photo.)
 
-  async function generateSocialCard() {
+  // photoData: this guest's photo (data URL) or null — each guest's story
+  // card carries THEIR photo; null renders the branded dark background.
+  async function generateSocialCard(photoData) {
     return new Promise((resolve) => {
       const W = 1080, H = 1920;
       const canvas = document.createElement('canvas');
@@ -2590,7 +2574,7 @@
         resolve(canvas.toDataURL('image/jpeg', 0.92));
       };
 
-      if (trip.photoData) {
+      if (photoData) {
         const img = new Image();
         img.onload = () => {
           const scale = Math.max(W / img.width, H / img.height);
@@ -2598,7 +2582,7 @@
           drawCard();
         };
         img.onerror = () => { ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H); drawCard(); };
-        img.src = trip.photoData;
+        img.src = photoData;
       } else {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, W, H);
@@ -2825,7 +2809,16 @@
   // guest without re-logging the trip. Returns the parsed result; throws on
   // failure.
   async function postTripReport({ guests, mode, tripId }) {
-    const socialCardData = await generateSocialCard();
+    // One story card per DISTINCT photo (rows sharing a photo share a card),
+    // so each guest's email carries a story with THEIR group's photo. The
+    // first card doubles as the legacy shared fallback for the server.
+    const cardByPhoto = new Map();
+    for (const g of guests) {
+      const key = g.photoData || '__none__';
+      if (!cardByPhoto.has(key)) cardByPhoto.set(key, await generateSocialCard(g.photoData || null));
+      g.socialCardData = cardByPhoto.get(key);
+    }
+    const socialCardData = cardByPhoto.values().next().value || await generateSocialCard(null);
     // The captain copy only goes out on the original send, so skip the
     // (slow) captain-card render on an add-guests resend.
     let captainCardData = null;
@@ -2951,8 +2944,6 @@
     if (agThumb) { agThumb.hidden = true; agThumb.src = ''; }
     const agBtn = document.getElementById('btnAddGuestPhoto');
     if (agBtn) agBtn.textContent = 'Add their photo (optional)';
-    document.getElementById('inputPhoto').value = '';
-    document.getElementById('photoPreview').style.display = 'none';
     document.getElementById('btnSend').innerHTML = 'Send Trip Report';
     document.getElementById('btnSend').disabled = false;
     document.getElementById('btnSend').style.background = '';
