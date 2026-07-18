@@ -862,7 +862,9 @@ module.exports = async function handler(req, res) {
   configureMailchimp(operator);
 
   const { tripData, tripDate, guestEmails, socialCardData, captainCardData } = req.body;
-  if (!tripData || !guestEmails) return res.status(400).json({ error: 'Missing tripData or guestEmails' });
+  if (!tripData || (!guestEmails && !Array.isArray(req.body.guests))) {
+    return res.status(400).json({ error: 'Missing tripData or guests' });
+  }
   // "Add a guest" resend: deliver the recap to a guest the captain forgot,
   // without re-logging the trip. The client passes the original trip's id.
   const isAddGuests = req.body.mode === 'add-guests';
@@ -892,11 +894,21 @@ module.exports = async function handler(req, res) {
   }
   tripData.tripPart = tripPartInTimeZone(tripData.startTime, pick(operator, 'timezone', null));
 
-  // Accept either a single email string or an array
-  const emails = Array.isArray(guestEmails) ? guestEmails : [guestEmails];
-
+  // Per-guest photos: prefer the guests[] payload ([{email, photoData|null}])
+  // so each group on the boat gets a report with THEIR photo from a single
+  // send (one trip on the widget). Older cached clients still send the flat
+  // guestEmails list — those guests all share the trip photo.
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const validEmails = emails.map(e => e.trim()).filter(e => emailRegex.test(e));
+  const rawGuests = Array.isArray(req.body.guests) && req.body.guests.length
+    ? req.body.guests
+    : (Array.isArray(guestEmails) ? guestEmails : [guestEmails]).map(e => ({ email: e }));
+  const validGuests = rawGuests
+    .map(g => ({
+      email: String((g && g.email) || '').trim(),
+      photoData: (g && typeof g.photoData === 'string' && /^data:image\//.test(g.photoData)) ? g.photoData : null,
+    }))
+    .filter(g => emailRegex.test(g.email));
+  const validEmails = validGuests.map(g => g.email);
   if (validEmails.length === 0) return res.status(400).json({ error: 'No valid email addresses provided' });
 
   try {
@@ -905,9 +917,21 @@ module.exports = async function handler(req, res) {
     // capped at 3s each, so this adds at most ~3s to the trip end flow.
     await attachDepthsToSightings(tripData.sightings);
 
-    console.log('Generating PDF...');
-    const pdfBuffer = await generatePDF(tripData, b);
-    console.log('PDF done, size:', pdfBuffer.length);
+    // One PDF per distinct photo. Guests without their own photo share the
+    // trip-photo PDF (tripData.photoData — may itself be absent). Generated
+    // sequentially: PDFKit + embedded images are memory-heavy on a small
+    // serverless function, and in practice there are only 1-3 groups.
+    console.log('Generating PDFs...');
+    const TRIP_PHOTO_KEY = '__trip__';
+    const pdfByPhoto = new Map();
+    for (const g of validGuests) {
+      const key = g.photoData || TRIP_PHOTO_KEY;
+      if (!pdfByPhoto.has(key)) {
+        const data = g.photoData ? { ...tripData, photoData: g.photoData } : tripData;
+        pdfByPhoto.set(key, await generatePDF(data, b));
+      }
+    }
+    console.log('PDFs done:', pdfByPhoto.size);
 
     // Save to Supabase ONCE regardless of how many guests. Every row is
     // tagged with the operator_id derived from the verified JWT, so a
@@ -931,9 +955,9 @@ module.exports = async function handler(req, res) {
     // ourselves — all in parallel. Captain copy failure never blocks the
     // guest emails (it swallows its own errors inside sendCaptainCopy).
     await Promise.all([
-      ...validEmails.map(email => Promise.all([
-        sendEmail(email, pdfBuffer, socialCardData, tripData, b, transporter, operatorId),
-        addToMailchimp(email, b),
+      ...validGuests.map(g => Promise.all([
+        sendEmail(g.email, pdfByPhoto.get(g.photoData || TRIP_PHOTO_KEY), socialCardData, tripData, b, transporter, operatorId),
+        addToMailchimp(g.email, b),
       ])),
       // The captain already got their copy on the original send — don't
       // re-send it on an add-guests resend.
